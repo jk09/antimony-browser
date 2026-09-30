@@ -10,9 +10,9 @@
     "node": ">=22.12"
   },
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "node scripts/run-electron.mjs dev",
     "build": "electron-vite build",
-    "start": "electron-vite preview",
+    "start": "node scripts/run-electron.mjs preview",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
