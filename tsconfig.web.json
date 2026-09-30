@@ -10,6 +10,7 @@
     "src/app/renderer/**/*",
     "src/shared/**/*",
     "src/features/*/ipc.ts",
+    "src/features/*/shared/**/*",
     "src/features/*/ui/**/*"
   ]
 }

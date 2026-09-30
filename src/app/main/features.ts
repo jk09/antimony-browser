@@ -1,4 +1,5 @@
-import type { BrowserWindow, Session } from 'electron'
+import type { BrowserWindow, MenuItemConstructorOptions, Session } from 'electron'
+import { register as navigation } from '../../features/navigation/main'
 import type { ChromeUiIpc } from './ipc'
 
 /** What a feature's main-process side gets at startup. */
@@ -9,10 +10,15 @@ export interface MainContext {
   browsingSession: Session
   /** Sender-checked IPC with the chrome UI. Use this, not ipcMain directly. */
   ipc: ChromeUiIpc
+  /**
+   * Items for the application menu's File menu. The app builds the menu once every feature is
+   * registered (src/app/main/menu.ts); features never call Menu.setApplicationMenu themselves.
+   */
+  fileMenu: MenuItemConstructorOptions[]
 }
 
 /** A feature's main-process entry point (`register` in src/features/<feature>/main.ts). */
 export type RegisterFeature = (ctx: MainContext) => void | Promise<void>
 
 // One entry per feature, sorted by name. Removing a feature removes its entry.
-export const features: RegisterFeature[] = []
+export const features: RegisterFeature[] = [navigation]

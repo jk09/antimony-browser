@@ -1,3 +1,5 @@
+import { OpenLocation } from '../../features/navigation/ui/OpenLocation'
+
 /** The chrome UI: toolbar on top, web content below. Features mount their UI here. */
 export function App() {
   const { chrome, electron } = window.antimony.versions
@@ -5,6 +7,7 @@ export function App() {
     <div className="shell">
       <header className="toolbar" data-testid="toolbar">
         <span className="brand">Antimony</span>
+        <OpenLocation />
       </header>
       <main className="content" data-testid="content">
         <p>

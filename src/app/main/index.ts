@@ -1,8 +1,9 @@
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { app, BrowserWindow, session } from 'electron'
+import { app, BrowserWindow, Menu, session, type MenuItemConstructorOptions } from 'electron'
 import { features } from './features'
 import { createChromeUiIpc } from './ipc'
+import { appMenuTemplate } from './menu'
 import { denyAllPermissions, hardenApp, hardenChromeUi, secureWebPreferences } from './security'
 
 const BROWSING_PARTITION = 'persist:browsing'
@@ -36,7 +37,9 @@ async function createWindow(): Promise<void> {
 
   // Register features before the chrome UI loads, so their IPC handlers exist when it calls them.
   const ipc = createChromeUiIpc(window.webContents)
-  for (const register of features) await register({ window, browsingSession, ipc })
+  const fileMenu: MenuItemConstructorOptions[] = []
+  for (const register of features) await register({ window, browsingSession, ipc, fileMenu })
+  Menu.setApplicationMenu(Menu.buildFromTemplate(appMenuTemplate(fileMenu, process.platform)))
 
   await window.loadURL(url)
 }
