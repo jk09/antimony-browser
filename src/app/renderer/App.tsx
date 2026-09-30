@@ -6,7 +6,6 @@ export function App() {
   return (
     <div className="shell">
       <header className="toolbar" data-testid="toolbar">
-        <span className="brand">Antimony</span>
         <OpenLocation />
       </header>
       <main className="content" data-testid="content">
