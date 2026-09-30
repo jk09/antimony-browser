@@ -46,10 +46,6 @@ body,
   user-select: none;
 }
 
-.brand {
-  font-weight: 600;
-}
-
 .open-location {
   display: flex;
   flex: 1;

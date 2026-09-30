@@ -8,7 +8,7 @@ test('opens the browser window with the chrome UI', async () => {
   try {
     const window = await app.firstWindow()
     await expect(window).toHaveTitle(/^Antimony - ([0-9a-f]{7,}|unknown)$/)
-    await expect(window.getByTestId('toolbar')).toContainText('Antimony')
+    await expect(window.getByTestId('toolbar')).toBeVisible()
     await expect(window.getByTestId('content')).toContainText('Chromium')
   } finally {
     await app.close()

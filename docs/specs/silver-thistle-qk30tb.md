@@ -6,12 +6,12 @@
 | --- | --- |
 | **Feature name** | Open new-window links in the page view |
 | **Spec ID** | silver-thistle-qk30tb |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-09-30 18:25 +00:00 |
-| **Last updated** | 2026-09-30 18:31 +00:00 |
+| **Last updated** | 2026-09-30 19:10 +00:00 |
 | **Affected features** | navigation |
 | **Target release** | 0.1.0 |
 | **Related links** | [amber-lantern-8qp2hb](./amber-lantern-8qp2hb.md) (Open Location), [quiet-harbor-n7k2x9](./quiet-harbor-n7k2x9.md) (fuller navigation) |
