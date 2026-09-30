@@ -12,7 +12,7 @@
 | **Reviewers** | |
 | **Created on** | YYYY-MM-DD HH:MM ±HH:MM |
 | **Last updated** | YYYY-MM-DD HH:MM ±HH:MM |
-| **Affected features** | <!-- feature folder names --> |
+| **Affected features** | <!-- folder names under src/features/, new ones included --> |
 | **Target release** | |
 | **Related links** | <!-- issues, PRs, designs, other specs --> |
 
@@ -63,11 +63,12 @@ Define the expected behavior in clear, testable terms.
 ## 8. Non-Functional Requirements
 Capture quality and system constraints.
 
-- Performance:
-- Reliability:
-- Security:
+- Performance: <!-- startup, memory per tab, UI responsiveness -->
+- Reliability: <!-- crashed renderers, unresponsive pages, restart behaviour -->
+- Security: <!-- new IPC channels, permissions or capabilities for web content, stored data -->
+- Privacy: <!-- what is stored or sent, and how the user clears it -->
 - Accessibility:
-- Compatibility:
+- Platforms: <!-- Windows / macOS / Linux differences -->
 
 ## 9. UX / UI Notes
 Describe any interface expectations or user interaction details.
@@ -80,7 +81,8 @@ Describe any interface expectations or user interaction details.
 Capture implementation guidance, architecture, and dependencies.
 
 - Proposed approach:
-- Dependencies:
+- Process split: <!-- what runs in main / preload / UI; IPC channels and their direction -->
+- Dependencies: <!-- other features, Electron APIs, npm packages (shipped packages need an ADR) -->
 - Risks / unknowns:
 - Open questions:
 
@@ -95,7 +97,7 @@ Define how success will be measured.
 Describe how the feature will be validated.
 
 - Manual test plan:
-- Automated test coverage:
+- Automated test coverage: <!-- unit (Vitest, next to the code) / end-to-end (Playwright, e2e/) -->
 - Regression considerations:
 
 ## 13. Rollout / Follow-up
