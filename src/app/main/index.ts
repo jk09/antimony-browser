@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, Menu, session, type MenuItemConstructorOptions } from 'electron'
+import { windowTitle } from '../../shared/build-info'
 import { features } from './features'
 import { createChromeUiIpc } from './ipc'
 import { appMenuTemplate } from './menu'
@@ -20,7 +21,7 @@ async function createWindow(): Promise<void> {
     height: 800,
     minWidth: 480,
     minHeight: 320,
-    title: 'Antimony',
+    title: windowTitle,
     show: false,
     webPreferences: {
       ...secureWebPreferences,
