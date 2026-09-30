@@ -1,0 +1,50 @@
+:root {
+  color-scheme: light dark;
+  --toolbar-height: 40px;
+  --toolbar-bg: #f1f3f4;
+  --text: #202124;
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --toolbar-bg: #292a2d;
+    --text: #e8eaed;
+  }
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  color: var(--text);
+}
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--toolbar-height);
+  padding: 0 12px;
+  background: var(--toolbar-bg);
+  user-select: none;
+}
+
+.brand {
+  font-weight: 600;
+}
+
+.content {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  opacity: 0.6;
+}
