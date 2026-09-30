@@ -17,6 +17,26 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
   page.webContents.on('will-navigate', guard)
   page.webContents.on('will-redirect', guard)
 
+  const load = (url: string, options?: Electron.LoadURLOptions) => {
+    page.webContents.loadURL(url, options).catch((error: unknown) => {
+      console.warn(`Failed to load ${url}`, error)
+    })
+  }
+
+  // No tabs yet: links that ask for a new window (target=_blank, window.open) open in this page.
+  page.webContents.setWindowOpenHandler(({ url, referrer, postBody }) => {
+    if (isWebUrl(url)) {
+      load(url, {
+        httpReferrer: referrer,
+        ...(postBody && {
+          postData: postBody.data,
+          extraHeaders: `Content-Type: ${postBody.contentType}`,
+        }),
+      })
+    }
+    return { action: 'deny' }
+  })
+
   const layout = () => {
     const [width = 0, height = 0] = window.getContentSize()
     page.setBounds({
@@ -41,9 +61,7 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
     const url = typeof input === 'string' ? toUrl(input) : null
     if (url === null) throw new TypeError(`${channels.go} expects an http(s) URL`)
     show()
-    page.webContents.loadURL(url).catch((error: unknown) => {
-      console.warn(`Failed to load ${url}`, error)
-    })
+    load(url)
     page.webContents.focus()
   })
 

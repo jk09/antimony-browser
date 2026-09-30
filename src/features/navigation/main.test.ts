@@ -6,8 +6,12 @@ type Listener = (...args: unknown[]) => void
 
 class FakeWebContents {
   listeners = new Map<string, Listener>()
-  loadURL = vi.fn(() => Promise.resolve())
+  loadURL = vi.fn((_url: string, _options?: unknown) => Promise.resolve())
   focus = vi.fn()
+  windowOpenHandler?: (details: unknown) => unknown
+  setWindowOpenHandler(handler: (details: unknown) => unknown) {
+    this.windowOpenHandler = handler
+  }
   on(event: string, listener: Listener) {
     this.listeners.set(event, listener)
     return this
@@ -86,9 +90,9 @@ describe('navigation main', () => {
     const { go, page, ctx } = setup()
     go('example.com')
     go('https://example.org/')
-    expect(page.webContents.loadURL.mock.calls).toEqual([
-      ['https://example.com/'],
-      ['https://example.org/'],
+    expect(page.webContents.loadURL.mock.calls.map(([url]) => url)).toEqual([
+      'https://example.com/',
+      'https://example.org/',
     ])
     expect(page.webContents.focus).toHaveBeenCalled()
     expect(ctx.window.contentView.addChildView).toHaveBeenCalledTimes(1)
@@ -123,6 +127,31 @@ describe('navigation main', () => {
       expect(blocked.preventDefault, event).toHaveBeenCalled()
       expect(allowed.preventDefault, event).not.toHaveBeenCalled()
     }
+  })
+
+  it('opens new-window links in the page view and never creates a window', () => {
+    const { page } = setup()
+    const open = page.webContents.windowOpenHandler!
+    const referrer = { url: 'https://example.com/', policy: 'strict-origin-when-cross-origin' }
+    expect(open({ url: 'https://example.org/a', referrer })).toEqual({ action: 'deny' })
+    const postBody = { data: [], contentType: 'application/x-www-form-urlencoded' }
+    expect(open({ url: 'https://example.org/form', referrer, postBody })).toEqual({
+      action: 'deny',
+    })
+    for (const url of ['about:blank', 'javascript:alert(1)', 'file:///etc/passwd']) {
+      expect(open({ url, referrer }), url).toEqual({ action: 'deny' })
+    }
+    expect(page.webContents.loadURL.mock.calls).toEqual([
+      ['https://example.org/a', { httpReferrer: referrer }],
+      [
+        'https://example.org/form',
+        {
+          httpReferrer: referrer,
+          postData: [],
+          extraHeaders: 'Content-Type: application/x-www-form-urlencoded',
+        },
+      ],
+    ])
   })
 
   it('adds File → Open Location…, which focuses the chrome UI and asks it for a URL', () => {

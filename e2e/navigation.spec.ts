@@ -15,9 +15,13 @@ let server: Server
 let origin: string
 
 test.beforeAll(async () => {
-  server = createServer((_request, response) => {
+  server = createServer((request, response) => {
     response.writeHead(200, { 'content-type': 'text/html' })
-    response.end('<!doctype html><title>Test page</title><h1>Hello from the test server</h1>')
+    response.end(
+      request.url === '/links'
+        ? '<!doctype html><title>Links</title><a href="/hello" target="_blank">New window</a>'
+        : '<!doctype html><title>Test page</title><h1>Hello from the test server</h1>',
+    )
   })
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
@@ -78,6 +82,25 @@ test('invalid input shows an error and loads nothing', async () => {
 
     await location.press('Escape')
     await expect(location).toBeHidden()
+  } finally {
+    await app.close()
+  }
+})
+
+test('links that open a new window load in the page view', async () => {
+  const app = await electron.launch({ args })
+  try {
+    const window = await app.firstWindow()
+    const location = await openLocation(app, window)
+    await location.fill(`${origin}/links`)
+    await location.press('Enter')
+    await expect.poll(() => pageUrls(app)).toEqual([`${origin}/links`])
+
+    const page = app.windows().find((candidate) => candidate.url() === `${origin}/links`)!
+    await page.getByRole('link', { name: 'New window' }).click()
+
+    await expect.poll(() => pageUrls(app)).toEqual([`${origin}/hello`])
+    expect(app.windows()).toHaveLength(2)
   } finally {
     await app.close()
   }
