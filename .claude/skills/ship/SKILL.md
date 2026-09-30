@@ -20,3 +20,4 @@ description: Finish a task – verify, update spec and docs, write the commit. U
    - `Spec:` line whenever an active spec drove the change.
 
 5. Create the PR and link to the spec. Inform the user about the PR and ask for review. If the PR is merged, set **Status** to `Done` in the spec.
+6. Always watch the PR you opened (in cloud sessions: subscribe to its activity) until it's merged or closed: fix CI failures and address review comments without being asked, validating each fix with step 1 before pushing.
