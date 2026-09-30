@@ -1,5 +1,8 @@
+import { mkdtempSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   _electron as electron,
   expect,
@@ -39,23 +42,31 @@ const pageUrls = (app: ElectronApplication) =>
       .map((contents) => contents.getURL())
   })
 
-/** Clicks File → Open Location… until the text box shows (the UI subscribes after it loads). */
+// No API key and no real API: these tests never reach a model.
+const env = { ...process.env, ANTHROPIC_API_KEY: '', ANTHROPIC_BASE_URL: 'http://127.0.0.1:9' }
+
+// A fresh profile per launch, so prompt history and settings don't leak between tests.
+const launch = () =>
+  electron.launch({
+    args: [...args, `--user-data-dir=${mkdtempSync(join(tmpdir(), 'antimony-e2e-'))}`],
+    env,
+  })
+
+/** Clicks File → Prompt… until the prompt shows (the UI subscribes after it loads). */
 async function openLocation(app: ElectronApplication, window: Page) {
-  const location = window.getByRole('textbox', { name: 'Location' })
+  const location = window.getByRole('textbox', { name: 'Prompt' })
   await expect(async () => {
-    await app.evaluate(({ Menu }) =>
-      Menu.getApplicationMenu()!.getMenuItemById('open-location')!.click(),
-    )
+    await app.evaluate(({ Menu }) => Menu.getApplicationMenu()!.getMenuItemById('prompt')!.click())
     await expect(location).toBeFocused({ timeout: 1000 })
   }).toPass()
   return location
 }
 
-test('File → Open Location… loads the typed URL in the page view', async () => {
-  const app = await electron.launch({ args })
+test('File → Prompt… (Ctrl+L) loads a typed URL in the page view', async () => {
+  const app = await launch()
   try {
     const window = await app.firstWindow()
-    await expect(window.getByRole('textbox', { name: 'Location' })).toBeHidden()
+    await expect(window.getByRole('textbox', { name: 'Prompt' })).toBeHidden()
 
     const location = await openLocation(app, window)
     await location.fill(`${origin}/hello`)
@@ -68,15 +79,15 @@ test('File → Open Location… loads the typed URL in the page view', async () 
   }
 })
 
-test('invalid input shows an error and loads nothing', async () => {
-  const app = await electron.launch({ args })
+test('text that is not a web address goes to the assistant, which needs a key', async () => {
+  const app = await launch()
   try {
     const window = await app.firstWindow()
     const location = await openLocation(app, window)
     await location.fill('file:///etc/passwd')
     await location.press('Enter')
 
-    await expect(window.getByRole('alert')).toContainText('web address')
+    await expect(window.getByRole('alert')).toContainText('/key')
     await expect(location).toBeVisible()
     expect(await pageUrls(app)).toEqual([''])
 
@@ -88,7 +99,7 @@ test('invalid input shows an error and loads nothing', async () => {
 })
 
 test('links that open a new window load in the page view', async () => {
-  const app = await electron.launch({ args })
+  const app = await launch()
   try {
     const window = await app.firstWindow()
     const location = await openLocation(app, window)

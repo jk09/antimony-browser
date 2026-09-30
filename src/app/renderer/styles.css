@@ -3,22 +3,38 @@
   --toolbar-height: 40px;
   --toolbar-bg: #f1f3f4;
   --text: #202124;
+  --muted: #5f6368;
   --field-bg: #ffffff;
   --field-border: #dadce0;
+  --card-bg: #ffffff;
+  --card-border: #e8b9a5;
+  --accent: #c96442;
+  --accent-text: #ffffff;
+  --hover: rgba(0, 0, 0, 0.06);
   --focus: #1a73e8;
   --error: #d93025;
+  --ok: #188038;
+  --code-bg: #f6f7f8;
   font-family: system-ui, sans-serif;
   font-size: 13px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --toolbar-bg: #292a2d;
+    --toolbar-bg: #1f1e1d;
     --text: #e8eaed;
+    --muted: #9aa0a6;
     --field-bg: #202124;
     --field-border: #5f6368;
+    --card-bg: #2b2a28;
+    --card-border: #a4583c;
+    --accent: #d97757;
+    --accent-text: #1f1e1d;
+    --hover: rgba(255, 255, 255, 0.08);
     --focus: #8ab4f8;
     --error: #f28b82;
+    --ok: #81c995;
+    --code-bg: #262524;
   }
 }
 
@@ -28,6 +44,15 @@ body,
   margin: 0;
   height: 100%;
   color: var(--text);
+  background: var(--toolbar-bg);
+}
+
+button,
+input,
+select,
+textarea {
+  color: inherit;
+  font: inherit;
 }
 
 .shell {
@@ -36,52 +61,617 @@ body,
   height: 100%;
 }
 
+/* Toolbar: the prompt (collapsed bar or card) and the skill form. */
+
 .toolbar {
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 8px;
-  height: var(--toolbar-height);
-  padding: 0 12px;
+  min-height: var(--toolbar-height);
+  box-sizing: border-box;
+  padding: 6px 12px;
   background: var(--toolbar-bg);
-  user-select: none;
 }
 
-.open-location {
+.prompt-collapsed {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(760px, 100%);
+  height: 28px;
+}
+
+.prompt-bar {
   display: flex;
   flex: 1;
-  align-items: center;
+  align-items: baseline;
   gap: 8px;
   min-width: 0;
-}
-
-.open-location input {
-  flex: 1;
-  max-width: 640px;
-  min-width: 0;
-  height: 26px;
-  padding: 0 10px;
+  height: 28px;
+  padding: 0 14px;
   border: 1px solid var(--field-border);
-  border-radius: 13px;
+  border-radius: 14px;
   background: var(--field-bg);
-  color: inherit;
-  font: inherit;
+  cursor: text;
+  text-align: left;
+  line-height: 26px;
 }
 
-.open-location input:focus {
-  outline: 2px solid var(--focus);
-  outline-offset: -1px;
-}
-
-.open-location-error {
+.prompt-bar > span {
   overflow: hidden;
-  color: var(--error);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.content {
+.prompt-bar-title {
+  flex-shrink: 0;
+  max-width: 50%;
+}
+
+.prompt-bar-url,
+.prompt-bar-placeholder {
+  color: var(--muted);
+}
+
+.prompt-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+  width: min(760px, 100%);
+  padding: 10px 12px;
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  background: var(--card-bg);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+}
+
+.prompt-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 24px;
+  max-height: 200px;
+  padding: 4px 2px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-size: 15px;
+  line-height: 1.45;
+  resize: none;
+}
+
+.prompt-input::placeholder {
+  color: var(--muted);
+}
+
+.prompt-key input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--field-border);
+  border-radius: 8px;
+  background: var(--field-bg);
+}
+
+.prompt-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.prompt-spacer {
+  flex: 1;
+}
+
+.prompt-icon,
+.prompt-toggle,
+.prompt-model {
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.prompt-icon {
+  width: 28px;
+  font-size: 16px;
+}
+
+.prompt-toggle {
+  padding: 0 8px;
+  color: var(--muted);
+}
+
+.prompt-toggle[aria-pressed='true'] {
+  border-color: var(--card-border);
+  color: var(--accent);
+}
+
+.prompt-model {
+  padding: 0 6px;
+  color: var(--muted);
+}
+
+.prompt-icon:hover,
+.prompt-toggle:hover,
+.prompt-model:hover {
+  background: var(--hover);
+}
+
+.prompt-send {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-text);
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.prompt-send:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.prompt-card :focus-visible:not(.prompt-input),
+.prompt-bar:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.prompt-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.prompt-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.prompt-stop {
+  padding: 2px 8px;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.prompt-message {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.prompt-message.error {
+  color: var(--error);
+}
+
+.prompt-message.info {
+  color: var(--muted);
+}
+
+.prompt-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.prompt-chip {
+  position: relative;
+}
+
+.prompt-chip-open {
+  display: block;
+  height: 48px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--field-border);
+  border-radius: 8px;
+  background: var(--field-bg);
+  cursor: pointer;
+}
+
+.prompt-chip-open img {
+  height: 48px;
+}
+
+.prompt-chip-text {
+  display: block;
+  padding: 0 10px;
+  line-height: 46px;
+}
+
+.prompt-chip-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--text);
+  color: var(--card-bg);
+  cursor: pointer;
+  line-height: 18px;
+}
+
+.prompt-preview {
+  max-height: 240px;
+  overflow: auto;
+}
+
+.prompt-preview img {
+  max-width: 100%;
+}
+
+.prompt-preview pre {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.prompt-suggestions {
+  margin: 0;
+  padding: 4px 0;
+  border-top: 1px solid var(--field-border);
+  list-style: none;
+}
+
+.prompt-suggestions li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.prompt-suggestions li.selected,
+.prompt-suggestions li:hover {
+  background: var(--hover);
+}
+
+.prompt-suggestion-icon {
+  width: 16px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.prompt-suggestion-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prompt-suggestion-detail {
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Conversation (agent) inside the prompt card. */
+
+.conversation {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--field-border);
+}
+
+.conversation-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 40vh;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.turn {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.turn.user {
+  align-self: flex-end;
+  max-width: 85%;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--hover);
+}
+
+.turn-attachments {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.turn.tool,
+.turn.approval,
+.turn.notice,
+.turn-detail {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.turn.tool.ok span:first-child {
+  color: var(--ok);
+}
+
+.turn.tool.error,
+.turn.error {
+  color: var(--error);
+}
+
+.approval {
+  padding: 8px 10px;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+}
+
+.approval p {
+  margin: 0 0 8px;
+}
+
+.approval-buttons,
+.save-skill-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.approval-buttons button,
+.save-skill,
+.save-skill-buttons button,
+.debug-copy {
+  padding: 4px 10px;
+  border: 1px solid var(--field-border);
+  border-radius: 6px;
+  background: var(--field-bg);
+  cursor: pointer;
+}
+
+.approval-buttons button:first-child,
+.save-skill-buttons button[type='submit'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.save-skill {
+  align-self: flex-start;
+}
+
+/* Skill save form (skills). */
+
+.save-skill-form {
+  box-sizing: border-box;
+  width: min(760px, 100%);
+  max-height: 50vh;
+  padding: 10px 12px;
+  overflow: auto;
+  border: 1px solid var(--field-border);
+  border-radius: 12px;
+  background: var(--card-bg);
+}
+
+.save-skill-form h2 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.save-skill-fields,
+.save-skill-steps li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.save-skill-form label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.save-skill-form input {
+  padding: 2px 6px;
+  border: 1px solid var(--field-border);
+  border-radius: 4px;
+  background: var(--field-bg);
+}
+
+.save-skill-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 20px;
+}
+
+.save-skill-hint {
+  color: var(--muted);
+}
+
+.save-skill-error {
+  color: var(--error);
+}
+
+/* Page area (navigation) with the acting frame (agent) and the debugger (agent). */
+
+.workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.acting-frame {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.acting-frame.acting {
+  padding: 2px;
+  background: var(--accent);
+}
+
+.page-area {
   flex: 1;
   display: grid;
   place-items: center;
+  min-width: 0;
   opacity: 0.6;
+}
+
+.debug-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-width: 280px;
+  max-width: 800px;
+  border-left: 1px solid var(--field-border);
+  background: var(--card-bg);
+}
+
+.debug-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  width: 6px;
+  cursor: col-resize;
+}
+
+.debug-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--field-border);
+}
+
+.debug-header h2 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.debug-close {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.debug-empty {
+  padding: 10px;
+  color: var(--muted);
+}
+
+.debug-runs,
+.debug-events {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.debug-runs {
+  flex: 1;
+  overflow: auto;
+}
+
+.debug-run > details > summary,
+.debug-event summary {
+  display: flex;
+  gap: 8px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.debug-run > details > summary {
+  background: var(--hover);
+  font-weight: 600;
+}
+
+.debug-run-label,
+.debug-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.debug-time {
+  color: var(--muted);
+  font-weight: normal;
+  white-space: nowrap;
+}
+
+.debug-type {
+  min-width: 72px;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.debug-event-request .debug-type {
+  color: var(--focus);
+}
+
+.debug-event-response .debug-type,
+.debug-event-done .debug-type {
+  color: var(--ok);
+}
+
+.debug-event-approval .debug-type {
+  color: var(--accent);
+}
+
+.debug-event-error .debug-type,
+.debug-event-stopped .debug-type {
+  color: var(--error);
+}
+
+.debug-copy {
+  margin: 6px 10px;
+}
+
+.debug-json {
+  max-height: 400px;
+  margin: 0 10px 8px;
+  padding: 6px;
+  overflow: auto;
+  border-radius: 4px;
+  background: var(--code-bg);
+  font-size: 11px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.debug-image {
+  display: block;
+  max-width: calc(100% - 20px);
+  margin: 0 10px 6px;
 }

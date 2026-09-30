@@ -8,6 +8,23 @@ class FakeWebContents {
   listeners = new Map<string, Listener>()
   loadURL = vi.fn((_url: string, _options?: unknown) => Promise.resolve())
   focus = vi.fn()
+  reload = vi.fn()
+  stop = vi.fn()
+  loading = false
+  navigationHistory = {
+    canGoBack: () => true,
+    canGoForward: () => false,
+    goBack: vi.fn(),
+    goForward: vi.fn(),
+  }
+  isDestroyed = () => false
+  getURL = () => 'https://example.com/'
+  getTitle = () => 'Example'
+  isLoading = () => this.loading
+  off(event: string) {
+    this.listeners.delete(event)
+    return this
+  }
   windowOpenHandler?: (details: unknown) => unknown
   setWindowOpenHandler(handler: (details: unknown) => unknown) {
     this.windowOpenHandler = handler
@@ -29,7 +46,7 @@ class FakeView {
 
 vi.mock('electron', () => ({ app: {}, WebContentsView: FakeView }))
 
-const { register, TOOLBAR_HEIGHT } = await import('./main')
+const { register, getPage, TOOLBAR_HEIGHT } = await import('./main')
 const { channels } = await import('./ipc')
 
 function setup() {
@@ -53,6 +70,7 @@ function setup() {
     ctx,
     page,
     go: (...args: unknown[]) => handlers.get(channels.go)!(...args),
+    call: (channel: string, ...args: unknown[]) => handlers.get(channel)!(...args),
     resize: (width: number, height: number) => {
       size = [width, height]
       windowListeners.get('resize')!()
@@ -154,12 +172,85 @@ describe('navigation main', () => {
     ])
   })
 
-  it('adds File → Open Location…, which focuses the chrome UI and asks it for a URL', () => {
-    const { ctx } = setup()
-    const [item] = ctx.fileMenu
-    expect(item).toMatchObject({ label: 'Open Location…', accelerator: 'CmdOrCtrl+L' })
-    ;(item!.click as () => void)()
-    expect(ctx.window.webContents.focus).toHaveBeenCalled()
-    expect(ctx.ipc.send).toHaveBeenCalledWith(channels.openLocation, null)
+  it('lays the page view out inside the insets the chrome UI reports', () => {
+    const { go, page, call, resize } = setup()
+    go('example.com')
+    call(channels.setInsets, { top: 120, right: 420, bottom: 2, left: 2 })
+    expect(page.setBounds).toHaveBeenLastCalledWith({ x: 2, y: 120, width: 578, height: 578 })
+    resize(1200, 800)
+    expect(page.setBounds).toHaveBeenLastCalledWith({ x: 2, y: 120, width: 778, height: 678 })
+  })
+
+  it('rejects invalid insets', () => {
+    const { call } = setup()
+    for (const insets of [
+      null,
+      { top: 1, right: 0, bottom: 0 },
+      { top: -1, right: 0, bottom: 0, left: 0 },
+      { top: 5000, right: 0, bottom: 0, left: 0 },
+      { top: '1', right: 0, bottom: 0, left: 0 },
+    ]) {
+      expect(() => call(channels.setInsets, insets), JSON.stringify(insets)).toThrow(TypeError)
+    }
+  })
+
+  it('reports page state to the chrome UI and does nothing before a page is loaded', () => {
+    const { go, page, ctx, call } = setup()
+    call(channels.back)
+    expect(page.webContents.navigationHistory.goBack).not.toHaveBeenCalled()
+    expect(getPage()!.state()).toEqual({
+      url: '',
+      title: '',
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+    })
+    go('example.com')
+    page.webContents.listeners.get('page-title-updated')!()
+    expect(ctx.ipc.send).toHaveBeenLastCalledWith(channels.stateChanged, {
+      url: 'https://example.com/',
+      title: 'Example',
+      loading: false,
+      canGoBack: true,
+      canGoForward: false,
+    })
+    call(channels.back)
+    call(channels.reload)
+    expect(page.webContents.navigationHistory.goBack).toHaveBeenCalled()
+    expect(page.webContents.reload).toHaveBeenCalled()
+  })
+
+  it('exports page controls that only load web addresses', () => {
+    const { page } = setup()
+    const controls = getPage()!
+    expect(controls.contents()).toBeNull()
+    expect(controls.load('javascript:alert(1)')).toBeNull()
+    expect(controls.load('example.org')).toBe('https://example.org/')
+    expect(page.webContents.loadURL).toHaveBeenCalledWith('https://example.org/', undefined)
+    expect(controls.contents()).toBe(page.webContents)
+  })
+
+  it('waits for the page to stop loading, or for the timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      const { page } = setup()
+      const controls = getPage()!
+      controls.load('example.com')
+      page.webContents.loading = true
+      let done = false
+      void controls.waitForLoad(5000).then(() => (done = true))
+      await vi.advanceTimersByTimeAsync(100)
+      expect(done).toBe(false)
+      page.webContents.listeners.get('did-stop-loading')!()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(done).toBe(true)
+
+      let timedOut = false
+      void controls.waitForLoad(5000).then(() => (timedOut = true))
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(timedOut).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
