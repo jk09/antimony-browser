@@ -7,7 +7,7 @@ import tseslint from 'typescript-eslint'
 const rendererCode = ['src/app/renderer/**/*.{ts,tsx}', 'src/features/*/ui/**/*.{ts,tsx}']
 const mainCode = ['src/app/main/**/*.ts', 'src/features/*/main.ts', 'src/features/*/main/**/*.ts']
 const preloadCode = ['src/app/preload/**/*.ts', 'src/features/*/preload.ts']
-const sharedCode = ['src/shared/**/*.ts', 'src/features/*/ipc.ts']
+const sharedCode = ['src/shared/**/*.ts', 'src/features/*/ipc.ts', 'src/features/*/shared/**/*.ts']
 
 const noElectron = { name: 'electron', message: 'Only main and preload code may import electron.' }
 const noNode = {

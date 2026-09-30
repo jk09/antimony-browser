@@ -26,7 +26,7 @@ Antimony is a minimal Chromium-based browser built on [Electron](https://www.ele
 ## UI notes
 
 - Layout: the UI reports its toolbar height (or the main process owns a constant) and the main process sets page view bounds on `resize`. Pages sit *above* the chrome UI's webContents, so anything that must overlap a page (menus, the address bar dropdown) needs a native `Menu`, a temporary resize, or a small popup `WebContentsView`.
-- Keyboard shortcuts must work while a page has focus: define them as application `Menu` accelerators in the main process (or `before-input-event` on page views), not DOM key handlers in the UI.
+- Keyboard shortcuts must work while a page has focus: define them as application `Menu` accelerators in the main process (items pushed onto `ctx.fileMenu`, [ADR 0003](./adr/0003-build-the-application-menu-from-feature-contributions.md)) or `before-input-event` on page views, not DOM key handlers in the UI.
 - Styling stays plain CSS with custom properties and `prefers-color-scheme`; add a UI library only with an ADR.
 
 ## A feature slice

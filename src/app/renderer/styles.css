@@ -3,6 +3,10 @@
   --toolbar-height: 40px;
   --toolbar-bg: #f1f3f4;
   --text: #202124;
+  --field-bg: #ffffff;
+  --field-border: #dadce0;
+  --focus: #1a73e8;
+  --error: #d93025;
   font-family: system-ui, sans-serif;
   font-size: 13px;
 }
@@ -11,6 +15,10 @@
   :root {
     --toolbar-bg: #292a2d;
     --text: #e8eaed;
+    --field-bg: #202124;
+    --field-border: #5f6368;
+    --focus: #8ab4f8;
+    --error: #f28b82;
   }
 }
 
@@ -40,6 +48,39 @@ body,
 
 .brand {
   font-weight: 600;
+}
+
+.open-location {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.open-location input {
+  flex: 1;
+  max-width: 640px;
+  min-width: 0;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--field-border);
+  border-radius: 13px;
+  background: var(--field-bg);
+  color: inherit;
+  font: inherit;
+}
+
+.open-location input:focus {
+  outline: 2px solid var(--focus);
+  outline-offset: -1px;
+}
+
+.open-location-error {
+  overflow: hidden;
+  color: var(--error);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .content {
