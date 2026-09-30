@@ -6,12 +6,12 @@
 | --- | --- |
 | **Feature name** | Open Location |
 | **Spec ID** | amber-lantern-8qp2hb |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-09-30 17:29 +00:00 |
-| **Last updated** | 2026-09-30 17:45 +00:00 |
+| **Last updated** | 2026-09-30 20:15 +00:00 |
 | **Affected features** | navigation (new) |
 | **Target release** | 0.1.0 |
 | **Related links** | [docs/architecture.md](../architecture.md), [quiet-harbor-n7k2x9](./quiet-harbor-n7k2x9.md) (fuller navigation, builds on this) |
