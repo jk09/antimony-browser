@@ -36,7 +36,7 @@ describe('AssistantPanel', () => {
     const box = screen.getByRole('textbox', { name: 'Prompt' })
     fireEvent.change(box, { target: { value: '/re' } })
     const order = [
-      screen.getByRole('button', { name: 'Hide assistant' }),
+      screen.getByTestId('page-info'),
       screen.getByRole('region', { name: 'Conversation' }),
       screen.getByRole('form', { name: 'Save as skill' }),
       screen.getByRole('listbox'),
@@ -49,9 +49,14 @@ describe('AssistantPanel', () => {
     }
   })
 
-  it('hides with × and shows again with Ctrl/Cmd+L, focusing the prompt', async () => {
+  it('has no close button: it is only hidden', async () => {
+    await renderPanel()
+    expect(screen.queryByRole('button', { name: /hide|close/i })).toBeNull()
+  })
+
+  it('hides with Ctrl/Cmd+B and shows again with Ctrl/Cmd+L, focusing the prompt', async () => {
     const { emit } = await renderPanel()
-    fireEvent.click(screen.getByRole('button', { name: 'Hide assistant' }))
+    act(() => emit.toggle())
     expect(panel()).toBeNull()
     act(() => emit.open())
     expect(panel()).toBeTruthy()
@@ -69,6 +74,23 @@ describe('AssistantPanel', () => {
     expect(api.prompt.focusPage).toHaveBeenCalledOnce()
   })
 
+  it('toggles every time, even when toggles arrive before a render', async () => {
+    const { emit } = await renderPanel()
+    act(() => {
+      emit.toggle()
+      emit.toggle()
+    })
+    expect(panel()).toBeTruthy()
+    act(() => {
+      emit.toggle()
+      emit.toggle()
+      emit.toggle()
+    })
+    expect(panel()).toBeNull()
+    act(() => emit.toggle())
+    expect(panel()).toBeTruthy()
+  })
+
   it('stays shown on Ctrl/Cmd+B while an approval is pending', async () => {
     const { api, emit } = await renderPanel()
     act(() =>
@@ -84,14 +106,14 @@ describe('AssistantPanel', () => {
 
   it('shows itself for an approval and for a skill save', async () => {
     const { emit } = await renderPanel()
-    fireEvent.click(screen.getByRole('button', { name: 'Hide assistant' }))
+    act(() => emit.toggle())
     act(() =>
       emit.state({ ...idleState, status: 'awaiting-approval', approval: { description: 'Click' } }),
     )
     expect(panel()).toBeTruthy()
 
     act(() => emit.state(idleState))
-    fireEvent.click(screen.getByRole('button', { name: 'Hide assistant' }))
+    act(() => emit.toggle())
     expect(panel()).toBeNull()
     act(() => emit.saveRequested('x'))
     expect(panel()).toBeTruthy()

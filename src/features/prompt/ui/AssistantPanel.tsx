@@ -1,4 +1,12 @@
-import { useEffect, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactNode,
+} from 'react'
 import type { AgentState } from '../../agent/ipc'
 import type { NavigationState } from '../../navigation/ipc'
 import { Prompt } from './Prompt'
@@ -19,7 +27,8 @@ export function clampWidth(requested: number): number {
  * page title and URL), the
  * conversation filling the height, the skill form, and the prompt at the bottom. Its width only
  * changes when the user drags its edge, so the page view keeps its size while the conversation
- * grows. Ctrl/Cmd+L shows it and focuses the prompt, Ctrl/Cmd+B shows or hides it; it also shows itself for an approval or a
+ * grows. Ctrl/Cmd+L shows it and focuses the prompt, Ctrl/Cmd+B shows or hides it (it has no close button:
+ * it is only ever hidden, never removed); it also shows itself for an approval or a
  * skill save.
  */
 export function AssistantPanel({
@@ -62,16 +71,24 @@ export function AssistantPanel({
     [api],
   )
   const pending = agent?.status === 'awaiting-approval'
+  // Read by the toggle listener, subscribed once: rapid toggles each see the latest state.
+  const latest = useRef({ shown, pending })
+  useLayoutEffect(() => {
+    latest.current = { shown, pending }
+  })
   useEffect(
     () =>
       api.prompt.onToggle(() => {
+        const current = latest.current
         // While an approval is pending the panel stays shown.
-        if (pending) return
-        setShown(!shown)
-        if (shown) void api.prompt.focusPage()
-        else setFocusRequest((n) => n + 1)
+        if (current.pending) return
+        const next = !current.shown
+        latest.current = { ...current, shown: next }
+        setShown(next)
+        if (next) setFocusRequest((n) => n + 1)
+        else void api.prompt.focusPage()
       }),
-    [api, shown, pending],
+    [api],
   )
   const visible = shown || pending
 
@@ -126,15 +143,6 @@ export function AssistantPanel({
             {navigation?.title && <span className="assistant-page-url">{navigation.url}</span>}
           </div>
         )}
-        <button
-          type="button"
-          className="assistant-hide"
-          aria-label="Hide assistant"
-          title="Hide (Ctrl+B)"
-          onClick={() => setShown(false)}
-        >
-          ×
-        </button>
       </header>
       <div className="assistant-body">
         {hasConversation && conversation}

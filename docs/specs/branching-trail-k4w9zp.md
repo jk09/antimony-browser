@@ -6,12 +6,12 @@
 | --- | --- |
 | **Feature name** | Navigation stacks: a vertical, branching breadcrumb tree replacing the page title/URL in the assistant panel header, one stack per tab |
 | **Spec ID** | branching-trail-k4w9zp |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-01 18:51 +00:00 |
-| **Last updated** | 2026-10-01 19:12 +00:00 |
+| **Last updated** | 2026-10-01 19:50 +00:00 |
 | **Affected features** | stacks (new), navigation, prompt, agent, history, menu |
 | **Target release** | 0.1.0 |
 | **Related links** | [still-meridian-r4v8nc](./still-meridian-r4v8nc.md) (assistant panel; its header is replaced here) |

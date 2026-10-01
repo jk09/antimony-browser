@@ -164,7 +164,7 @@ describe('HistoryView', () => {
     const fake = fakeApi()
     render(<AssistantPanel overlay={<HistoryView />} />)
     await act(async () => {})
-    fireEvent.click(screen.getByRole('button', { name: 'Hide assistant' }))
+    act(() => fake.emit.toggle())
     expect((screen.getByRole('complementary', { hidden: true }) as HTMLElement).hidden).toBe(true)
     act(() => fake.emit.historyOpen({}))
     expect((screen.getByRole('complementary') as HTMLElement).hidden).toBe(false)
