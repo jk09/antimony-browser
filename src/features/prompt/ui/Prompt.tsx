@@ -300,9 +300,6 @@ export function Prompt({ focusRequest = 0 }: { focusRequest?: number }) {
       {agent?.status === 'awaiting-approval'
         ? 'Waiting for your approval…'
         : 'Assistant is acting…'}
-      <button type="button" className="prompt-stop" onClick={() => void api.agent.stop()}>
-        Stop
-      </button>
     </span>
   ) : null
 

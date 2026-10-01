@@ -11,7 +11,7 @@
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-01 02:45 +00:00 |
-| **Last updated** | 2026-10-01 03:10 +00:00 |
+| **Last updated** | 2026-10-01 04:00 +00:00 |
 | **Affected features** | prompt, agent, skills, navigation |
 | **Target release** | 0.1.0 |
 | **Related links** | [violet-harbinger-p7w3kd](./violet-harbinger-p7w3kd.md) (LLM prompt bar; its card-on-top layout is replaced by this) |
@@ -69,7 +69,7 @@
 7. Hide (× in the header) hides the panel; the page area takes the full width. The panel shows again by itself when an approval is asked (as the card does today), and with Ctrl/Cmd+L.
 8. Escape in the input closes the suggestion list, otherwise stops a running assistant, otherwise does nothing (it no longer hides anything).
 9. Submitting a URL clears the input and leaves the panel as it is; the page view gets keyboard focus after the navigation starts, as after Enter in a browser's address bar.
-10. The "Assistant is acting… / Stop" status shows in the card, as today. The page's accent frame (agent) is unchanged.
+10. The "Assistant is acting…" status shows in the card; the input row's send button turns into the Stop button while a run is active (no second Stop button in the status line). The page's accent frame (agent) is unchanged.
 
 ### Debugger (feature `agent`)
 11. The debugger stays docked between the page area and the assistant panel and keeps its resize handle on its left edge; its width is computed from its own right edge (so it doesn't jump when the assistant panel is shown).
@@ -132,6 +132,7 @@
 - **The page area's 240 px minimum is CSS** (`min-width` on the acting frame; the panel is a shrinkable flex item down to its 300 px minimum), not a JS clamp. `clampWidth` only keeps drags and arrow keys within 300–720 px.
 - **The prompt card is capped at 60 % of the panel height and scrolls**, so many attachments or a long suggestion list can't squeeze the conversation to nothing.
 - **The conversation also keeps its newest item in view when its box shrinks** (a `ResizeObserver`), e.g. when the suggestion list opens; found on a screenshot.
+- **The status line lost its own Stop button** (req. 10): it duplicated the send button, which already turns into Stop while a run is active; found on a screenshot.
 - **Suggestion labels keep at least 60 % of a row** in the narrower panel, so `/key` and `/model` aren't cut to `/…`.
 - **e2e ran in this session** (the Electron binary could be downloaded): all 9 tests pass under `xvfb-run`. Screenshots at 1 400 × 800 confirmed the layout in light mode; dark mode uses the existing color tokens but couldn't be switched in Xvfb, so it wasn't checked visually.
 - **History reloads after each submit**, not only when the prompt opens: the panel no longer closes and reopens, so suggestions would otherwise miss what was just typed.
