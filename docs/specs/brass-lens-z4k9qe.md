@@ -6,7 +6,7 @@
 | --- | --- |
 | **Feature name** | Zoom the chrome UI with Ctrl/Cmd + / − / 0 |
 | **Spec ID** | brass-lens-z4k9qe |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |

@@ -5,7 +5,7 @@ Lets Claude (Anthropic Messages API) or a local Ollama model carry out requests 
 ## Entry points
 - UI: `ui/Conversation.tsx` (conversation, approvals, "Save as skill") filling the assistant panel above the prompt, following new items unless scrolled up; `ui/ActingFrame.tsx` around the page area; `ui/DebugPanel.tsx` docked between the page area and the assistant panel – all mounted in `App.tsx`
 - IPC: `agent:run|stop|approve|new-conversation|state|settings|update-settings|set-key|models|debug-log|toggle-debug` (UI → main); `agent:state-changed`, `agent:settings-changed`, `agent:debug-log-changed`, `agent:debug-toggled` (main → UI) – `ipc.ts`
-- Main: `register` in `main.ts` – File → Toggle Assistant Debugger (Ctrl/Cmd+Shift+D); exports `replay`, `savableSteps`, `isReplayableTool` for skills. Run loop `main/agent.ts`, client `main/anthropic.ts` (fetch, no SDK; also Ollama's compatible `/v1/messages`), Ollama address and model list `main/ollama.ts`, tools `main/tools.ts`, page adapter `main/browser.ts`, key and settings `main/settings.ts`
+- Main: `register` in `main.ts` – File → Toggle Assistant Debugger (Ctrl/Cmd+Shift+D); exports `replay`, `savableSteps`, `isReplayableTool` for skills and `complete` (one request to the selected model, no tools; for history's summaries and Meaning search). Run loop `main/agent.ts`, client `main/anthropic.ts` (fetch, no SDK; also Ollama's compatible `/v1/messages`), Ollama address and model list `main/ollama.ts`, tools `main/tools.ts`, page adapter `main/browser.ts`, key and settings `main/settings.ts`
 - Shared: `shared/page-scripts.ts` – the fixed scripts run in the page's isolated world
 
 ## Invariants
@@ -14,6 +14,7 @@ Lets Claude (Anthropic Messages API) or a local Ollama model carry out requests 
 - Never types into password or payment card fields – `main/agent.test.ts › refuses typing into sensitive fields…`, `shared/page-scripts.test.ts › flags password…`
 - Page content reaches the model inside `<untrusted_page_content>` – `main/tools.test.ts › untrusted`, `e2e/prompt.spec.ts`
 - The API key never reaches the renderer and is stored only encrypted – `main.test.ts › never sends the API key…`, `main/settings.test.ts`
+- `complete` uses the selected model and the same key rules, sends no tools and returns only text – `main.test.ts › answers single requests…`
 - Ollama models (`ollama:<name>`) run without a key and get no Anthropic-only request fields or key header; the server address comes only from `OLLAMA_HOST` – `main.test.ts › runs Ollama models…`, `main/anthropic.test.ts`, `main/ollama.test.ts`
 - Model history is append-only; every `tool_use` gets a `tool_result`, also after Stop – `main/agent.test.ts › stop during an approval…`
 - A run ends after 25 model steps – `main/agent.test.ts › ends with an error after the step limit`
@@ -27,6 +28,7 @@ Lets Claude (Anthropic Messages API) or a local Ollama model carry out requests 
 
 ## Security surface
 - IPC: the chrome UI can start runs, answer approvals, change model and page access, set the key (write-only) and list models (ids and labels only; it can't change the Ollama address).
+- Main: `complete` lets other features' main code send text (and a JPEG) to the selected model; they decide what may be sent (history: ADR 0006).
 - Web content: with page access on, the model reads page text, element lists and screenshots (sent to Anthropic, or to Ollama for `ollama:` models) and, after approval, clicks and types via trusted input events. Navigation needs no approval until the run has read a page; then leaving the site needs approval too (ADR 0004).
 
 ## Feature flags
@@ -34,4 +36,4 @@ Lets Claude (Anthropic Messages API) or a local Ollama model carry out requests 
 |---|---|---|---|
 | – | | | |
 
-Spec: violet-harbinger-p7w3kd, copper-lantern-o7l4ma, still-meridian-r4v8nc · ADRs: 0004, 0005
+Spec: violet-harbinger-p7w3kd, copper-lantern-o7l4ma, still-meridian-r4v8nc, ember-ledger-h3x8vq · ADRs: 0004, 0005, 0006

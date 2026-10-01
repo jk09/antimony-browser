@@ -1,3 +1,4 @@
+import type { VisitedSuggestion } from '../../history/ipc'
 import type { HistoryEntry } from '../ipc'
 
 /** A /command or skill the prompt can suggest. */
@@ -100,4 +101,29 @@ export function suggest(
       label: entry.kind === 'url' ? bare(entry.text) : entry.text,
       ...(entry.kind === 'url' && { detail: entry.text }),
     }))
+}
+
+/**
+ * Adds pages from browsing history to URL suggestions: after the URLs typed into the prompt,
+ * before past questions, without duplicates. Nothing changes for /commands.
+ */
+export function withVisited(
+  suggestions: Suggestion[],
+  visited: VisitedSuggestion[],
+  input: string,
+  limit = SUGGESTION_LIMIT,
+): Suggestion[] {
+  const text = input.trimStart()
+  if (!text || text.startsWith('/') || visited.length === 0) return suggestions
+  const typed = suggestions.filter((suggestion) => suggestion.kind === 'url')
+  const seen = new Set(typed.map((suggestion) => bare(suggestion.text)))
+  const pages: Suggestion[] = []
+  for (const page of visited) {
+    const key = bare(page.url)
+    if (seen.has(key) || page.url === text) continue
+    seen.add(key)
+    pages.push({ kind: 'url', text: page.url, label: page.title || key, detail: key })
+  }
+  const others = suggestions.filter((suggestion) => suggestion.kind !== 'url')
+  return [...typed, ...pages, ...others].slice(0, limit)
 }

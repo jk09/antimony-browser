@@ -82,7 +82,7 @@ export function buildRequest(request: ModelRequest): {
         max_tokens: 16_000,
         system: request.system,
         messages: request.messages,
-        tools: request.tools,
+        ...(request.tools.length > 0 && { tools: request.tools }),
       },
       headers: {},
     }
@@ -92,7 +92,7 @@ export function buildRequest(request: ModelRequest): {
     max_tokens: 16_000,
     system: request.system,
     messages: request.messages,
-    tools: request.tools,
+    ...(request.tools.length > 0 && { tools: request.tools }),
     // Caches the stable prefix (tools, system prompt, earlier turns) between the steps of a run.
     cache_control: { type: 'ephemeral' },
   }

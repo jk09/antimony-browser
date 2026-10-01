@@ -19,7 +19,7 @@ vi.mock('../navigation/main', () => ({ getPage: () => null }))
 
 process.env['OLLAMA_HOST'] = '127.0.0.1:11555'
 delete process.env['ANTHROPIC_API_KEY']
-const { register } = await import('./main')
+const { register, complete } = await import('./main')
 const { channels } = await import('./ipc')
 
 function setup() {
@@ -138,5 +138,44 @@ describe('agent main', () => {
     expect(await call(channels.models)).toMatchObject({
       ollama: { error: "Ollama isn't running at http://127.0.0.1:11555." },
     })
+  })
+
+  it('answers single requests with the selected model, without tools', async () => {
+    const fetch = vi.fn(async (_url: string, _init?: RequestInit) =>
+      json({
+        id: 'm2',
+        model: 'qwen3:8b',
+        content: [
+          { type: 'thinking', thinking: 'hmm' },
+          { type: 'text', text: 'SUMMARY: ' },
+          { type: 'text', text: 'ok' },
+        ],
+        stop_reason: 'end_turn',
+        usage: {},
+      }),
+    )
+    vi.stubGlobal('fetch', fetch)
+    const { call } = setup()
+    call(channels.updateSettings, { model: 'ollama:qwen3:8b' })
+    const answer = await complete({ system: 'sys', text: 'hello', imageJpegBase64: 'AAAA' })
+    expect(answer).toEqual({ text: 'SUMMARY: ok', model: 'ollama:qwen3:8b' })
+    const body = JSON.parse(fetch.mock.calls[0]![1]!.body as string)
+    expect(body).not.toHaveProperty('tools')
+    expect(body.system).toBe('sys')
+    expect(body.messages).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'AAAA' } },
+          { type: 'text', text: 'hello' },
+        ],
+      },
+    ])
+
+    // Claude without a key: rejected, nothing sent.
+    call(channels.setKey, null)
+    call(channels.updateSettings, { model: 'claude-sonnet-5-5' })
+    await expect(complete({ system: 's', text: 't' })).rejects.toThrow(/key/)
+    expect(fetch).toHaveBeenCalledTimes(1)
   })
 })

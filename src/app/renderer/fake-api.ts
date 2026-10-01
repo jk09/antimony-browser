@@ -7,6 +7,7 @@ import {
   type DebugEvent,
   type ModelList,
 } from '../../features/agent/ipc'
+import type { HistorySettings, OpenRequest } from '../../features/history/ipc'
 import type { NavigationState } from '../../features/navigation/ipc'
 import { toUrl } from '../../features/navigation/shared/to-url'
 import type { Skill } from '../../features/skills/ipc'
@@ -59,6 +60,9 @@ export function fakeApi(
   const debugEvent = channel<{ event: DebugEvent; label: string }>()
   const debugToggled = channel<void>()
   const navigation = channel<NavigationState>()
+  const historyOpen = channel<OpenRequest>()
+  const historyChanged = channel<void>()
+  const historySettings = channel<HistorySettings>()
   const currentSettings = { ...defaultSettings, ...options.settings }
 
   const api = {
@@ -80,6 +84,21 @@ export function fakeApi(
         debugEvent.subscribe(({ event, label }) => listener(event, label)),
       toggleDebug: vi.fn(async () => debugToggled.emit()),
       onDebugToggled: debugToggled.subscribe,
+    },
+    history: {
+      suggest: vi.fn(async (_text: string) => []),
+      search: vi.fn(async (_request) => ({ pages: [] })),
+      screenshot: vi.fn(async (_id: number) => null),
+      current: vi.fn(async () => null),
+      setNote: vi.fn(async (_id: number, _note: string | null) => {}),
+      delete: vi.fn(async (_id: number) => {}),
+      clear: vi.fn(async (_all: boolean) => {}),
+      settings: vi.fn(async () => ({ summaries: false })),
+      updateSettings: vi.fn(async (update) => ({ summaries: false, ...update })),
+      requestOpen: vi.fn(async (request: OpenRequest) => historyOpen.emit(request)),
+      onOpen: historyOpen.subscribe,
+      onChanged: historyChanged.subscribe,
+      onSettingsChanged: historySettings.subscribe,
     },
     navigation: {
       go: vi.fn(async () => {}),
@@ -121,6 +140,8 @@ export function fakeApi(
       debugEvent: (event: DebugEvent, label: string) => debugEvent.emit({ event, label }),
       debugToggled: () => debugToggled.emit(),
       navigation: navigation.emit,
+      historyOpen: historyOpen.emit,
+      historyChanged: () => historyChanged.emit(),
     },
   }
 }

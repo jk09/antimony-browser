@@ -102,6 +102,45 @@ export async function runCommand(
     case 'forget-history':
       await api.prompt.clearHistory()
       return info('Prompt history cleared.')
+    case 'history':
+      await api.history.requestOpen({ query: args })
+      return { close: true }
+    case 'note': {
+      const page = await api.history.current()
+      if (!args) {
+        await api.history.requestOpen({ note: true })
+        return { close: true }
+      }
+      if (!page) return error('This page is not in history, so it can’t have a note.')
+      if (args === 'clear') {
+        await api.history.setNote(page.id, null)
+        return info('Note removed.')
+      }
+      await api.history.setNote(page.id, args)
+      return info(`Noted ${page.title || page.url}.`)
+    }
+    case 'history-clear':
+      if (args !== '' && args !== 'all') return error('Use /history-clear or /history-clear all.')
+      await api.history.clear(args === 'all')
+      return info(
+        args === 'all'
+          ? 'Browsing history cleared, notes included.'
+          : 'Browsing history cleared; noted pages and their notes are kept.',
+      )
+    case 'history-summaries': {
+      if (args !== 'on' && args !== 'off') {
+        const current = await api.history.settings()
+        return info(
+          `Page summaries are ${current.summaries ? 'on' : 'off'}. Use /history-summaries on or off.`,
+        )
+      }
+      await api.history.updateSettings({ summaries: args === 'on' })
+      return info(
+        args === 'on'
+          ? 'Pages you spend 30 s or more on will be summarised by the selected model (their text and a screenshot are sent to it).'
+          : 'Page summaries off.',
+      )
+    }
   }
 
   const skill = skills.find((candidate) => candidate.name === name)
