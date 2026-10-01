@@ -6,12 +6,12 @@
 | --- | --- |
 | **Feature name** | LLM prompt bar (prompt, agent, skills, debug view) |
 | **Spec ID** | violet-harbinger-p7w3kd |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-09-30 19:36 +00:00 |
-| **Last updated** | 2026-09-30 20:11 +00:00 |
+| **Last updated** | 2026-10-01 01:17 +00:00 |
 | **Affected features** | navigation, prompt (new), agent (new), skills (new) |
 | **Target release** | 0.1.0 |
 | **Related links** | [amber-lantern-8qp2hb](./amber-lantern-8qp2hb.md) (Open Location, replaced by this), [quiet-harbor-n7k2x9](./quiet-harbor-n7k2x9.md) (Draft; its address bar is superseded by this prompt) |
