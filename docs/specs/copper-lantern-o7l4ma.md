@@ -6,7 +6,7 @@
 | --- | --- |
 | **Feature name** | Ollama as a local model provider |
 | **Spec ID** | copper-lantern-o7l4ma |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
