@@ -1,0 +1,95 @@
+// @vitest-environment jsdom
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it } from 'vitest'
+import { fakeApi, idleState } from '../../../app/renderer/fake-api'
+import { AssistantPanel, clampWidth, DEFAULT_WIDTH, MAX_WIDTH, MIN_WIDTH } from './AssistantPanel'
+
+afterEach(cleanup)
+
+async function renderPanel() {
+  const fake = fakeApi()
+  render(
+    <AssistantPanel
+      conversation={<section aria-label="Conversation">Hello</section>}
+      form={<form aria-label="Save as skill" />}
+    />,
+  )
+  await act(async () => {})
+  return fake
+}
+
+const panel = () => screen.queryByRole('complementary', { name: 'Assistant' })
+
+describe('AssistantPanel', () => {
+  it('is shown at start with a hint until there is a conversation', async () => {
+    const { emit } = await renderPanel()
+    expect(panel()).toBeTruthy()
+    expect(screen.getByText(/Ask about this page/)).toBeTruthy()
+    expect(screen.queryByRole('region', { name: 'Conversation' })).toBeNull()
+    act(() => emit.state({ ...idleState, items: [{ kind: 'user', text: 'hi', attachments: [] }] }))
+    expect(screen.getByRole('region', { name: 'Conversation' })).toBeTruthy()
+    expect(screen.queryByText(/Ask about this page/)).toBeNull()
+  })
+
+  it('stacks header, conversation, form and prompt, with suggestions above the input', async () => {
+    const { emit } = await renderPanel()
+    act(() => emit.state({ ...idleState, items: [{ kind: 'user', text: 'hi', attachments: [] }] }))
+    const box = screen.getByRole('textbox', { name: 'Prompt' })
+    fireEvent.change(box, { target: { value: '/re' } })
+    const order = [
+      screen.getByRole('button', { name: 'Hide assistant' }),
+      screen.getByRole('region', { name: 'Conversation' }),
+      screen.getByRole('form', { name: 'Save as skill' }),
+      screen.getByRole('listbox'),
+      box,
+    ]
+    for (let i = 1; i < order.length; i++) {
+      expect(
+        order[i - 1]!.compareDocumentPosition(order[i]!) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
+    }
+  })
+
+  it('hides with × and shows again with Ctrl/Cmd+L, focusing the prompt', async () => {
+    const { emit } = await renderPanel()
+    fireEvent.click(screen.getByRole('button', { name: 'Hide assistant' }))
+    expect(panel()).toBeNull()
+    act(() => emit.open())
+    expect(panel()).toBeTruthy()
+    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Prompt' }))
+  })
+
+  it('shows itself for an approval and for a skill save', async () => {
+    const { emit } = await renderPanel()
+    fireEvent.click(screen.getByRole('button', { name: 'Hide assistant' }))
+    act(() =>
+      emit.state({ ...idleState, status: 'awaiting-approval', approval: { description: 'Click' } }),
+    )
+    expect(panel()).toBeTruthy()
+
+    act(() => emit.state(idleState))
+    fireEvent.click(screen.getByRole('button', { name: 'Hide assistant' }))
+    expect(panel()).toBeNull()
+    act(() => emit.saveRequested('x'))
+    expect(panel()).toBeTruthy()
+  })
+
+  it('resizes with the arrow keys on its edge, within the limits', async () => {
+    await renderPanel()
+    const edge = screen.getByRole('separator', { name: 'Resize assistant' })
+    expect(panel()!.style.flexBasis).toBe(`${DEFAULT_WIDTH}px`)
+    fireEvent.keyDown(edge, { key: 'ArrowLeft' })
+    expect(panel()!.style.flexBasis).toBe(`${DEFAULT_WIDTH + 16}px`)
+    fireEvent.keyDown(edge, { key: 'ArrowRight' })
+    fireEvent.keyDown(edge, { key: 'ArrowRight' })
+    expect(edge.getAttribute('aria-valuenow')).toBe(String(DEFAULT_WIDTH - 16))
+    for (let i = 0; i < 40; i++) fireEvent.keyDown(edge, { key: 'ArrowRight' })
+    expect(panel()!.style.flexBasis).toBe(`${MIN_WIDTH}px`)
+  })
+
+  it('clamps widths to its limits', () => {
+    expect(clampWidth(0)).toBe(MIN_WIDTH)
+    expect(clampWidth(450.4)).toBe(450)
+    expect(clampWidth(5000)).toBe(MAX_WIDTH)
+  })
+})

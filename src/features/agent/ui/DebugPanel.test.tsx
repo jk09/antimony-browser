@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, describe, expect, it } from 'vitest'
 import { fakeApi } from '../../../app/renderer/fake-api'
 import type { DebugEvent } from '../ipc'
-import { addEvent, DebugPanel } from './DebugPanel'
+import { addEvent, DebugPanel, MIN_WIDTH } from './DebugPanel'
 
 afterEach(cleanup)
 
@@ -70,5 +70,24 @@ describe('addEvent', () => {
       [2, 'second', 1],
       [1, 'first', 2],
     ])
+  })
+
+  it('resizes from its own right edge, within its limits', async () => {
+    const { emit } = fakeApi()
+    render(<DebugPanel />)
+    act(() => emit.debugToggled())
+    const panel = screen.getByRole('complementary', { name: 'Assistant debugger' })
+    // Docked left of a 400 px assistant panel in a 1 400 px window.
+    panel.getBoundingClientRect = () => ({ right: 1000 }) as DOMRect
+    const handle = screen.getByRole('separator', { name: 'Resize debugger' })
+    handle.setPointerCapture = () => {}
+    fireEvent.pointerDown(handle, { pointerId: 1 })
+    act(() => handle.dispatchEvent(Object.assign(new Event('pointermove'), { clientX: 500 })))
+    expect(panel.style.width).toBe('500px')
+    act(() => handle.dispatchEvent(Object.assign(new Event('pointermove'), { clientX: 900 })))
+    expect(panel.style.width).toBe(`${MIN_WIDTH}px`)
+    act(() => handle.dispatchEvent(new Event('pointerup')))
+    act(() => handle.dispatchEvent(Object.assign(new Event('pointermove'), { clientX: 400 })))
+    expect(panel.style.width).toBe(`${MIN_WIDTH}px`)
   })
 })

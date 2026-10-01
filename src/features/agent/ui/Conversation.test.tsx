@@ -1,11 +1,18 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { fakeApi, idleState } from '../../../app/renderer/fake-api'
 import { ActingFrame } from './ActingFrame'
 import { Conversation } from './Conversation'
 
 afterEach(cleanup)
+
+beforeAll(() => {
+  globalThis.ResizeObserver ??= class {
+    observe() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver
+})
 
 describe('Conversation', () => {
   it('renders nothing for an empty conversation', async () => {
@@ -74,5 +81,32 @@ describe('ActingFrame', () => {
     expect(frame.className).not.toContain('acting ')
     act(() => emit.state({ ...idleState, status: 'running' }))
     expect(frame.classList.contains('acting')).toBe(true)
+  })
+
+  it('follows new items unless scrolled up, and follows again on a new question', async () => {
+    const { emit } = fakeApi()
+    render(<Conversation />)
+    const say = (text: string, kind: 'assistant' | 'user' = 'assistant') =>
+      kind === 'user' ? { kind, text, attachments: [] } : { kind, text }
+    act(() => emit.state({ ...idleState, items: [say('one')] }))
+    const list = screen.getByRole('list')
+    let height = 1000
+    Object.defineProperty(list, 'scrollHeight', { get: () => height })
+    Object.defineProperty(list, 'clientHeight', { get: () => 200 })
+
+    act(() => emit.state({ ...idleState, items: [say('one'), say('two')] }))
+    expect(list.scrollTop).toBe(1000)
+
+    list.scrollTop = 100
+    fireEvent.scroll(list)
+    height = 1200
+    act(() => emit.state({ ...idleState, items: [say('one'), say('two'), say('three')] }))
+    expect(list.scrollTop).toBe(100)
+
+    height = 1400
+    act(() =>
+      emit.state({ ...idleState, items: [say('one'), say('two'), say('three'), say('q', 'user')] }),
+    )
+    expect(list.scrollTop).toBe(1400)
   })
 })

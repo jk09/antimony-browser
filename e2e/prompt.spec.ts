@@ -120,6 +120,14 @@ const pageUrls = (app: ElectronApplication) =>
       .map((contents) => contents.getURL())
   })
 
+/** Bounds of the page view, or null before the first page is loaded. */
+const pageBounds = (app: ElectronApplication) =>
+  app.evaluate(({ BrowserWindow }) => {
+    const window = BrowserWindow.getAllWindows()[0]!
+    const [view] = window.contentView.children
+    return view ? { ...view.getBounds(), windowWidth: window.getContentSize()[0]! } : null
+  })
+
 async function openPrompt(app: ElectronApplication, window: Page) {
   const prompt = window.getByRole('textbox', { name: 'Prompt' })
   await expect(async () => {
@@ -159,6 +167,18 @@ test('a question runs the assistant, which drives the browser; the run replays a
     // Page access is off by default: navigation tools only.
     expect(requests[0]!.body.tools.map((tool) => tool.name)).not.toContain('read_page')
 
+    // The page sits left of the assistant panel and keeps its size while the conversation grows.
+    await expect(window.getByRole('status')).toHaveCount(0)
+    const before = (await pageBounds(app))!
+    expect(before).toMatchObject({ x: 0, y: 0 })
+    expect(before.width).toBeLessThan(before.windowWidth - 250)
+    await prompt.fill('open the test page again, please')
+    await prompt.press('Enter')
+    await expect(conversation.getByText('Opened the test page.')).toHaveCount(2)
+    await expect(window.getByRole('status')).toHaveCount(0)
+    await expect.poll(() => pageBounds(app)).toEqual(before)
+    requests.length = 0
+
     // Save the run as /testpage and replay it: no model request.
     await window.getByRole('button', { name: /Save as skill/ }).click()
     const form = window.getByRole('form', { name: 'Save as skill' })
@@ -176,7 +196,7 @@ test('a question runs the assistant, which drives the browser; the run replays a
     await prompt.press('Escape')
     await prompt.press('Enter')
     await expect.poll(() => pageUrls(app)).toEqual([`${origin}/hello`])
-    expect(requests).toHaveLength(2)
+    expect(requests).toHaveLength(0)
   } finally {
     await app.close()
   }
@@ -224,7 +244,9 @@ test('the debugger shows requests, responses and tool calls', async () => {
         const [content = 0] = window.getContentSize()
         return { content, page: window.contentView.children[0]?.getBounds().width ?? 0 }
       })
-    expect((await widths()).page).toBe((await widths()).content)
+    // The assistant panel takes the right edge (400 px at start).
+    const start = await widths()
+    expect(start.content - start.page).toBe(400)
     await app.evaluate(({ Menu }) =>
       Menu.getApplicationMenu()!.getMenuItemById('toggle-debugger')!.click(),
     )
@@ -236,13 +258,8 @@ test('the debugger shows requests, responses and tool calls', async () => {
       ).toBeVisible()
     }
     await expect(panel).not.toContainText('sk-ant-e2e-test')
-    // The page view narrows to make room for the panel.
-    await expect
-      .poll(async () => {
-        const { content, page } = await widths()
-        return content - page
-      })
-      .toBeGreaterThanOrEqual(280)
+    // The page view narrows to make room for the debugger, next to the assistant panel.
+    await expect.poll(async () => start.page - (await widths()).page).toBeGreaterThanOrEqual(280)
   } finally {
     await app.close()
   }

@@ -8,8 +8,11 @@ test('opens the browser window with the chrome UI', async () => {
   try {
     const window = await app.firstWindow()
     await expect(window).toHaveTitle(/^Antimony - ([0-9a-f]{7,}|unknown)$/)
-    await expect(window.getByTestId('toolbar')).toBeVisible()
     await expect(window.getByTestId('content')).toContainText('Chromium')
+    // The assistant panel is docked on the right with its prompt ready, no toolbar on top.
+    await expect(window.getByRole('complementary', { name: 'Assistant' })).toBeVisible()
+    await expect(window.getByRole('textbox', { name: 'Prompt' })).toBeVisible()
+    await expect(window.getByTestId('toolbar')).toHaveCount(0)
   } finally {
     await app.close()
   }

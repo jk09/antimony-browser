@@ -4,9 +4,6 @@ import { secureWebPreferences } from '../../app/main/security'
 import { channels, type NavigationState, type PageInsets } from './ipc'
 import { isWebUrl, toUrl } from './shared/to-url'
 
-/** Must match `--toolbar-height` in src/app/renderer/styles.css; the top inset until the UI reports one. */
-export const TOOLBAR_HEIGHT = 40
-
 const MAX_INSET = 4000
 
 /** Controls for the page view, for other features' main code (the agent). */
@@ -79,7 +76,8 @@ export function register({ window, browsingSession, ipc }: MainContext): void {
     return { action: 'deny' }
   })
 
-  let insets: PageInsets = { top: TOOLBAR_HEIGHT, right: 0, bottom: 0, left: 0 }
+  // The chrome UI reports the page area's insets when it mounts, before a page can be loaded.
+  let insets: PageInsets = { top: 0, right: 0, bottom: 0, left: 0 }
   const layout = () => {
     const [width = 0, height = 0] = window.getContentSize()
     page.setBounds({

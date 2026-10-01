@@ -52,7 +52,8 @@ function EventRow({ event }: { event: DebugEvent }) {
 
 /**
  * The assistant debugger: every model request and response, tool call, approval and result of
- * each run, docked on the right (the page view narrows). Toggled with Ctrl/Cmd+Shift+D or /debug.
+ * each run, docked right of the page (the page view narrows), left of the assistant panel. Toggled
+ * with Ctrl/Cmd+Shift+D or /debug.
  */
 export function DebugPanel() {
   const [visible, setVisible] = useState(false)
@@ -79,9 +80,11 @@ export function DebugPanel() {
 
   const startResize = (event: PointerEvent<HTMLDivElement>) => {
     const handle = event.currentTarget
+    // Measured from the panel's own right edge: the assistant panel may sit to its right.
+    const right = handle.parentElement?.getBoundingClientRect().right ?? window.innerWidth
     handle.setPointerCapture(event.pointerId)
     const move = (moveEvent: globalThis.PointerEvent) => {
-      const next = window.innerWidth - moveEvent.clientX
+      const next = right - moveEvent.clientX
       setWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, next)))
     }
     const up = () => {
