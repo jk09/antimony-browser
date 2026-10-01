@@ -1,6 +1,6 @@
 # 0004. Let an LLM assistant read and act on pages, Edge Copilot style
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-30
 - Features: agent, prompt, skills, navigation
 - Spec: violet-harbinger-p7w3kd
