@@ -25,7 +25,7 @@ Antimony is a minimal Chromium-based browser built on [Electron](https://www.ele
 
 ## UI notes
 
-- Layout: `PageArea` reports the page area's box as insets and the main process sets page view bounds on inset changes and `resize`. Keep UI that grows with content (conversation, suggestions, forms) in the assistant panel, not above or below the page, so the page keeps its size. Pages sit *above* the chrome UI's webContents, so anything that must overlap a page (menus, the address bar dropdown) needs a native `Menu`, a temporary resize, or a small popup `WebContentsView`.
+- Layout: `PageArea` reports the page area's box as insets (CSS pixels) and the main process sets page view bounds, scaled by the chrome UI's zoom factor, on inset changes and `resize`. Ctrl/Cmd + / − / 0 zoom the chrome UI only (View menu, `src/app/main/menu.ts`, steps in `zoom.ts`); page zoom is a separate feature. Keep UI that grows with content (conversation, suggestions, forms) in the assistant panel, not above or below the page, so the page keeps its size. Pages sit *above* the chrome UI's webContents, so anything that must overlap a page (menus, the address bar dropdown) needs a native `Menu`, a temporary resize, or a small popup `WebContentsView`.
 - Keyboard shortcuts must work while a page has focus: define them as application `Menu` accelerators in the main process (items pushed onto `ctx.fileMenu`, [ADR 0003](./adr/0003-build-the-application-menu-from-feature-contributions.md)) or `before-input-event` on page views, not DOM key handlers in the UI.
 - Styling stays plain CSS with custom properties and `prefers-color-scheme`; add a UI library only with an ADR.
 

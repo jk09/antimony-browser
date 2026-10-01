@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { act, cleanup, render, screen } from '@testing-library/react'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
 import { fakeApi } from './fake-api'
 
@@ -28,5 +28,21 @@ describe('App', () => {
     ).toBeTruthy()
     expect(screen.getByRole('textbox', { name: 'Prompt' })).toBeTruthy()
     expect(screen.queryByTestId('toolbar')).toBeNull()
+  })
+
+  it('reports the page area again when the chrome UI is zoomed, even with the same insets', () => {
+    const { api } = fakeApi()
+    render(<App />)
+    const calls = vi.mocked(api.navigation.setInsets).mock.calls.length
+    act(() => window.dispatchEvent(new Event('resize')))
+    expect(api.navigation.setInsets).toHaveBeenCalledTimes(calls)
+    const ratio = window.devicePixelRatio
+    try {
+      Object.defineProperty(window, 'devicePixelRatio', { value: ratio * 0.5, configurable: true })
+      act(() => window.dispatchEvent(new Event('resize')))
+      expect(api.navigation.setInsets).toHaveBeenCalledTimes(calls + 1)
+    } finally {
+      Object.defineProperty(window, 'devicePixelRatio', { value: ratio, configurable: true })
+    }
   })
 })

@@ -6,7 +6,7 @@
 | --- | --- |
 | **Feature name** | Assistant side panel (prompt docked on the right) |
 | **Spec ID** | still-meridian-r4v8nc |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
