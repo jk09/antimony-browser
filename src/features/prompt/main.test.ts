@@ -7,10 +7,14 @@ import type { MainContext } from '../../app/main/features'
 
 const userData = mkdtempSync(join(tmpdir(), 'antimony-prompt-'))
 const quitListeners: (() => void)[] = []
+let created: ((event: unknown, contents: unknown) => void) | null = null
 vi.mock('electron', () => ({
   app: {
     getPath: () => userData,
-    on: (_event: string, listener: () => void) => quitListeners.push(listener),
+    on: (event: string, listener: never) => {
+      if (event === 'will-quit') quitListeners.push(listener)
+      if (event === 'web-contents-created') created = listener
+    },
   },
 }))
 
@@ -18,13 +22,40 @@ const page = { focus: vi.fn() }
 let pageContents: typeof page | null = page
 vi.mock('../navigation/main', () => ({ getPage: () => ({ contents: () => pageContents }) }))
 
-const { register } = await import('./main')
+const { isToggleKey, register } = await import('./main')
+
+type InputListener = (event: { preventDefault: () => void }, input: Electron.Input) => void
+/** A webContents that records its before-input-event listener. */
+function fakeContents(session: unknown = {}) {
+  const contents = {
+    session,
+    focus: vi.fn(),
+    input: null as InputListener | null,
+    on: (event: string, listener: InputListener) => {
+      if (event === 'before-input-event') contents.input = listener
+    },
+  }
+  return contents
+}
+
+const key = (overrides: Partial<Electron.Input> = {}) =>
+  ({
+    type: 'keyDown',
+    key: 'b',
+    control: true,
+    meta: false,
+    alt: false,
+    shift: false,
+    isAutoRepeat: false,
+    ...overrides,
+  }) as Electron.Input
 const { channels } = await import('./ipc')
 
 function setup() {
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
   const ctx = {
-    window: { webContents: { focus: vi.fn() } },
+    window: { webContents: fakeContents() },
+    browsingSession: { name: 'browsing' },
     ipc: { handle: (channel: string, fn: never) => handlers.set(channel, fn), send: vi.fn() },
     fileMenu: [] as MenuItemConstructorOptions[],
   }
@@ -79,6 +110,43 @@ describe('prompt main', () => {
     ;(item!.click as () => void)()
     expect(ctx.window.webContents.focus).toHaveBeenCalled()
     expect(ctx.ipc.send).toHaveBeenCalledWith(channels.toggle, null)
+  })
+
+  it('matches Ctrl+B (Cmd+B on macOS) pressed, not held or with other modifiers', () => {
+    expect(isToggleKey(key(), 'win32')).toBe(true)
+    expect(isToggleKey(key({ key: 'B' }), 'linux')).toBe(true)
+    expect(isToggleKey(key({ control: false, meta: true }), 'darwin')).toBe(true)
+    expect(isToggleKey(key({ control: false, meta: true }), 'win32')).toBe(false)
+    expect(isToggleKey(key(), 'darwin')).toBe(false)
+    expect(isToggleKey(key({ isAutoRepeat: true }), 'win32')).toBe(false)
+    expect(isToggleKey(key({ type: 'keyUp' }), 'win32')).toBe(false)
+    expect(isToggleKey(key({ shift: true }), 'win32')).toBe(false)
+    expect(isToggleKey(key({ alt: true }), 'win32')).toBe(false)
+    expect(isToggleKey(key({ key: 'l' }), 'win32')).toBe(false)
+  })
+
+  it('toggles once on Ctrl/Cmd+B in the chrome UI or a page, before the page or menu sees it', () => {
+    const { ctx } = setup()
+    const page = fakeContents(ctx.browsingSession)
+    const other = fakeContents({ name: 'other' })
+    created!({}, page)
+    created!({}, other)
+    expect(other.input).toBeNull()
+
+    const command = process.platform === 'darwin' ? { control: false, meta: true } : {}
+    for (const contents of [ctx.window.webContents, page]) {
+      ctx.ipc.send.mockClear()
+      const event = { preventDefault: vi.fn() }
+      contents.input!(event, key(command))
+      expect(event.preventDefault).toHaveBeenCalledOnce()
+      expect(ctx.ipc.send).toHaveBeenCalledExactlyOnceWith(channels.toggle, null)
+    }
+
+    ctx.ipc.send.mockClear()
+    const typed = { preventDefault: vi.fn() }
+    page.input!(typed, key({ key: 'a' }))
+    expect(typed.preventDefault).not.toHaveBeenCalled()
+    expect(ctx.ipc.send).not.toHaveBeenCalled()
   })
 
   it('focuses the page on request, and does nothing without one', () => {

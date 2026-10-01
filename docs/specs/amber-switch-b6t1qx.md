@@ -11,7 +11,7 @@
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-01 18:40 +00:00 |
-| **Last updated** | 2026-10-01 19:00 +00:00 |
+| **Last updated** | 2026-10-01 19:45 +00:00 |
 | **Affected features** | prompt |
 | **Target release** | 0.1.0 |
 | **Related links** | ADR 0003 (application menu from feature contributions), spec slate-compass-m5t2rw (`/menu`) |
@@ -101,3 +101,4 @@
 ## 14. Changes during implementation
 
 - **e2e ran in this session** under `xvfb-run` (Electron binary downloaded with curl): all 12 tests pass; Ctrl+B is checked in `e2e/prompt.spec.ts › the menu bar is hidden…` with `sendInputEvent` in the page.
+- **Follow-up fix (2026-10-01):** on Windows the panel hid with Ctrl+B but often wouldn't come back until the chrome UI was reloaded: with the page view focused, Ctrl+B didn't reliably reach the menu accelerator, and toggles that arrived before a render read a stale `shown`. Ctrl/Cmd+B is now caught in `before-input-event` (chrome UI and browsing-session webContents; `preventDefault` stops the page and the menu accelerator, so one press toggles once; key repeat is ignored), and the panel's toggle listener reads the latest state from a ref. At the owner's request the × button is removed (supersedes item 6 and non-goal 3): the panel can only be hidden, never closed.

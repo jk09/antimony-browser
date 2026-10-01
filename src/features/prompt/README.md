@@ -3,10 +3,10 @@
 The assistant panel docked on the right of the window, with a location bar shaped like the Claude prompt at its bottom: Ctrl/Cmd+L focuses it, Ctrl/Cmd+B shows or hides it, a URL loads the page, `/command` runs a command or skill (`/menu` reaches the application menu), and anything else is a request for the assistant. `@name` alone switches to that navigation stack; `@name` in a question attaches the stack's outline. It suggests past URLs and visited pages (by address prefix, from history), questions, commands, skill arguments and menu items level by level, and takes pasted images and long text as attachments. The page keeps its size while the conversation grows.
 
 ## Entry points
-- UI: `ui/AssistantPanel.tsx` – mounted on the right edge in `App.tsx`: a `header` slot (stacks' tree; page title and URL without it), the `conversation` slot (left empty, without a hint, until there is a conversation: the input's placeholder is the hint) and the `form` slot (agent's `Conversation`, skills' `SaveSkill`), then `ui/Prompt.tsx`, plus an `overlay` slot over the conversation (history's view); 400 px, resizable 300–720 px, × hides it, Ctrl/Cmd+B hides it (focusing the page) or shows it (focusing the prompt), Ctrl/Cmd+L, an approval, a skill save or opening history shows it
+- UI: `ui/AssistantPanel.tsx` – mounted on the right edge in `App.tsx`: a `header` slot (stacks' tree; page title and URL without it), the `conversation` slot (left empty, without a hint, until there is a conversation: the input's placeholder is the hint) and the `form` slot (agent's `Conversation`, skills' `SaveSkill`), then `ui/Prompt.tsx`, plus an `overlay` slot over the conversation (history's view); 400 px, resizable 300–720 px, no close button (it is only ever hidden), Ctrl/Cmd+B hides it (focusing the page) or shows it (focusing the prompt), Ctrl/Cmd+L, an approval, a skill save or opening history shows it
 - UI: `ui/Prompt.tsx` – the card at the panel's bottom, suggestions above the input; while a run is active the status line shows what the assistant is doing and the send button becomes Stop; its model picker groups Claude and installed Ollama models (`agent.models()`, refreshed at start, on Ctrl/Cmd+L and on focus); `ui/commands.ts` built-in commands (incl. `/history`, `/note`, `/history-clear`, `/history-summaries`, which call history, and `/menu`, which calls menu), `ui/attachments.ts`, `ui/SuggestionList.tsx`
 - IPC: `prompt:history`, `prompt:record`, `prompt:clear-history`, `prompt:focus-page` (UI → main), `prompt:open`, `prompt:toggle` (main → UI, no payload) – `ipc.ts`
-- Main: `register` in `main.ts` – File → Prompt… (Ctrl/Cmd+L), File → Toggle Assistant (Ctrl/Cmd+B), prompt history store
+- Main: `register` in `main.ts` – File → Prompt… (Ctrl/Cmd+L), File → Toggle Assistant (Ctrl/Cmd+B; the key is also caught in `before-input-event` of the chrome UI and every browsing-session webContents, because a focused page view doesn't reliably reach the menu accelerator on Windows), prompt history store
 - Shared: `shared/classify.ts` (URL / command / query, no network), `shared/suggest.ts` (also nested arguments: `SuggestCommand.tree`, and `@` stack names: `suggestStacks`, `stackRefs`), `shared/history.ts`
 
 ## Invariants
@@ -19,6 +19,7 @@ The assistant panel docked on the right of the window, with a location bar shape
 - Escape closes suggestions, then stops a running assistant; it never hides the panel – `ui/Prompt.test.tsx`
 - The panel shows itself for an approval or a skill save, and Ctrl/Cmd+B can't hide it while an approval is pending – `ui/AssistantPanel.test.tsx › shows itself…`, `› stays shown on Ctrl/Cmd+B…`
 - Ctrl/Cmd+B works with the page focused, and hiding leaves the page focused – `e2e/prompt.spec.ts › the menu bar is hidden…`
+- Each Ctrl/Cmd+B press toggles exactly once (no menu double-fire, no key repeat), even when toggles arrive before a render; the panel has no close button – `main.test.ts › toggles once on Ctrl/Cmd+B…`, `ui/AssistantPanel.test.tsx › toggles every time…`, `› has no close button…`
 - The page area's size depends only on the window and the panels' widths, never on the conversation or the prompt – `e2e/prompt.spec.ts › a question runs the assistant…`
 - Queries need an Anthropic key only for Claude models; the picker always shows the selected model, even when Ollama doesn't list it – `ui/Prompt.test.tsx › sends queries to an Ollama model…`, `› shows Ollama's error…`
 
@@ -29,7 +30,7 @@ The assistant panel docked on the right of the window, with a location bar shape
 
 ## Security surface
 - IPC: the chrome UI reads and writes its own prompt history and can move keyboard focus to the page view.
-- Web content: –
+- Web content: main reads key presses in pages (`before-input-event`) only to catch Ctrl/Cmd+B, which pages no longer receive.
 
 ## Feature flags
 | Flag | Default | Owner | Remove by |

@@ -85,8 +85,10 @@ test('File → Prompt… (Ctrl+L) loads a typed URL in the page view', async () 
       )
       .toBe(true)
 
-    // × hides the panel; Ctrl+L brings it back.
-    await window.getByRole('button', { name: 'Hide assistant' }).click()
+    // Ctrl+B hides the panel (it has no close button); Ctrl+L brings it back.
+    await app.evaluate(({ Menu }) =>
+      Menu.getApplicationMenu()!.getMenuItemById('prompt-toggle')!.click(),
+    )
     await expect(location).toBeHidden()
     await openLocation(app, window)
     await expect(location).toBeVisible()
