@@ -11,7 +11,7 @@
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-01 01:45 +00:00 |
-| **Last updated** | 2026-10-01 01:58 +00:00 |
+| **Last updated** | 2026-10-01 02:00 +00:00 |
 | **Affected features** | agent, prompt |
 | **Target release** | 0.1.0 |
 | **Related links** | [violet-harbinger-p7w3kd](./violet-harbinger-p7w3kd.md) (LLM prompt bar), [ADR 0004](../adr/0004-let-an-llm-assistant-read-and-act-on-pages.md) ("revisit when more providers are added"), [Ollama Anthropic compatibility](https://github.com/ollama/ollama/blob/main/docs/api/anthropic-compatibility.mdx) |
@@ -116,7 +116,7 @@
 - [x] The picker shows the Claude and Ollama groups, the error or "no models" option, and keeps an unlisted selected `ollama:` model (unit: `Prompt.test.tsx`)
 - [x] `/model` accepts `ollama:<name>` and bare installed names, suggests installed Ollama models, and reports unknown ones (unit: `commands`/`Prompt.test.tsx`)
 - [x] Ollama errors (unreachable, missing model, no tool support, other) produce the sentences in requirement 8 (unit: `anthropic.test.ts`)
-- [ ] End to end: with `OLLAMA_HOST` pointing at a fake server, picking the Ollama model and sending a request navigates via a tool call and shows the answer, with no API key set (e2e: `prompt.spec.ts`)
+- [x] End to end: with `OLLAMA_HOST` pointing at a fake server, picking the Ollama model and sending a request navigates via a tool call and shows the answer, with no API key set (e2e: `prompt.spec.ts`)
 - [x] ADR added for the second provider; agent and prompt READMEs and `docs/features.md` updated
 
 ## 12. Testing / Verification
@@ -135,4 +135,4 @@
 - Error wording (requirement 8): the missing-model sentence reads "Pull it with: ollama pull <name>" (no code formatting; the conversation shows plain text). An extra case was added: a 404 that isn't about a model, or a non-Messages reply, means Ollama is older than 0.14 → "Ollama at <url> doesn't speak the Messages API; update it to version 0.14 or newer." Without it, old Ollama versions would have been reported as "no model".
 - The "No Anthropic API key" messages (prompt and agent) now add "or pick an Ollama model".
 - `/model` asks main for a fresh model list each time instead of using the picker's cached one.
-- The e2e criterion is written (`e2e/prompt.spec.ts › an installed Ollama model runs the assistant without an API key`) but couldn't run in the cloud session (no Electron binary); CI runs it.
+- The e2e criterion is written (`e2e/prompt.spec.ts › an installed Ollama model runs the assistant without an API key`) and couldn't run in the cloud session (no Electron binary); it passed in CI on the PR.
