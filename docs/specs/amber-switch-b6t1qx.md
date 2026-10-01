@@ -6,12 +6,12 @@
 | --- | --- |
 | **Feature name** | Keyboard shortcut Ctrl/Cmd+B toggles the assistant panel (the sidebar with the prompt) |
 | **Spec ID** | amber-switch-b6t1qx |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-01 18:40 +00:00 |
-| **Last updated** | 2026-10-01 18:55 +00:00 |
+| **Last updated** | 2026-10-01 19:00 +00:00 |
 | **Affected features** | prompt |
 | **Target release** | 0.1.0 |
 | **Related links** | ADR 0003 (application menu from feature contributions), spec slate-compass-m5t2rw (`/menu`) |
