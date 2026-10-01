@@ -6,7 +6,7 @@
 | --- | --- |
 | **Feature name** | Browsing history in a local SQLite database, searchable by URL, full text and meaning |
 | **Spec ID** | ember-ledger-h3x8vq |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
