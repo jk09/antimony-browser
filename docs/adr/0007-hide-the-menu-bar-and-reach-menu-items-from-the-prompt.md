@@ -1,6 +1,6 @@
 # 0007. Hide the menu bar and reach menu items from the prompt
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-01
 - Features: menu, prompt, navigation, – (app shell)
 - Spec: slate-compass-m5t2rw

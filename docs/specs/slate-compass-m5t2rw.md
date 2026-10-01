@@ -6,12 +6,12 @@
 | --- | --- |
 | **Feature name** | Hide the window's menu bar; reach every menu item through `/menu` in the prompt, with nested suggestions |
 | **Spec ID** | slate-compass-m5t2rw |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-01 15:00 +00:00 |
-| **Last updated** | 2026-10-01 16:00 +00:00 |
+| **Last updated** | 2026-10-01 16:30 +00:00 |
 | **Affected features** | menu (new), prompt |
 | **Target release** | 0.1.0 |
 | **Related links** | ADR 0003 (application menu from feature contributions), ADR 0007 |
@@ -110,3 +110,4 @@
 - **`/menu` alone** lists the top-level menus as `/menu <name>` hints (info message, not an error).
 - **e2e ran in this session** under `xvfb-run` (Electron binary downloaded with curl): all 12 tests pass. Accelerators are checked with `sendInputEvent` (Ctrl+L in the page).
 
+- **ADR 0007** accepted by the owner.
