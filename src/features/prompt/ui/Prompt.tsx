@@ -11,6 +11,7 @@ import {
 } from 'react'
 import {
   claudeModels,
+  limits,
   type AgentSettings,
   type AgentState,
   type Attachment,
@@ -20,11 +21,14 @@ import {
 import type { VisitedSuggestion } from '../../history/ipc'
 import type { MenuEntry } from '../../menu/ipc'
 import type { Skill } from '../../skills/ipc'
+import type { StacksState } from '../../stacks/ipc'
 import { promptCommands, type HistoryEntry } from '../ipc'
 import { classify } from '../shared/classify'
 import { historyText } from '../shared/history'
 import {
+  stackRefs,
   suggest,
+  suggestStacks,
   withVisited,
   type OptionNode,
   type SuggestCommand,
@@ -78,6 +82,8 @@ export function Prompt({ focusRequest = 0 }: { focusRequest?: number }) {
   const settings = useSubscription<AgentSettings>(api.agent.settings, api.agent.onSettingsChanged)
   const skillList = useSubscription<Skill[]>(api.skills.list, api.skills.onListChanged)
   const skills = useMemo(() => skillList ?? [], [skillList])
+  const stackState = useSubscription<StacksState>(api.stacks.state, api.stacks.onChanged)
+  const stacks = useMemo(() => stackState?.stacks ?? [], [stackState])
   const [modelList, setModelList] = useState<ModelList | null>(null)
   const [menu, setMenu] = useState<MenuEntry[]>([])
   const running = agent !== null && agent.status !== 'idle'
@@ -159,12 +165,14 @@ export function Prompt({ focusRequest = 0 }: { focusRequest?: number }) {
     () =>
       listHidden || recall !== -1
         ? []
-        : withVisited(
-            suggest(text, history, commands),
-            visited.text === text ? visited.pages : [],
-            text,
-          ),
-    [text, history, commands, listHidden, recall, visited],
+        : suggestStacks(text, stacks).length > 0
+          ? suggestStacks(text, stacks)
+          : withVisited(
+              suggest(text, history, commands),
+              visited.text === text ? visited.pages : [],
+              text,
+            ),
+    [text, history, commands, listHidden, recall, visited, stacks],
   )
 
   const edit = (value: string) => {
@@ -198,7 +206,41 @@ export function Prompt({ focusRequest = 0 }: { focusRequest?: number }) {
     if (error) setMessage({ kind: 'error', text: error })
   }
 
+  /** Text attachments with the outline of each stack the text names with `@name`. */
+  const stackAttachments = async (value: string): Promise<Attachment[]> => {
+    const names = stackRefs(
+      value,
+      stacks.map((stack) => stack.name),
+    )
+    const outlines = await Promise.all(names.map((name) => api.stacks.outline(name)))
+    return names.flatMap((name, index) => {
+      const outline = outlines[index]
+      return outline ? [{ kind: 'text' as const, name: `@${name}`, text: outline }] : []
+    })
+  }
+
   const submit = async (value = text) => {
+    // `@name` alone switches to that stack, without the model.
+    const alone = /^@([a-z0-9-]+)$/.exec(value.trim())
+    const stack = alone && stacks.find((candidate) => candidate.name === alone[1])
+    if (stack) {
+      if (running) {
+        setMessage({ kind: 'error', text: 'Stop the current run first (Esc).' })
+        return
+      }
+      record('command', value.trim())
+      setText('')
+      reset()
+      try {
+        await api.stacks.switch(stack.id)
+      } catch (reason) {
+        setMessage({
+          kind: 'error',
+          text: reason instanceof Error ? reason.message : String(reason),
+        })
+      }
+      return
+    }
     const parsed = classify(value, {
       hasAttachments: attachments.length > 0,
       toUrl: api.navigation.toUrl,
@@ -213,7 +255,7 @@ export function Prompt({ focusRequest = 0 }: { focusRequest?: number }) {
           reset()
           await api.navigation.go(parsed.url)
           return
-        case 'query':
+        case 'query': {
           if (running) {
             setMessage({ kind: 'error', text: 'Stop the current run first (Esc).' })
             return
@@ -225,12 +267,18 @@ export function Prompt({ focusRequest = 0 }: { focusRequest?: number }) {
             })
             return
           }
+          const referenced = await stackAttachments(parsed.text)
+          if (attachments.length + referenced.length > limits.attachments) {
+            setMessage({ kind: 'error', text: `At most ${limits.attachments} attachments.` })
+            return
+          }
           if (parsed.text) record('query', parsed.text)
-          await api.agent.run({ text: parsed.text, attachments })
+          await api.agent.run({ text: parsed.text, attachments: [...attachments, ...referenced] })
           setText('')
           setAttachments([])
           setPreview(null)
           return
+        }
         case 'command': {
           record('command', historyText(value))
           setText('')

@@ -5,6 +5,7 @@ import { register as menu } from '../../features/menu/main'
 import { register as navigation } from '../../features/navigation/main'
 import { register as prompt } from '../../features/prompt/main'
 import { register as skills } from '../../features/skills/main'
+import { register as stacks } from '../../features/stacks/main'
 import type { ChromeUiIpc } from './ipc'
 
 /** What a feature's main-process side gets at startup. */
@@ -26,4 +27,12 @@ export interface MainContext {
 export type RegisterFeature = (ctx: MainContext) => void | Promise<void>
 
 // One entry per feature, sorted by name. Removing a feature removes its entry.
-export const features: RegisterFeature[] = [agent, history, menu, navigation, prompt, skills]
+export const features: RegisterFeature[] = [
+  agent,
+  history,
+  menu,
+  navigation,
+  prompt,
+  skills,
+  stacks,
+]

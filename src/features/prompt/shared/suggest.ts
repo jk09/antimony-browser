@@ -174,3 +174,50 @@ export function withVisited(
   const others = suggestions.filter((suggestion) => suggestion.kind !== 'url')
   return [...typed, ...pages, ...others].slice(0, limit)
 }
+
+/** A navigation stack `@name` can refer to. */
+export interface StackRef {
+  name: string
+  rootTitle: string
+}
+
+const STACK_REF = /(^|\s)@([a-z0-9-]*)$/
+
+/**
+ * Stacks for the `@word` being typed at the end of the input, by name prefix first; accepting
+ * one completes `@name ` and leaves the rest of the input as it is.
+ */
+export function suggestStacks(
+  input: string,
+  stacks: StackRef[],
+  limit = SUGGESTION_LIMIT,
+): Suggestion[] {
+  const match = STACK_REF.exec(input)
+  if (!match || input.trimStart().startsWith('/')) return []
+  const typed = match[2]!
+  const before = input.slice(0, input.length - typed.length - 1)
+  return rank(
+    stacks.filter((stack) => stack.name !== ''),
+    (stack) => [stack.name],
+    typed,
+  )
+    .filter((stack) => stack.name !== typed)
+    .slice(0, limit)
+    .map((stack) => ({
+      kind: 'value',
+      text: `${before}@${stack.name} `,
+      label: `@${stack.name}`,
+      detail: stack.rootTitle,
+    }))
+}
+
+/** The distinct `@name`s in the text that name a known stack, in order. */
+export function stackRefs(text: string, names: string[]): string[] {
+  const known = new Set(names.filter((name) => name !== ''))
+  const found: string[] = []
+  for (const match of text.matchAll(/(?:^|\s)@([a-z0-9-]+)(?=$|[\s.,;:!?)])/g)) {
+    const name = match[1]!
+    if (known.has(name) && !found.includes(name)) found.push(name)
+  }
+  return found
+}

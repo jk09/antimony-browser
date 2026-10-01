@@ -20,7 +20,7 @@ Lets Claude (Anthropic Messages API) or a local Ollama model carry out requests 
 - A run ends after 25 model steps – `main/agent.test.ts › ends with an error after the step limit`
 
 ## Dependencies
-- Features: navigation (`getPage` from `main.ts`, `NavigationState` from `ipc.ts`)
+- Features: navigation (`getPage` from `main.ts`, the active tab, `NavigationState` from `ipc.ts`)
 - App: `createJsonStore` (`src/app/main/json-store.ts`)
 - Electron: `safeStorage`, `webContents.executeJavaScriptInIsolatedWorld`, `sendInputEvent`, `insertText`, `capturePage`
 - Network: `POST https://api.anthropic.com/v1/messages` (`ANTHROPIC_BASE_URL` overrides); for Ollama models `POST {OLLAMA_HOST}/v1/messages` and `GET {OLLAMA_HOST}/api/tags` (default `http://localhost:11434`, Ollama ≥ 0.14); e2e uses a local fake for both

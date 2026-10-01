@@ -84,6 +84,45 @@ describe('Prompt', () => {
     expect(box.value).toBe('')
   })
 
+  it('suggests stacks after @, switches with @name alone and attaches named stacks', async () => {
+    const stacks = {
+      current: null,
+      stacks: [
+        { id: 's1', name: 'hacker-news', rootTitle: 'Hacker News', pages: 3 },
+        { id: 's2', name: 'rust-docs', rootTitle: 'Rust', pages: 5 },
+      ],
+    }
+    const { api, box } = await openPrompt({ stacks })
+    type(box, 'compare @ru')
+    const list = screen.getByRole('listbox')
+    expect(
+      within(list)
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual(['↳@rust-docsRust'])
+    press(box, 'Tab')
+    expect(box.value).toBe('compare @rust-docs ')
+
+    type(box, 'compare @rust-docs with @hacker-news and @unknown')
+    press(box, 'Enter')
+    await waitFor(() => expect(api.agent.run).toHaveBeenCalled())
+    expect(api.stacks.outline.mock.calls).toEqual([['rust-docs'], ['hacker-news']])
+    expect(api.agent.run).toHaveBeenCalledWith({
+      text: 'compare @rust-docs with @hacker-news and @unknown',
+      attachments: [
+        { kind: 'text', name: '@rust-docs', text: 'Navigation stack @rust-docs' },
+        { kind: 'text', name: '@hacker-news', text: 'Navigation stack @hacker-news' },
+      ],
+    })
+
+    type(box, '@hacker-news')
+    expect(screen.queryByRole('listbox')).toBeNull()
+    press(box, 'Enter')
+    await waitFor(() => expect(api.stacks.switch).toHaveBeenCalledWith('s1'))
+    expect(api.agent.run).toHaveBeenCalledTimes(1)
+    expect(box.value).toBe('')
+  })
+
   it('asks for an API key before sending a query without one', async () => {
     const { api, box } = await openPrompt({ settings: { hasKey: false } })
     type(box, 'hello there')

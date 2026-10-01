@@ -4,7 +4,7 @@ import { app, powerMonitor } from 'electron'
 import type { MainContext } from '../../app/main/features'
 import { createJsonStore } from '../../app/main/json-store'
 import { complete } from '../agent/main'
-import { getPage, onPageEvent } from '../navigation/main'
+import { getPage, getTabs, onPageEvent } from '../navigation/main'
 import {
   channels,
   MAX_NOTE,
@@ -25,7 +25,7 @@ import {
   SEMANTIC_SYSTEM,
 } from './main/semantic'
 import { needsSummary, parseSummary, SUMMARY_SYSTEM, summaryPrompt } from './main/summarize'
-import { adoptCanonicalLink } from './shared/canonical-url'
+import { adoptCanonicalLink, canonicalUrl } from './shared/canonical-url'
 import { ftsQuery } from './shared/fts-query'
 import { readPageMeta, scriptSource, type PageMeta } from './shared/page-meta'
 
@@ -124,6 +124,14 @@ function openDb(file: string): HistoryDb {
 }
 
 const withTimeout = () => AbortSignal.timeout(MODEL_TIMEOUT_MS)
+
+const clearedListeners = new Set<(all: boolean) => void>()
+
+/** Called after the user clears browsing history (`all`: noted pages too). For stacks. */
+export function onHistoryCleared(listener: (all: boolean) => void): () => void {
+  clearedListeners.add(listener)
+  return () => clearedListeners.delete(listener)
+}
 
 export function register({ window, ipc, fileMenu }: MainContext): void {
   const userData = app.getPath('userData')
@@ -246,7 +254,16 @@ export function register({ window, ipc, fileMenu }: MainContext): void {
     },
   })
 
+  // Visits follow the active tab: background tabs aren't recorded until they're shown.
   onPageEvent((event) => {
+    if (event.type === 'activated') {
+      const url = canonicalUrl(event.url)
+      if (url !== null && recorder.visit()?.url !== url) {
+        recorder.navigated(event.url, 200, 'back_forward')
+      }
+      return
+    }
+    if (event.tabId !== getTabs()?.active()) return
     switch (event.type) {
       case 'navigated':
         recorder.navigated(event.url, event.status, event.transition)
@@ -361,6 +378,7 @@ export function register({ window, ipc, fileMenu }: MainContext): void {
     recorder.dispose()
     db.clear(all)
     changed()
+    for (const listener of clearedListeners) listener(all)
   })
   ipc.handle(channels.settings, () => settings.get())
   ipc.handle(channels.updateSettings, (value) => {

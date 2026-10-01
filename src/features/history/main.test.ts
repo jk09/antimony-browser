@@ -35,6 +35,7 @@ const pageContents = {
 }
 vi.mock('../navigation/main', () => ({
   getPage: () => ({ contents: () => pageContents }),
+  getTabs: () => ({ active: () => 1 }),
   onPageEvent: (listener: (event: PageEvent) => void) => {
     pageListener = listener
     return () => {}
@@ -80,7 +81,14 @@ function setup() {
   }
   register(ctx as unknown as MainContext)
   const call = (channel: string, ...args: unknown[]) => handlers.get(channel)!(...args)
-  const page = (event: PageEvent) => pageListener!(event)
+  /** An event of the active tab (1); navigations add a session history entry. */
+  type Raw<T> = T extends unknown ? Omit<T, 'tabId' | 'entry'> & { tabId?: number } : never
+  const page = (event: Raw<PageEvent>) =>
+    pageListener!({
+      tabId: 1,
+      ...(event.type.startsWith('navigated') && { entry: 'new' }),
+      ...event,
+    } as PageEvent)
   return { ctx, call, page }
 }
 
@@ -216,6 +224,23 @@ describe('history main', () => {
     await vi.advanceTimersByTimeAsync(HIGH_DWELL_MS + 5000)
     expect(pageContents.capturePage).not.toHaveBeenCalled()
     expect(complete).not.toHaveBeenCalled()
+  })
+
+  it('records only the active tab, and a switch of tabs as a back/forward visit', async () => {
+    const { call, page } = setup()
+    page({ type: 'navigated', url: 'https://example.com/a', status: 200, transition: 'link' })
+    page({
+      tabId: 2,
+      type: 'navigated',
+      url: 'https://example.com/background',
+      status: 200,
+      transition: 'link',
+    })
+    await vi.advanceTimersByTimeAsync(1500)
+    expect(call(channels.current)).toMatchObject({ url: 'https://example.com/a' })
+    page({ tabId: 2, type: 'activated', url: 'https://example.com/background' })
+    await vi.advanceTimersByTimeAsync(1500)
+    expect(call(channels.current)).toMatchObject({ url: 'https://example.com/background' })
   })
 
   it('applies a same-page rel=canonical', async () => {

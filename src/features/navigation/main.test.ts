@@ -11,12 +11,18 @@ class FakeWebContents {
   reload = vi.fn()
   stop = vi.fn()
   loading = false
+  index = -1
+  urls: string[] = []
   navigationHistory = {
     canGoBack: () => true,
     canGoForward: () => false,
     goBack: vi.fn(),
     goForward: vi.fn(),
+    goToIndex: vi.fn(),
+    getActiveIndex: () => this.index,
+    getAllEntries: () => this.urls.map((url) => ({ url, title: '' })),
   }
+  close = vi.fn()
   isDestroyed = () => false
   getURL = () => 'https://example.com/'
   getTitle = () => 'Example'
@@ -36,17 +42,20 @@ class FakeWebContents {
 }
 
 class FakeView {
-  static last: FakeView
+  static all: FakeView[] = []
+  static get last() {
+    return FakeView.all.at(-1)!
+  }
   webContents = new FakeWebContents()
   setBounds = vi.fn()
   constructor(public options: unknown) {
-    FakeView.last = this
+    FakeView.all.push(this)
   }
 }
 
 vi.mock('electron', () => ({ app: {}, WebContentsView: FakeView }))
 
-const { register, getPage, onPageEvent } = await import('./main')
+const { register, getPage, getTabs, onPageEvent, setHistoryResolver } = await import('./main')
 const { channels } = await import('./ipc')
 
 function setup() {
@@ -57,19 +66,26 @@ function setup() {
   const ctx = {
     window: {
       getContentSize: () => size,
-      contentView: { addChildView: vi.fn() },
+      contentView: { addChildView: vi.fn(), removeChildView: vi.fn() },
       webContents: { focus: vi.fn(), getZoomFactor: () => zoom },
       on: (event: string, listener: Listener) => windowListeners.set(event, listener),
+      emit: (event: string, ...args: unknown[]) => windowListeners.get(event)!(...args),
     },
     browsingSession: { name: 'browsing' },
     ipc: { handle: (channel: string, fn: never) => handlers.set(channel, fn), send: vi.fn() },
     fileMenu: [] as MenuItemConstructorOptions[],
   }
+  FakeView.all = []
+  setHistoryResolver(null)
   register(ctx as unknown as MainContext)
-  const page = FakeView.last
+  // The first tab is created on the first load; tests that need it before call `tab()`.
+  const tab = () => FakeView.all[0] ?? (getTabs()!.create({ activate: true }), FakeView.all[0]!)
   return {
+    tab,
+    get page() {
+      return tab()
+    },
     ctx,
-    page,
     go: (...args: unknown[]) => handlers.get(channels.go)!(...args),
     call: (channel: string, ...args: unknown[]) => handlers.get(channel)!(...args),
     resize: (width: number, height: number) => {
@@ -151,20 +167,32 @@ describe('navigation main', () => {
     }
   })
 
-  it('opens new-window links in the page view and never creates a window', () => {
-    const { page } = setup()
+  it('opens new-window links in a new tab and never creates a window', () => {
+    const { page, go, ctx } = setup()
+    go('example.com')
+    const events: unknown[] = []
+    const unsubscribe = onPageEvent((event) => events.push(event))
     const open = page.webContents.windowOpenHandler!
     const referrer = { url: 'https://example.com/', policy: 'strict-origin-when-cross-origin' }
-    expect(open({ url: 'https://example.org/a', referrer })).toEqual({ action: 'deny' })
+    expect(open({ url: 'https://example.org/a', referrer, disposition: 'foreground-tab' })).toEqual(
+      { action: 'deny' },
+    )
     const postBody = { data: [], contentType: 'application/x-www-form-urlencoded' }
-    expect(open({ url: 'https://example.org/form', referrer, postBody })).toEqual({
-      action: 'deny',
-    })
+    expect(
+      open({ url: 'https://example.org/form', referrer, postBody, disposition: 'background-tab' }),
+    ).toEqual({ action: 'deny' })
     for (const url of ['about:blank', 'javascript:alert(1)', 'file:///etc/passwd']) {
-      expect(open({ url, referrer }), url).toEqual({ action: 'deny' })
+      expect(open({ url, referrer, disposition: 'foreground-tab' }), url).toEqual({
+        action: 'deny',
+      })
     }
-    expect(page.webContents.loadURL.mock.calls).toEqual([
+    unsubscribe()
+    expect(FakeView.all).toHaveLength(3)
+    const [, foreground, background] = FakeView.all as [FakeView, FakeView, FakeView]
+    expect(foreground.webContents.loadURL.mock.calls).toEqual([
       ['https://example.org/a', { httpReferrer: referrer }],
+    ])
+    expect(background.webContents.loadURL.mock.calls).toEqual([
       [
         'https://example.org/form',
         {
@@ -174,6 +202,74 @@ describe('navigation main', () => {
         },
       ],
     ])
+    // Every tab has the same secure web preferences on the browsing session.
+    for (const view of FakeView.all) {
+      expect(view.options).toEqual(page.options)
+    }
+    // The foreground tab replaced the first one in the window; the background one wasn't shown.
+    expect(ctx.window.contentView.removeChildView).toHaveBeenCalledWith(page)
+    expect(ctx.window.contentView.addChildView).toHaveBeenLastCalledWith(foreground)
+    expect(getTabs()!.active()).toBe(2)
+    expect(events).toEqual([
+      { tabId: 2, type: 'opened', openerId: 1, active: true },
+      { tabId: 2, type: 'activated', url: 'https://example.com/' },
+      { tabId: 3, type: 'opened', openerId: 1, active: false },
+    ])
+  })
+
+  it('switches, loads and closes tabs', () => {
+    const { go, page, ctx } = setup()
+    go('example.com')
+    const tabs = getTabs()!
+    const second = tabs.create({ activate: false, url: 'example.org' })
+    expect(tabs.ids()).toEqual([1, second])
+    expect(tabs.active()).toBe(1)
+    tabs.activate(second)
+    expect(ctx.window.contentView.addChildView).toHaveBeenLastCalledWith(FakeView.all[1])
+    expect(getPage()!.contents()).toBe(FakeView.all[1]!.webContents)
+    expect(tabs.load(second, 'javascript:alert(1)', 'typed')).toBe(false)
+    expect(tabs.load(99, 'example.net', 'typed')).toBe(false)
+    expect(tabs.load(second, 'example.net', 'back_forward')).toBe(true)
+    tabs.close(second)
+    expect(FakeView.all[1]!.webContents.close).toHaveBeenCalled()
+    expect(tabs.active()).toBeNull()
+    expect(getPage()!.contents()).toBeNull()
+    expect(ctx.ipc.send).toHaveBeenLastCalledWith(channels.stateChanged, {
+      url: '',
+      title: '',
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+    })
+    tabs.activate(1)
+    expect(getPage()!.contents()).toBe(page.webContents)
+    page.webContents.urls = ['https://example.com/a', 'https://example.com/b']
+    page.webContents.index = 1
+    expect(tabs.entries(1)).toEqual({ urls: page.webContents.urls, index: 1 })
+    tabs.goToIndex(1, 0)
+    expect(page.webContents.navigationHistory.goToIndex).toHaveBeenCalledWith(0)
+  })
+
+  it('lets a history resolver decide what back and forward mean', () => {
+    const { go, page, ctx } = setup()
+    go('example.com')
+    const resolver = {
+      back: vi.fn(() => true),
+      forward: vi.fn(() => false),
+      canGoBack: () => false,
+      canGoForward: () => true,
+    }
+    setHistoryResolver(resolver)
+    ctx.window.emit('app-command', {}, 'browser-backward')
+    ctx.window.emit('app-command', {}, 'browser-forward')
+    expect(resolver.back).toHaveBeenCalledWith(1)
+    expect(page.webContents.navigationHistory.goBack).not.toHaveBeenCalled()
+    expect(page.webContents.navigationHistory.goForward).toHaveBeenCalled()
+    page.webContents.listeners.get('page-title-updated')!()
+    expect(ctx.ipc.send).toHaveBeenLastCalledWith(
+      channels.stateChanged,
+      expect.objectContaining({ canGoBack: false, canGoForward: true }),
+    )
   })
 
   it('lays the page view out inside the insets the chrome UI reports', () => {
@@ -276,29 +372,47 @@ describe('navigation main', () => {
     const fire = (name: string, ...args: unknown[]) =>
       page.webContents.listeners.get(name)!({}, ...args)
 
+    const contents = page.webContents
     go('example.com')
+    contents.index = 0
     fire('did-navigate', 'https://example.com/', 200)
+    contents.index = 1
     fire('did-navigate', 'https://example.com/next', 200)
     getPage()!.back()
+    contents.index = 0
     fire('did-navigate', 'https://example.com/', 200)
     getPage()!.reload()
     fire('did-navigate', 'https://example.com/', 200)
     getPage()!.load('example.org')
     fire('did-fail-load', -105, 'NAME_NOT_RESOLVED', 'https://example.org/', true)
+    contents.index = 1
     fire('did-navigate', 'https://example.com/clicked', 404)
+    // history.back() from the page script: no pending transition, but the index went back.
+    contents.index = 0
+    fire('did-navigate', 'https://example.com/', 200)
     fire('page-title-updated', 'Clicked')
     fire('did-stop-loading')
     unsubscribe()
     fire('did-navigate', 'https://example.com/ignored', 200)
 
+    const nav = (url: string, status: number, transition: string, entry: string) => ({
+      tabId: 1,
+      type: 'navigated',
+      url,
+      status,
+      transition,
+      entry,
+    })
     expect(events).toEqual([
-      { type: 'navigated', url: 'https://example.com/', status: 200, transition: 'typed' },
-      { type: 'navigated', url: 'https://example.com/next', status: 200, transition: 'link' },
-      { type: 'navigated', url: 'https://example.com/', status: 200, transition: 'back_forward' },
-      { type: 'navigated', url: 'https://example.com/', status: 200, transition: 'reload' },
-      { type: 'navigated', url: 'https://example.com/clicked', status: 404, transition: 'link' },
-      { type: 'title', title: 'Clicked' },
-      { type: 'loaded', url: 'https://example.com/' },
+      nav('https://example.com/', 200, 'typed', 'new'),
+      nav('https://example.com/next', 200, 'link', 'new'),
+      nav('https://example.com/', 200, 'back_forward', 'back'),
+      nav('https://example.com/', 200, 'reload', 'replaced'),
+      { tabId: 1, type: 'failed' },
+      nav('https://example.com/clicked', 404, 'link', 'new'),
+      nav('https://example.com/', 200, 'back_forward', 'back'),
+      { tabId: 1, type: 'title', title: 'Clicked' },
+      { tabId: 1, type: 'loaded', url: 'https://example.com/' },
     ])
   })
 
@@ -311,9 +425,11 @@ describe('navigation main', () => {
       page.webContents.listeners.get(name)!({}, ...args)
     go('example.com')
 
+    page.webContents.index = 0
     fire('did-navigate-in-page', 'https://example.com/#a', true)
     fire('input-event', { type: 'mouseWheel' })
     fire('did-navigate-in-page', 'https://example.com/?page=2', true)
+    page.webContents.index = 1
     fire('input-event', { type: 'mouseDown' })
     vi.advanceTimersByTime(1500)
     fire('did-navigate-in-page', 'https://example.com/item/1', true)
@@ -322,9 +438,27 @@ describe('navigation main', () => {
     vi.useRealTimers()
 
     expect(events).toEqual([
-      { type: 'navigated-in-page', url: 'https://example.com/#a', sinceInputMs: null },
-      { type: 'navigated-in-page', url: 'https://example.com/?page=2', sinceInputMs: null },
-      { type: 'navigated-in-page', url: 'https://example.com/item/1', sinceInputMs: 1500 },
+      {
+        tabId: 1,
+        type: 'navigated-in-page',
+        url: 'https://example.com/#a',
+        sinceInputMs: null,
+        entry: 'new',
+      },
+      {
+        tabId: 1,
+        type: 'navigated-in-page',
+        url: 'https://example.com/?page=2',
+        sinceInputMs: null,
+        entry: 'replaced',
+      },
+      {
+        tabId: 1,
+        type: 'navigated-in-page',
+        url: 'https://example.com/item/1',
+        sinceInputMs: 1500,
+        entry: 'new',
+      },
     ])
   })
 })

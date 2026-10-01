@@ -15,17 +15,21 @@ export function clampWidth(requested: number): number {
 }
 
 /**
- * The assistant panel, docked on the right edge of the window: page title and URL, the
+ * The assistant panel, docked on the right edge of the window: the header (stacks' tree, or the
+ * page title and URL), the
  * conversation filling the height, the skill form, and the prompt at the bottom. Its width only
  * changes when the user drags its edge, so the page view keeps its size while the conversation
  * grows. Ctrl/Cmd+L shows it and focuses the prompt, Ctrl/Cmd+B shows or hides it; it also shows itself for an approval or a
  * skill save.
  */
 export function AssistantPanel({
+  header,
   conversation,
   form,
   overlay,
 }: {
+  /** Replaces the page title and URL in the header (stacks' navigation tree). */
+  header?: ReactNode
   conversation?: ReactNode
   form?: ReactNode
   /** Laid over the conversation when it renders anything (history's view). */
@@ -115,11 +119,13 @@ export function AssistantPanel({
         onPointerDown={startResize}
         onKeyDown={resizeByKey}
       />
-      <header className="assistant-header">
-        <div className="assistant-page" data-testid="page-info">
-          <span className="assistant-page-title">{title || 'New tab'}</span>
-          {navigation?.title && <span className="assistant-page-url">{navigation.url}</span>}
-        </div>
+      <header className={`assistant-header${header ? ' custom' : ''}`}>
+        {header ?? (
+          <div className="assistant-page" data-testid="page-info">
+            <span className="assistant-page-title">{title || 'New tab'}</span>
+            {navigation?.title && <span className="assistant-page-url">{navigation.url}</span>}
+          </div>
+        )}
         <button
           type="button"
           className="assistant-hide"

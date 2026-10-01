@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { HistoryEntry } from '../ipc'
-import { suggest, SUGGESTION_LIMIT, withVisited, type SuggestCommand } from './suggest'
+import {
+  stackRefs,
+  suggest,
+  suggestStacks,
+  SUGGESTION_LIMIT,
+  withVisited,
+  type SuggestCommand,
+} from './suggest'
 
 const at = 0
 const history: HistoryEntry[] = [
@@ -167,5 +174,34 @@ describe('withVisited', () => {
       title: '',
     }))
     expect(withVisited([], many, 'g')).toHaveLength(SUGGESTION_LIMIT)
+  })
+})
+
+describe('suggestStacks', () => {
+  const stacks = [
+    { name: 'hacker-news', rootTitle: 'Hacker News' },
+    { name: 'news-today', rootTitle: 'Today' },
+    { name: '', rootTitle: 'Unnamed' },
+  ]
+
+  it('suggests stacks for the @word at the end, by name prefix first', () => {
+    expect(suggestStacks('read @news', stacks).map((s) => s.text)).toEqual([
+      'read @news-today ',
+      'read @hacker-news ',
+    ])
+    expect(suggestStacks('@', stacks).map((s) => s.label)).toEqual(['@hacker-news', '@news-today'])
+    expect(suggestStacks('@hacker-news', stacks)).toEqual([])
+    expect(suggestStacks('mail@news', stacks)).toEqual([])
+    expect(suggestStacks('/note @news', stacks)).toEqual([])
+    expect(suggestStacks('@news and more', stacks)).toEqual([])
+  })
+
+  it('finds the known @names in a text once each', () => {
+    expect(
+      stackRefs('compare @news-today, @hacker-news and @news-today; @nope a@hacker-news', [
+        'hacker-news',
+        'news-today',
+      ]),
+    ).toEqual(['news-today', 'hacker-news'])
   })
 })
