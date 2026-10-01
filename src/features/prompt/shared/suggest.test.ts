@@ -20,6 +20,27 @@ const commands: SuggestCommand[] = [
   },
   { name: 'team', usage: '<name>', description: 'Open the team dashboard' },
   { name: 'reload', usage: '', description: 'Reload the page' },
+  {
+    name: 'menu',
+    usage: '<menu> <item>',
+    description: 'Run a menu item',
+    tree: [
+      { name: 'file', label: 'File', children: [{ name: 'quit', label: 'Quit' }] },
+      {
+        name: 'view',
+        label: 'View',
+        children: [
+          { name: 'zoom-in', label: 'Zoom In', detail: 'Ctrl+Plus' },
+          { name: 'zoom-out', label: 'Zoom Out' },
+          {
+            name: 'more',
+            label: 'More',
+            children: [{ name: 'full-screen', label: 'Full Screen' }],
+          },
+        ],
+      },
+    ],
+  },
 ]
 
 describe('suggest', () => {
@@ -51,6 +72,7 @@ describe('suggest', () => {
       '/model <model>',
       '/team <name>',
       '/reload',
+      '/menu <menu> <item>',
     ])
     expect(suggest('/re', history, commands)).toEqual([
       { kind: 'command', text: '/reload', label: '/reload', detail: 'Reload the page' },
@@ -69,6 +91,28 @@ describe('suggest', () => {
     ])
     expect(suggest('/team b', history, commands).map((s) => s.text)).toEqual(['/team beta squad'])
     expect(suggest('/unknown x', history, commands)).toEqual([])
+  })
+
+  it('suggests nested arguments level by level', () => {
+    const texts = (input: string) => suggest(input, history, commands).map((s) => s.text)
+    expect(texts('/menu ')).toEqual(['/menu file ', '/menu view '])
+    expect(texts('/menu vi')).toEqual(['/menu view '])
+    expect(texts('/menu view ')).toEqual([
+      '/menu view zoom-in',
+      '/menu view zoom-out',
+      '/menu view more ',
+    ])
+    expect(texts('/menu VIEW zoom')).toEqual(['/menu view zoom-in', '/menu view zoom-out'])
+    expect(texts('/menu view out')).toEqual(['/menu view zoom-out'])
+    expect(texts('/menu view more f')).toEqual(['/menu view more full-screen'])
+    expect(texts('/menu view zoom-in')).toEqual([])
+    expect(texts('/menu nope ')).toEqual([])
+    expect(texts('/menu view zoom-in ')).toEqual([])
+
+    const [zoomIn, , more] = suggest('/menu view ', history, commands)
+    expect(zoomIn).toMatchObject({ kind: 'value', label: 'View › Zoom In', detail: 'Ctrl+Plus' })
+    expect(more).toMatchObject({ label: 'View › More ›', detail: 'Menu' })
+    expect(suggest('/menu view zoom-o', history, commands)[0]!.detail).toBe('Run a menu item')
   })
 
   it('returns at most the limit', () => {

@@ -24,6 +24,10 @@ async function createWindow(): Promise<void> {
     minHeight: 320,
     title: windowTitle,
     show: false,
+    // No menu bar on Windows and Linux, so the page gets the space; `/menu` in the prompt reaches
+    // every item (features/menu). Auto-hide, not setMenuBarVisibility(false): a hidden menu bar
+    // drops its accelerators on Linux. Alt still shows it until the next Alt or a click.
+    autoHideMenuBar: true,
     webPreferences: {
       ...secureWebPreferences,
       preload: join(import.meta.dirname, '../preload/index.cjs'),

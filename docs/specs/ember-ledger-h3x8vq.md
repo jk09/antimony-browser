@@ -6,12 +6,12 @@
 | --- | --- |
 | **Feature name** | Browsing history in a local SQLite database, searchable by URL, full text and meaning |
 | **Spec ID** | ember-ledger-h3x8vq |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-01 12:00 +00:00 |
-| **Last updated** | 2026-10-01 14:10 +00:00 |
+| **Last updated** | 2026-10-01 15:10 +00:00 |
 | **Affected features** | history (new), navigation, agent, prompt |
 | **Target release** | 0.1.0 |
 | **Related links** | docs/architecture.md "Suggested feature order" item 3; ADR 0004, 0005 |

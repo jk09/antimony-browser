@@ -217,6 +217,53 @@ describe('Prompt', () => {
     expect(box.value).toBe('/dash ')
   })
 
+  it('/menu suggests menu items level by level and runs the chosen one', async () => {
+    const menu = [
+      {
+        name: 'view',
+        label: 'View',
+        enabled: true,
+        children: [
+          { name: 'zoom-in', label: 'Zoom In', accelerator: 'Ctrl+Plus', enabled: true },
+          { name: 'locked', label: 'Locked', enabled: false },
+        ],
+      },
+    ]
+    const { api, box } = await openPrompt({ menu })
+    type(box, '/me')
+    expect(within(await screen.findByRole('listbox')).getByRole('option').textContent).toContain(
+      '/menu <menu> <item>',
+    )
+    press(box, 'Tab')
+    expect(box.value).toBe('/menu ')
+    type(box, '/menu v')
+    press(box, 'Tab')
+    expect(box.value).toBe('/menu view ')
+    type(box, '/menu view ')
+    const options = within(screen.getByRole('listbox')).getAllByRole('option')
+    expect(options.map((option) => option.textContent)).toEqual([
+      '↳View › Zoom InCtrl+Plus',
+      '↳View › LockedDisabled',
+    ])
+    press(box, 'ArrowDown')
+    press(box, 'Enter')
+    await waitFor(() => expect(api.menu.run).toHaveBeenCalledWith(['view', 'zoom-in']))
+    expect(box.value).toBe('')
+  })
+
+  it('/menu shows why an item can’t run, and lists the menus on its own', async () => {
+    const { api, box } = await openPrompt({
+      menu: [{ name: 'file', label: 'File', enabled: true, children: [] }],
+    })
+    api.menu.run.mockResolvedValueOnce({ ok: false, error: 'No “x” among the menus.' })
+    type(box, '/menu x')
+    press(box, 'Enter')
+    expect((await screen.findByRole('alert')).textContent).toBe('No “x” among the menus.')
+    type(box, '/menu')
+    press(box, 'Enter')
+    expect((await screen.findByRole('status')).textContent).toBe('Pick a menu: /menu file.')
+  })
+
   it('steps back through history with ↑ on an empty prompt', async () => {
     const { box, api } = await openPrompt({}, [
       { kind: 'query', text: 'newest', at: 2 },

@@ -18,11 +18,18 @@ import {
   type ModelList,
 } from '../../agent/ipc'
 import type { VisitedSuggestion } from '../../history/ipc'
+import type { MenuEntry } from '../../menu/ipc'
 import type { Skill } from '../../skills/ipc'
 import { promptCommands, type HistoryEntry } from '../ipc'
 import { classify } from '../shared/classify'
 import { historyText } from '../shared/history'
-import { suggest, withVisited, type SuggestCommand, type Suggestion } from '../shared/suggest'
+import {
+  suggest,
+  withVisited,
+  type OptionNode,
+  type SuggestCommand,
+  type Suggestion,
+} from '../shared/suggest'
 import { imageUrl, isLongPaste, readImages } from './attachments'
 import { runCommand } from './commands'
 import { suggestionId, SuggestionList } from './SuggestionList'
@@ -31,6 +38,17 @@ import { useSubscription } from './useSubscription'
 type Message = { kind: 'error' | 'info'; text: string }
 
 const MAX_INPUT_HEIGHT = 200
+
+/** The application menu as `/menu`'s nested arguments; disabled items say so. */
+const menuOptions = (entries: MenuEntry[]): OptionNode[] =>
+  entries.map((entry) => ({
+    name: entry.name,
+    label: entry.label,
+    ...((entry.accelerator || !entry.enabled) && {
+      detail: entry.enabled ? entry.accelerator : 'Disabled',
+    }),
+    ...(entry.children && { children: menuOptions(entry.children) }),
+  }))
 
 /**
  * The prompt: a Claude-style card at the bottom of the assistant panel. URLs and /commands are
@@ -61,6 +79,7 @@ export function Prompt({ focusRequest = 0 }: { focusRequest?: number }) {
   const skillList = useSubscription<Skill[]>(api.skills.list, api.skills.onListChanged)
   const skills = useMemo(() => skillList ?? [], [skillList])
   const [modelList, setModelList] = useState<ModelList | null>(null)
+  const [menu, setMenu] = useState<MenuEntry[]>([])
   const running = agent !== null && agent.status !== 'idle'
 
   // Asks Ollama which models are installed; the picker shows the Claude models meanwhile.
@@ -76,6 +95,10 @@ export function Prompt({ focusRequest = 0 }: { focusRequest?: number }) {
     api.prompt
       .history()
       .then(setHistory)
+      .catch((reason: unknown) => console.error(reason))
+    api.menu
+      .items()
+      .then(setMenu)
       .catch((reason: unknown) => console.error(reason))
     refreshModels()
     ;(keyMode ? keyInput : input).current?.focus()
@@ -96,12 +119,17 @@ export function Prompt({ focusRequest = 0 }: { focusRequest?: number }) {
       ...promptCommands.map((command) =>
         command.name === 'forget'
           ? { ...command, options: saved }
-          : command.name === 'model' && modelList && 'models' in modelList.ollama
-            ? {
-                ...command,
-                options: [...(command.options ?? []), ...modelList.ollama.models.map((m) => m.id)],
-              }
-            : command,
+          : command.name === 'menu'
+            ? { ...command, tree: menuOptions(menu) }
+            : command.name === 'model' && modelList && 'models' in modelList.ollama
+              ? {
+                  ...command,
+                  options: [
+                    ...(command.options ?? []),
+                    ...modelList.ollama.models.map((m) => m.id),
+                  ],
+                }
+              : command,
       ),
       ...skills.map((skill) => ({
         name: skill.name,
@@ -109,7 +137,7 @@ export function Prompt({ focusRequest = 0 }: { focusRequest?: number }) {
         description: skill.description || (skill.builtin ? 'Built-in skill' : 'Saved skill'),
       })),
     ].sort((a, b) => a.name.localeCompare(b.name))
-  }, [skills, modelList])
+  }, [skills, modelList, menu])
 
   // Pages from browsing history whose address starts with what's typed.
   useEffect(() => {

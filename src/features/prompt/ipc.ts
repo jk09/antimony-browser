@@ -43,6 +43,7 @@ export const promptCommands: CommandInfo[] = [
     description: 'Let the assistant read and act on the page',
     options: ['on', 'off'],
   },
+  { name: 'menu', usage: '<menu> <item>', description: 'Run an item from the application menu' },
   { name: 'save', usage: '<name>', description: 'Save the last run as a skill' },
   { name: 'skills', usage: '', description: 'List saved skills' },
   { name: 'forget', usage: '<skill>', description: 'Delete a saved skill' },
