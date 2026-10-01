@@ -23,13 +23,12 @@ function parseHistory(raw: unknown): HistoryEntry[] {
     .slice(0, HISTORY_LIMIT)
 }
 
-/** Ctrl/Cmd+B pressed (not held): toggles the assistant panel. */
+/** Ctrl/Cmd+B pressed or held (key repeat): the assistant panel's shortcut. */
 export function isToggleKey(input: Electron.Input, platform: string = process.platform): boolean {
   const command =
     platform === 'darwin' ? input.meta && !input.control : input.control && !input.meta
   return (
     input.type === 'keyDown' &&
-    !input.isAutoRepeat &&
     command &&
     !input.alt &&
     !input.shift &&
@@ -87,12 +86,13 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
 
   // Ctrl/Cmd+B is caught before the page or the menu sees it: a page view doesn't always pass it
   // on to the menu accelerator (Windows), and a page may handle it itself. preventDefault keeps
-  // the menu accelerator from toggling a second time; a held key doesn't repeat the toggle.
+  // the menu accelerator from toggling a second time. A held key toggles once: its repeats are
+  // swallowed too, or each would reach the menu accelerator and toggle again.
   const catchToggle = (contents: Electron.WebContents) =>
     contents.on('before-input-event', (event, input) => {
       if (!isToggleKey(input)) return
       event.preventDefault()
-      toggle()
+      if (!input.isAutoRepeat) toggle()
     })
   catchToggle(window.webContents)
   app.on('web-contents-created', (_event, contents) => {

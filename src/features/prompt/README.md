@@ -19,7 +19,8 @@ The assistant panel docked on the right of the window, with a location bar shape
 - Escape closes suggestions, then stops a running assistant; it never hides the panel – `ui/Prompt.test.tsx`
 - The panel shows itself for an approval or a skill save, and Ctrl/Cmd+B can't hide it while an approval is pending – `ui/AssistantPanel.test.tsx › shows itself…`, `› stays shown on Ctrl/Cmd+B…`
 - Ctrl/Cmd+B works with the page focused, and hiding leaves the page focused – `e2e/prompt.spec.ts › the menu bar is hidden…`
-- Each Ctrl/Cmd+B press toggles exactly once (no menu double-fire, no key repeat), even when toggles arrive before a render; the panel has no close button – `main.test.ts › toggles once on Ctrl/Cmd+B…`, `ui/AssistantPanel.test.tsx › toggles every time…`, `› has no close button…`
+- Each Ctrl/Cmd+B press toggles exactly once (no menu double-fire; a held key's repeats are swallowed, not toggled), even when toggles arrive before a render; the panel has no close button – `main.test.ts › toggles once on Ctrl/Cmd+B…`, `ui/AssistantPanel.test.tsx › toggles every time…`, `› has no close button…`
+- Shown again, the panel never stays under the page view: the page view spans the full width while the panel is hidden and ends at the panel's edge when it is shown. The chrome UI window has `backgroundThrottling: false`, so it keeps rendering while the page covers it – `e2e/prompt.spec.ts › Ctrl+B hides and shows the assistant…`
 - The page area's size depends only on the window and the panels' widths, never on the conversation or the prompt – `e2e/prompt.spec.ts › a question runs the assistant…`
 - Queries need an Anthropic key only for Claude models; the picker always shows the selected model, even when Ollama doesn't list it – `ui/Prompt.test.tsx › sends queries to an Ollama model…`, `› shows Ollama's error…`
 
@@ -30,7 +31,7 @@ The assistant panel docked on the right of the window, with a location bar shape
 
 ## Security surface
 - IPC: the chrome UI reads and writes its own prompt history and can move keyboard focus to the page view.
-- Web content: main reads key presses in pages (`before-input-event`) only to catch Ctrl/Cmd+B, which pages no longer receive.
+- Web content: main reads key presses in pages (`before-input-event`) only to catch Ctrl/Cmd+B (repeats included), which pages no longer receive.
 
 ## Feature flags
 | Flag | Default | Owner | Remove by |

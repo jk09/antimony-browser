@@ -112,13 +112,13 @@ describe('prompt main', () => {
     expect(ctx.ipc.send).toHaveBeenCalledWith(channels.toggle, null)
   })
 
-  it('matches Ctrl+B (Cmd+B on macOS) pressed, not held or with other modifiers', () => {
+  it('matches Ctrl+B (Cmd+B on macOS) pressed or held, not with other modifiers', () => {
     expect(isToggleKey(key(), 'win32')).toBe(true)
     expect(isToggleKey(key({ key: 'B' }), 'linux')).toBe(true)
     expect(isToggleKey(key({ control: false, meta: true }), 'darwin')).toBe(true)
     expect(isToggleKey(key({ control: false, meta: true }), 'win32')).toBe(false)
     expect(isToggleKey(key(), 'darwin')).toBe(false)
-    expect(isToggleKey(key({ isAutoRepeat: true }), 'win32')).toBe(false)
+    expect(isToggleKey(key({ isAutoRepeat: true }), 'win32')).toBe(true)
     expect(isToggleKey(key({ type: 'keyUp' }), 'win32')).toBe(false)
     expect(isToggleKey(key({ shift: true }), 'win32')).toBe(false)
     expect(isToggleKey(key({ alt: true }), 'win32')).toBe(false)
@@ -141,6 +141,13 @@ describe('prompt main', () => {
       expect(event.preventDefault).toHaveBeenCalledOnce()
       expect(ctx.ipc.send).toHaveBeenCalledExactlyOnceWith(channels.toggle, null)
     }
+
+    // Held: the repeats are swallowed too (the menu accelerator would toggle on each) but don't toggle.
+    ctx.ipc.send.mockClear()
+    const held = { preventDefault: vi.fn() }
+    page.input!(held, key({ ...command, isAutoRepeat: true }))
+    expect(held.preventDefault).toHaveBeenCalledOnce()
+    expect(ctx.ipc.send).not.toHaveBeenCalled()
 
     ctx.ipc.send.mockClear()
     const typed = { preventDefault: vi.fn() }
