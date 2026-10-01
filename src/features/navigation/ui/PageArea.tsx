@@ -21,8 +21,14 @@ export function PageArea({ children }: { children?: ReactNode }) {
         left: Math.max(0, rect.left),
       }
       // A zoom of the chrome UI changes devicePixelRatio but not always the insets; main scales
-      // them by the zoom factor, so it needs them again.
-      const key = JSON.stringify([insets, window.devicePixelRatio])
+      // them by the zoom factor, so it needs them again. The same goes for a change of the
+      // window's content size without a window resize (the menu bar shown with Alt).
+      const key = JSON.stringify([
+        insets,
+        window.devicePixelRatio,
+        window.innerWidth,
+        window.innerHeight,
+      ])
       if (key === last) return
       last = key
       window.antimony.navigation.setInsets(insets).catch((reason: unknown) => console.error(reason))

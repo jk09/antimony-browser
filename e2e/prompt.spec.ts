@@ -194,6 +194,82 @@ test('zooming the chrome UI keeps the page view next to the assistant panel', as
   }
 })
 
+test('the menu bar is hidden; its shortcuts work and /menu runs its items', async () => {
+  const app = await launch()
+  try {
+    const window = await app.firstWindow()
+    const prompt = await openPrompt(app, window)
+    expect(
+      await app.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()[0]!.isMenuBarVisible(),
+      ),
+    ).toBe(process.platform === 'darwin')
+    await prompt.fill(`${origin}/hello`)
+    await prompt.press('Enter')
+    await expect.poll(() => pageUrls(app)).toContain(`${origin}/hello`)
+
+    // Ctrl+L pressed in the page still reaches the hidden menu's accelerator.
+    const pressInPage = (keys: { keyCode: string; modifiers?: ['control'] }[]) =>
+      app.evaluate(({ BrowserWindow }, keys) => {
+        const [view] = BrowserWindow.getAllWindows()[0]!.contentView.children
+        const page = (view as Electron.WebContentsView).webContents
+        page.focus()
+        for (const key of keys) {
+          page.sendInputEvent({ type: 'keyDown', ...key })
+          page.sendInputEvent({ type: 'keyUp', ...key })
+        }
+      }, keys)
+    await pressInPage([{ keyCode: 'L', modifiers: ['control'] }])
+    await expect(prompt).toBeFocused()
+
+    // Alt shows the menu bar (Windows, Linux); the page view shrinks with the window's content.
+    const layout = () =>
+      app.evaluate(({ BrowserWindow }) => {
+        const window = BrowserWindow.getAllWindows()[0]!
+        const [view] = window.contentView.children
+        return {
+          menuBar: window.isMenuBarVisible(),
+          fits: view!.getBounds().height === window.getContentSize()[1],
+        }
+      })
+    if (process.platform !== 'darwin') {
+      await pressInPage([{ keyCode: 'Alt' }])
+      await expect.poll(layout).toEqual({ menuBar: true, fits: true })
+      // Alt again or a click hides it, but the shown menu bar takes the keys sendInputEvent sends.
+      await app.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()[0]!.setMenuBarVisibility(false),
+      )
+      await expect.poll(layout).toEqual({ menuBar: false, fits: true })
+      await openPrompt(app, window)
+    }
+
+    // /menu walks the menu level by level with suggestions, then runs the item.
+    await prompt.fill('/menu v')
+    await prompt.press('Tab')
+    await expect(prompt).toHaveValue('/menu view ')
+    await expect(window.getByRole('option', { name: /View › Zoom In/ })).toBeVisible()
+    await prompt.fill('/menu view zoom-i')
+    await prompt.press('Tab')
+    await expect(prompt).toHaveValue('/menu view zoom-in')
+    await prompt.press('Enter')
+    await expect
+      .poll(() =>
+        app.evaluate(({ BrowserWindow }) =>
+          BrowserWindow.getAllWindows()[0]!.webContents.getZoomFactor(),
+        ),
+      )
+      .toBeCloseTo(1.1)
+    await expect(prompt).toHaveValue('')
+
+    await prompt.fill('/menu view nope')
+    await prompt.press('Enter')
+    await expect(window.getByRole('alert')).toContainText('Pick one of:')
+    expect(requests).toHaveLength(0)
+  } finally {
+    await app.close()
+  }
+})
+
 test('a question runs the assistant, which drives the browser; the run replays as a skill', async () => {
   const app = await launch()
   try {

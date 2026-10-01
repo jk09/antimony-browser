@@ -8,6 +8,7 @@ import {
   type ModelList,
 } from '../../features/agent/ipc'
 import type { HistorySettings, OpenRequest } from '../../features/history/ipc'
+import type { MenuEntry, RunResult } from '../../features/menu/ipc'
 import type { NavigationState } from '../../features/navigation/ipc'
 import { toUrl } from '../../features/navigation/shared/to-url'
 import type { Skill } from '../../features/skills/ipc'
@@ -50,7 +51,12 @@ export const defaultModels: ModelList = {
 }
 
 export function fakeApi(
-  options: { settings?: Partial<AgentSettings>; skills?: Skill[]; models?: ModelList } = {},
+  options: {
+    settings?: Partial<AgentSettings>
+    skills?: Skill[]
+    models?: ModelList
+    menu?: MenuEntry[]
+  } = {},
 ) {
   const open = channel<void>()
   const state = channel<AgentState>()
@@ -99,6 +105,10 @@ export function fakeApi(
       onOpen: historyOpen.subscribe,
       onChanged: historyChanged.subscribe,
       onSettingsChanged: historySettings.subscribe,
+    },
+    menu: {
+      items: vi.fn(async () => options.menu ?? []),
+      run: vi.fn(async (_path: string[]): Promise<RunResult> => ({ ok: true })),
     },
     navigation: {
       go: vi.fn(async () => {}),

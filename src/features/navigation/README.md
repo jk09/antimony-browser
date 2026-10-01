@@ -3,7 +3,7 @@
 Owns the page view: loads web pages (from the prompt or the assistant), keeps it laid out in the page area the chrome UI reports, and tells the UI the current URL, title and loading state. Links that ask for a new window open in that same page view, since there are no tabs yet.
 
 ## Entry points
-- UI: `ui/PageArea.tsx` – mounted in `App.tsx`; reports its box to main as page insets (CSS pixels), again on every zoom of the chrome UI
+- UI: `ui/PageArea.tsx` – mounted in `App.tsx`; reports its box to main as page insets (CSS pixels), again on every zoom of the chrome UI and every change of its viewport (the menu bar shown with Alt changes the content size without a window `resize`)
 - IPC: `navigation:go|back|forward|reload|stop|set-insets` (UI → main), `navigation:state-changed` (main → UI) – `ipc.ts`; the bridge's `toUrl` runs in the preload, without IPC
 - Main: `register` in `main.ts` – owns the page `WebContentsView`, adds it on the first load, lays it out on `resize` and inset changes (none until the UI reports them), scaling the insets by the chrome UI's zoom factor, focuses it after `navigation:go`, and sets the page's window-open handler; exports `getPage()` (page controls for the agent and history) and `onPageEvent()` (committed navigations with how they started – typed, link, back/forward, assistant, reload –, in-page navigations with the time since the last click or key press in the page, title changes, load stops; for history)
 - Shared: `shared/to-url.ts` – `toUrl` (typed text → http(s) URL or null), `isWebUrl`
@@ -33,4 +33,4 @@ Owns the page view: loads web pages (from the prompt or the assistant), keeps it
 |---|---|---|---|
 | – | | | |
 
-Specs: amber-lantern-8qp2hb, silver-thistle-qk30tb, violet-harbinger-p7w3kd, still-meridian-r4v8nc, brass-lens-z4k9qe, ember-ledger-h3x8vq · ADRs: 0003, 0004, 0006
+Specs: amber-lantern-8qp2hb, silver-thistle-qk30tb, violet-harbinger-p7w3kd, still-meridian-r4v8nc, brass-lens-z4k9qe, ember-ledger-h3x8vq, slate-compass-m5t2rw · ADRs: 0003, 0004, 0006

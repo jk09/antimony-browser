@@ -77,6 +77,15 @@ export async function runCommand(
           ? 'Page access on: the assistant can read this page and, with your approval, act on it.'
           : 'Page access off: the assistant only sees the page address and title.',
       )
+    case 'menu': {
+      if (!args) {
+        const menus = await api.menu.items()
+        return info(`Pick a menu: ${menus.map((menu) => `/menu ${menu.name}`).join(', ')}.`)
+      }
+      const result = await api.menu.run(args.split(/\s+/))
+      if (!result.ok) return error(result.error)
+      return { close: true }
+    }
     case 'save':
       await api.skills.requestSave(args)
       return {}
