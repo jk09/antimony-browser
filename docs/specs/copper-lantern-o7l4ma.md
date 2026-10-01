@@ -6,15 +6,15 @@
 | --- | --- |
 | **Feature name** | Ollama as a local model provider |
 | **Spec ID** | copper-lantern-o7l4ma |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-01 01:45 +00:00 |
-| **Last updated** | 2026-10-01 02:00 +00:00 |
+| **Last updated** | 2026-10-01 02:09 +00:00 |
 | **Affected features** | agent, prompt |
 | **Target release** | 0.1.0 |
-| **Related links** | [violet-harbinger-p7w3kd](./violet-harbinger-p7w3kd.md) (LLM prompt bar), [ADR 0004](../adr/0004-let-an-llm-assistant-read-and-act-on-pages.md) ("revisit when more providers are added"), [Ollama Anthropic compatibility](https://github.com/ollama/ollama/blob/main/docs/api/anthropic-compatibility.mdx) |
+| **Related links** | [violet-harbinger-p7w3kd](./violet-harbinger-p7w3kd.md) (LLM prompt bar), [ADR 0004](../adr/0004-let-an-llm-assistant-read-and-act-on-pages.md) ("revisit when more providers are added"), [Ollama Anthropic compatibility](https://github.com/ollama/ollama/blob/main/docs/api/anthropic-compatibility.mdx), [PR #9](https://github.com/jk09/antimony-browser/pull/9) |
 
 **Status definitions:**
 - **Draft:** The spec is being written or reviewed. The scope may still change.
