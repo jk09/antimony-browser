@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { HistoryEntry } from '../ipc'
-import { suggest, SUGGESTION_LIMIT, type SuggestCommand } from './suggest'
+import { suggest, SUGGESTION_LIMIT, withVisited, type SuggestCommand } from './suggest'
 
 const at = 0
 const history: HistoryEntry[] = [
@@ -78,5 +78,50 @@ describe('suggest', () => {
       at,
     }))
     expect(suggest('q', many, commands)).toHaveLength(SUGGESTION_LIMIT)
+  })
+})
+
+describe('withVisited', () => {
+  const visited = [
+    { url: 'https://www.github.com/jk09', title: 'jk09 on GitHub' },
+    { url: 'https://github.com/anthropics', title: 'Anthropic' },
+    { url: 'https://gist.github.com/x', title: '' },
+  ]
+
+  it('puts visited pages after typed URLs and before questions, without duplicates', () => {
+    const base = suggest('g', history, commands)
+    expect(withVisited(base, visited, 'g').map((s) => [s.kind, s.label])).toEqual([
+      ['url', 'github.com/jk09'],
+      ['url', 'Anthropic'],
+      ['url', 'gist.github.com/x'],
+    ])
+    const withQuestion = suggest('summ', history, commands)
+    expect(
+      withVisited(withQuestion, [{ url: 'https://summit.example/', title: 'Summit' }], 'summ').map(
+        (s) => s.kind,
+      ),
+    ).toEqual(['url', 'query'])
+  })
+
+  it('shows the title as label and the address as detail', () => {
+    expect(withVisited([], visited.slice(1, 2), 'git')).toEqual([
+      {
+        kind: 'url',
+        text: 'https://github.com/anthropics',
+        label: 'Anthropic',
+        detail: 'github.com/anthropics',
+      },
+    ])
+  })
+
+  it('leaves commands and empty input alone, and keeps the limit', () => {
+    const commandSuggestions = suggest('/re', history, commands)
+    expect(withVisited(commandSuggestions, visited, '/re')).toBe(commandSuggestions)
+    expect(withVisited([], visited, '  ')).toEqual([])
+    const many = Array.from({ length: 20 }, (_, i) => ({
+      url: `https://g${i}.example/`,
+      title: '',
+    }))
+    expect(withVisited([], many, 'g')).toHaveLength(SUGGESTION_LIMIT)
   })
 })

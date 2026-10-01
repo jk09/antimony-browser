@@ -47,6 +47,25 @@ export const promptCommands: CommandInfo[] = [
   { name: 'skills', usage: '', description: 'List saved skills' },
   { name: 'forget', usage: '<skill>', description: 'Delete a saved skill' },
   { name: 'forget-history', usage: '', description: 'Clear the prompt history' },
+  { name: 'history', usage: '<search>', description: 'Search the pages you visited' },
+  {
+    name: 'note',
+    usage: '<text>',
+    description: 'Note this page (makes it a bookmark); /note clear removes it',
+    options: ['clear'],
+  },
+  {
+    name: 'history-clear',
+    usage: '[all]',
+    description: 'Clear browsing history (keeps noted pages unless all)',
+    options: ['all'],
+  },
+  {
+    name: 'history-summaries',
+    usage: 'on|off',
+    description: 'Summarise pages you spend time on with the selected model',
+    options: ['on', 'off'],
+  },
 ]
 
 export interface PromptApi {

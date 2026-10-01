@@ -5,7 +5,12 @@ import { createJsonStore } from '../../app/main/json-store'
 import { getPage } from '../navigation/main'
 import { channels, claudeModels, isOllamaModel, providerOf, type ModelList } from './ipc'
 import { Agent, type Step } from './main/agent'
-import { createMessage, DEFAULT_BASE_URL } from './main/anthropic'
+import {
+  createMessage,
+  DEFAULT_BASE_URL,
+  type ContentBlock,
+  type ModelRequest,
+} from './main/anthropic'
 import { pageBrowser } from './main/browser'
 import { listOllamaModels, ollamaUrl } from './main/ollama'
 import { toolNamed } from './main/tools'
@@ -22,6 +27,31 @@ import { parseDecision, parseRunInput } from './main/validate'
 export type { Step } from './main/agent'
 
 let agent: Agent | null = null
+let completer: ((request: CompletionRequest) => Promise<Completion>) | null = null
+
+/** A single model request without tools or conversation (history summaries and search). */
+export interface CompletionRequest {
+  system: string
+  text: string
+  /** A JPEG image sent before the text, base64. */
+  imageJpegBase64?: string
+  signal?: AbortSignal
+}
+
+export interface Completion {
+  text: string
+  /** The model that answered (the one selected in the prompt). */
+  model: string
+}
+
+/**
+ * Asks the model selected in the prompt (Claude or Ollama) once. Rejects when no model is usable
+ * (Claude without a key) or the request fails. Callers decide what content they may send.
+ */
+export function complete(request: CompletionRequest): Promise<Completion> {
+  if (!completer) return Promise.reject(new Error('The assistant is not available.'))
+  return completer(request)
+}
 
 /** Runs recorded steps without the model (skills); rejects while another run is going. */
 export function replay(label: string, steps: Step[]): Promise<{ ok: boolean; error?: string }> {
@@ -58,15 +88,39 @@ export function register({ ipc, fileMenu }: MainContext): void {
   const ollamaBaseUrl = ollamaUrl(process.env['OLLAMA_HOST'])
   const noKey = 'No Anthropic API key is set. Use /key to add one, or pick an Ollama model.'
 
+  const callModel = (request: ModelRequest, signal?: AbortSignal) => {
+    if (isOllamaModel(request.model)) {
+      return createMessage(request, { baseUrl: ollamaBaseUrl, ...(signal && { signal }) })
+    }
+    const apiKey = settings.apiKey()
+    if (!apiKey) throw new Error(noKey)
+    return createMessage(request, { apiKey, baseUrl, ...(signal && { signal }) })
+  }
+  completer = async ({ system, text, imageJpegBase64, signal }) => {
+    const { model } = settings.get()
+    const content: ContentBlock[] = [
+      ...(imageJpegBase64
+        ? [
+            {
+              type: 'image',
+              source: { type: 'base64', media_type: 'image/jpeg', data: imageJpegBase64 },
+            } as const,
+          ]
+        : []),
+      { type: 'text', text },
+    ]
+    const response = await callModel(
+      { model, system, messages: [{ role: 'user', content }], tools: [] },
+      signal,
+    )
+    const answer = response.content
+      .flatMap((block) => (block.type === 'text' ? [String(block['text'])] : []))
+      .join('')
+    return { text: answer, model }
+  }
+
   const current = new Agent({
-    callModel: (request, signal) => {
-      if (isOllamaModel(request.model)) {
-        return createMessage(request, { baseUrl: ollamaBaseUrl, signal })
-      }
-      const apiKey = settings.apiKey()
-      if (!apiKey) throw new Error(noKey)
-      return createMessage(request, { apiKey, baseUrl, signal })
-    },
+    callModel,
     browser: () => {
       const page = getPage()
       return page ? pageBrowser(page) : null

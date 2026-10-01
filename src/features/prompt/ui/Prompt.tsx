@@ -17,11 +17,12 @@ import {
   type ModelInfo,
   type ModelList,
 } from '../../agent/ipc'
+import type { VisitedSuggestion } from '../../history/ipc'
 import type { Skill } from '../../skills/ipc'
 import { promptCommands, type HistoryEntry } from '../ipc'
 import { classify } from '../shared/classify'
 import { historyText } from '../shared/history'
-import { suggest, type SuggestCommand, type Suggestion } from '../shared/suggest'
+import { suggest, withVisited, type SuggestCommand, type Suggestion } from '../shared/suggest'
 import { imageUrl, isLongPaste, readImages } from './attachments'
 import { runCommand } from './commands'
 import { suggestionId, SuggestionList } from './SuggestionList'
@@ -47,6 +48,10 @@ export function Prompt({ focusRequest = 0 }: { focusRequest?: number }) {
   const [selected, setSelected] = useState(-1)
   const [listHidden, setListHidden] = useState(false)
   const [recall, setRecall] = useState(-1)
+  const [visited, setVisited] = useState<{ text: string; pages: VisitedSuggestion[] }>({
+    text: '',
+    pages: [],
+  })
   const input = useRef<HTMLTextAreaElement>(null)
   const keyInput = useRef<HTMLInputElement>(null)
   const files = useRef<HTMLInputElement>(null)
@@ -106,9 +111,32 @@ export function Prompt({ focusRequest = 0 }: { focusRequest?: number }) {
     ].sort((a, b) => a.name.localeCompare(b.name))
   }, [skills, modelList])
 
+  // Pages from browsing history whose address starts with what's typed.
+  useEffect(() => {
+    const typed = text.trim()
+    if (!typed || typed.startsWith('/') || typed.startsWith('?') || /\s/.test(typed)) return
+    let stale = false
+    api.history
+      .suggest(typed)
+      .then((pages) => {
+        if (!stale) setVisited({ text, pages })
+      })
+      .catch((reason: unknown) => console.error(reason))
+    return () => {
+      stale = true
+    }
+  }, [api, text])
+
   const suggestions = useMemo(
-    () => (listHidden || recall !== -1 ? [] : suggest(text, history, commands)),
-    [text, history, commands, listHidden, recall],
+    () =>
+      listHidden || recall !== -1
+        ? []
+        : withVisited(
+            suggest(text, history, commands),
+            visited.text === text ? visited.pages : [],
+            text,
+          ),
+    [text, history, commands, listHidden, recall, visited],
   )
 
   const edit = (value: string) => {

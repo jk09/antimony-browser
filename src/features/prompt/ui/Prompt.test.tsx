@@ -144,6 +144,66 @@ describe('Prompt', () => {
     )
   })
 
+  it('suggests visited pages from browsing history by address prefix', async () => {
+    const { api, box } = await openPrompt()
+    api.history.suggest.mockResolvedValue([
+      { url: 'https://en.wikipedia.org/wiki/SQLite', title: 'SQLite – Wikipedia' },
+    ] as never)
+    type(box, 'wiki')
+    const options = within(await screen.findByRole('listbox')).getAllByRole('option')
+    expect(api.history.suggest).toHaveBeenLastCalledWith('wiki')
+    expect(options.map((option) => option.textContent)).toEqual([
+      expect.stringContaining('SQLite – Wikipedia'),
+    ])
+    fireEvent.click(options[0]!)
+    await waitFor(() =>
+      expect(api.navigation.go).toHaveBeenCalledWith('https://en.wikipedia.org/wiki/SQLite'),
+    )
+    api.history.suggest.mockClear()
+    type(box, '/hist')
+    type(box, 'what is sqlite')
+    expect(api.history.suggest).not.toHaveBeenCalled()
+  })
+
+  it('/history opens the history view; /note notes the current page', async () => {
+    const { api, box } = await openPrompt()
+    type(box, '/history sqlite wal')
+    press(box, 'Enter')
+    await waitFor(() =>
+      expect(api.history.requestOpen).toHaveBeenCalledWith({ query: 'sqlite wal' }),
+    )
+
+    api.history.current.mockResolvedValue({
+      id: 7,
+      url: 'https://example.com/',
+      title: 'Example',
+    } as never)
+    type(box, '/note compare with Postgres')
+    press(box, 'Enter')
+    await waitFor(() =>
+      expect(api.history.setNote).toHaveBeenCalledWith(7, 'compare with Postgres'),
+    )
+    expect(await screen.findByText('Noted Example.')).toBeTruthy()
+
+    type(box, '/note clear')
+    press(box, 'Enter')
+    await waitFor(() => expect(api.history.setNote).toHaveBeenLastCalledWith(7, null))
+
+    type(box, '/history-summaries on')
+    press(box, 'Enter')
+    await waitFor(() =>
+      expect(api.history.updateSettings).toHaveBeenCalledWith({ summaries: true }),
+    )
+
+    type(box, '/history-clear everything')
+    press(box, 'Enter')
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    expect(api.history.clear).not.toHaveBeenCalled()
+    type(box, '/history-clear')
+    press(box, 'Enter')
+    await waitFor(() => expect(api.history.clear).toHaveBeenCalledWith(false))
+  })
+
   it('suggests commands and skills after /, and Tab fills one in', async () => {
     const skills = [
       ...builtins,

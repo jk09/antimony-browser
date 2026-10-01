@@ -46,7 +46,7 @@ class FakeView {
 
 vi.mock('electron', () => ({ app: {}, WebContentsView: FakeView }))
 
-const { register, getPage } = await import('./main')
+const { register, getPage, onPageEvent } = await import('./main')
 const { channels } = await import('./ipc')
 
 function setup() {
@@ -267,5 +267,64 @@ describe('navigation main', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('tells other features how each navigation started', () => {
+    const { go, page } = setup()
+    const events: unknown[] = []
+    const unsubscribe = onPageEvent((event) => events.push(event))
+    const fire = (name: string, ...args: unknown[]) =>
+      page.webContents.listeners.get(name)!({}, ...args)
+
+    go('example.com')
+    fire('did-navigate', 'https://example.com/', 200)
+    fire('did-navigate', 'https://example.com/next', 200)
+    getPage()!.back()
+    fire('did-navigate', 'https://example.com/', 200)
+    getPage()!.reload()
+    fire('did-navigate', 'https://example.com/', 200)
+    getPage()!.load('example.org')
+    fire('did-fail-load', -105, 'NAME_NOT_RESOLVED', 'https://example.org/', true)
+    fire('did-navigate', 'https://example.com/clicked', 404)
+    fire('page-title-updated', 'Clicked')
+    fire('did-stop-loading')
+    unsubscribe()
+    fire('did-navigate', 'https://example.com/ignored', 200)
+
+    expect(events).toEqual([
+      { type: 'navigated', url: 'https://example.com/', status: 200, transition: 'typed' },
+      { type: 'navigated', url: 'https://example.com/next', status: 200, transition: 'link' },
+      { type: 'navigated', url: 'https://example.com/', status: 200, transition: 'back_forward' },
+      { type: 'navigated', url: 'https://example.com/', status: 200, transition: 'reload' },
+      { type: 'navigated', url: 'https://example.com/clicked', status: 404, transition: 'link' },
+      { type: 'title', title: 'Clicked' },
+      { type: 'loaded', url: 'https://example.com/' },
+    ])
+  })
+
+  it('reports in-page navigations of the main frame with the time since user input', () => {
+    vi.useFakeTimers({ now: 1_000_000 })
+    const { go, page } = setup()
+    const events: unknown[] = []
+    const unsubscribe = onPageEvent((event) => events.push(event))
+    const fire = (name: string, ...args: unknown[]) =>
+      page.webContents.listeners.get(name)!({}, ...args)
+    go('example.com')
+
+    fire('did-navigate-in-page', 'https://example.com/#a', true)
+    fire('input-event', { type: 'mouseWheel' })
+    fire('did-navigate-in-page', 'https://example.com/?page=2', true)
+    fire('input-event', { type: 'mouseDown' })
+    vi.advanceTimersByTime(1500)
+    fire('did-navigate-in-page', 'https://example.com/item/1', true)
+    fire('did-navigate-in-page', 'https://ads.example/frame', false)
+    unsubscribe()
+    vi.useRealTimers()
+
+    expect(events).toEqual([
+      { type: 'navigated-in-page', url: 'https://example.com/#a', sinceInputMs: null },
+      { type: 'navigated-in-page', url: 'https://example.com/?page=2', sinceInputMs: null },
+      { type: 'navigated-in-page', url: 'https://example.com/item/1', sinceInputMs: 1500 },
+    ])
   })
 })

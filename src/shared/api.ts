@@ -1,4 +1,5 @@
 import type { AgentApi } from '../features/agent/ipc'
+import type { HistoryApi } from '../features/history/ipc'
 import type { NavigationApi } from '../features/navigation/ipc'
 import type { PromptApi } from '../features/prompt/ipc'
 import type { SkillsApi } from '../features/skills/ipc'
@@ -11,6 +12,7 @@ export interface AntimonyApi {
   /** Versions of the embedded runtimes. */
   versions: { chrome: string; electron: string }
   agent: AgentApi
+  history: HistoryApi
   navigation: NavigationApi
   prompt: PromptApi
   skills: SkillsApi

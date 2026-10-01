@@ -24,9 +24,12 @@ export function clampWidth(requested: number): number {
 export function AssistantPanel({
   conversation,
   form,
+  overlay,
 }: {
   conversation?: ReactNode
   form?: ReactNode
+  /** Laid over the conversation when it renders anything (history's view). */
+  overlay?: ReactNode
 }) {
   const api = window.antimony
   const [shown, setShown] = useState(true)
@@ -45,6 +48,7 @@ export function AssistantPanel({
     [api],
   )
   useEffect(() => api.skills.onSaveRequested(() => setShown(true)), [api])
+  useEffect(() => api.history.onOpen(() => setShown(true)), [api])
   // An approval is asked in the conversation: show the panel, and keep it shown while pending.
   useEffect(
     () =>
@@ -120,6 +124,7 @@ export function AssistantPanel({
         ) : (
           <p className="assistant-hint">Ask about this page, type a URL, or / for skills.</p>
         )}
+        {overlay}
       </div>
       {form}
       <Prompt focusRequest={focusRequest} />

@@ -23,6 +23,39 @@ export interface PageControls {
 
 let controls: PageControls | null = null
 
+/** How a navigation of the page view started; history stores it with the visit. */
+export type Transition = 'typed' | 'link' | 'back_forward' | 'assistant' | 'reload'
+
+/** What happens in the page view's main frame, for other features' main code (history). */
+export type PageEvent =
+  /** A navigation committed (redirects already followed). `status` is the HTTP status, or ≤ 0. */
+  | { type: 'navigated'; url: string; status: number; transition: Transition }
+  /**
+   * pushState, replaceState or a fragment change. `sinceInputMs`: time since the user (or the
+   * assistant) last clicked, tapped or pressed a key in the page or went back/forward; null if never.
+   */
+  | { type: 'navigated-in-page'; url: string; sinceInputMs: number | null }
+  | { type: 'title'; title: string }
+  | { type: 'loaded'; url: string }
+
+const pageListeners = new Set<(event: PageEvent) => void>()
+
+/** Subscribes to page view events; returns an unsubscribe function. */
+export function onPageEvent(listener: (event: PageEvent) => void): () => void {
+  pageListeners.add(listener)
+  return () => pageListeners.delete(listener)
+}
+
+function emit(event: PageEvent) {
+  for (const listener of pageListeners) {
+    try {
+      listener(event)
+    } catch (error) {
+      console.error('Page event listener failed', error)
+    }
+  }
+}
+
 /** The page view's controls; null until navigation is registered. */
 export function getPage(): PageControls | null {
   return controls
@@ -56,6 +89,15 @@ export function register({ window, browsingSession, ipc }: MainContext): void {
   contents.on('will-navigate', guard)
   contents.on('will-redirect', guard)
 
+  // Set when a navigation is started here, read when it commits; anything else is a link.
+  let pending: Transition | null = null
+  // Scrolling and mouse moves don't count: infinite scroll changes the URL on its own.
+  let lastInputAt: number | null = null
+  contents.on('input-event', (_event, input) => {
+    if (['mouseDown', 'rawKeyDown', 'keyDown', 'gestureTap'].includes(input.type)) {
+      lastInputAt = Date.now()
+    }
+  })
   const load = (url: string, options?: Electron.LoadURLOptions) => {
     contents.loadURL(url, options).catch((error: unknown) => {
       console.warn(`Failed to load ${url}`, error)
@@ -116,27 +158,65 @@ export function register({ window, browsingSession, ipc }: MainContext): void {
     }
   }
   const publish = () => ipc.send(channels.stateChanged, state())
-  contents.on('did-navigate', publish)
-  contents.on('did-navigate-in-page', publish)
-  contents.on('page-title-updated', publish)
+  contents.on('did-navigate', (_event, url: string, status: number) => {
+    emit({ type: 'navigated', url, status, transition: pending ?? 'link' })
+    pending = null
+    publish()
+  })
+  contents.on('did-fail-load', (_event, _code, _description, _url, isMainFrame: boolean) => {
+    if (isMainFrame) pending = null
+  })
+  contents.on('did-navigate-in-page', (_event, url: string, isMainFrame: boolean) => {
+    if (!isMainFrame) return
+    // Back/forward between entries of the same document doesn't commit a new navigation.
+    if (pending === 'back_forward') {
+      pending = null
+      lastInputAt = Date.now()
+    }
+    emit({
+      type: 'navigated-in-page',
+      url,
+      sinceInputMs: lastInputAt === null ? null : Date.now() - lastInputAt,
+    })
+    publish()
+  })
+  contents.on('page-title-updated', (_event, title: string) => {
+    emit({ type: 'title', title })
+    publish()
+  })
   contents.on('did-start-loading', publish)
-  contents.on('did-stop-loading', publish)
+  contents.on('did-stop-loading', () => {
+    emit({ type: 'loaded', url: contents.getURL() })
+    publish()
+  })
 
   const whenShown = (action: () => void) => () => {
     if (shown && !contents.isDestroyed()) action()
   }
 
+  const open = (input: string, transition: Transition) => {
+    const url = toUrl(input)
+    if (url === null) return null
+    show()
+    pending = transition
+    load(url)
+    return url
+  }
+
   const pageControls: PageControls = {
-    load(input) {
-      const url = toUrl(input)
-      if (url === null) return null
-      show()
-      load(url)
-      return url
-    },
-    back: whenShown(() => contents.navigationHistory.goBack()),
-    forward: whenShown(() => contents.navigationHistory.goForward()),
-    reload: whenShown(() => contents.reload()),
+    load: (input) => open(input, 'assistant'),
+    back: whenShown(() => {
+      pending = 'back_forward'
+      contents.navigationHistory.goBack()
+    }),
+    forward: whenShown(() => {
+      pending = 'back_forward'
+      contents.navigationHistory.goForward()
+    }),
+    reload: whenShown(() => {
+      pending = 'reload'
+      contents.reload()
+    }),
     stop: whenShown(() => contents.stop()),
     state,
     waitForLoad(timeoutMs) {
@@ -158,7 +238,7 @@ export function register({ window, browsingSession, ipc }: MainContext): void {
   ipc.handle(channels.go, (input) => {
     const url = typeof input === 'string' ? toUrl(input) : null
     if (url === null) throw new TypeError(`${channels.go} expects an http(s) URL`)
-    pageControls.load(url)
+    open(url, 'typed')
     contents.focus()
   })
   ipc.handle(channels.back, () => pageControls.back())
