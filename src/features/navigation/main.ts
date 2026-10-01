@@ -77,14 +77,19 @@ export function register({ window, browsingSession, ipc }: MainContext): void {
   })
 
   // The chrome UI reports the page area's insets when it mounts, before a page can be loaded.
+  // They're in its CSS pixels: times its zoom factor, they're window pixels.
   let insets: PageInsets = { top: 0, right: 0, bottom: 0, left: 0 }
   const layout = () => {
     const [width = 0, height = 0] = window.getContentSize()
+    const zoom = window.webContents.getZoomFactor()
+    const [top, right, bottom, left] = [insets.top, insets.right, insets.bottom, insets.left].map(
+      (inset) => Math.round(inset * zoom),
+    ) as [number, number, number, number]
     page.setBounds({
-      x: insets.left,
-      y: insets.top,
-      width: Math.max(0, width - insets.left - insets.right),
-      height: Math.max(0, height - insets.top - insets.bottom),
+      x: left,
+      y: top,
+      width: Math.max(0, width - left - right),
+      height: Math.max(0, height - top - bottom),
     })
   }
 

@@ -151,6 +151,49 @@ test('a URL navigates without any model request', async () => {
   }
 })
 
+test('zooming the chrome UI keeps the page view next to the assistant panel', async () => {
+  const app = await launch()
+  try {
+    const window = await app.firstWindow()
+    const prompt = await openPrompt(app, window)
+    await prompt.fill(`${origin}/hello`)
+    await prompt.press('Enter')
+    await expect.poll(() => pageUrls(app)).toContain(`${origin}/hello`)
+
+    const zoom = (label: string) =>
+      app.evaluate(({ BrowserWindow, Menu }, label) => {
+        const view = Menu.getApplicationMenu()!.items.find((item) => item.label === 'View')!
+        view.submenu!.items.find((item) => item.label === label && item.visible)!.click()
+        return BrowserWindow.getAllWindows()[0]!.webContents.getZoomFactor()
+      }, label)
+    // The page view's right edge and the panel's left edge, both in window pixels.
+    const edges = async () => {
+      const factor = await app.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()[0]!.webContents.getZoomFactor(),
+      )
+      const page = (await pageBounds(app))!
+      const panel = (await window.getByRole('complementary', { name: 'Assistant' }).boundingBox())!
+      return { page: page.x + page.width, panel: Math.round(panel.x * factor) }
+    }
+    const meets = async () => {
+      const { page, panel } = await edges()
+      return Math.abs(page - panel) <= 1
+    }
+
+    expect(await zoom('Zoom Out')).toBeCloseTo(0.9)
+    expect(await zoom('Zoom Out')).toBeCloseTo(0.8)
+    await expect.poll(meets).toBe(true)
+    expect(await zoom('Zoom In')).toBeCloseTo(0.9)
+    expect(await zoom('Zoom In')).toBeCloseTo(1)
+    expect(await zoom('Zoom In')).toBeCloseTo(1.1)
+    await expect.poll(meets).toBe(true)
+    expect(await zoom('Actual Size')).toBe(1)
+    await expect.poll(meets).toBe(true)
+  } finally {
+    await app.close()
+  }
+})
+
 test('a question runs the assistant, which drives the browser; the run replays as a skill', async () => {
   const app = await launch()
   try {

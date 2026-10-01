@@ -3,7 +3,7 @@ import type { PageInsets } from '../ipc'
 
 /**
  * Marks where the page view goes: main lays the page out over this element's box, so the chrome
- * UI's layout (prompt height, debug panel) decides the page size. Children show until a page loads.
+ * UI's layout (assistant panel, debug panel) decides the page size, at any zoom of the chrome UI. Children show until a page loads.
  */
 export function PageArea({ children }: { children?: ReactNode }) {
   const area = useRef<HTMLElement>(null)
@@ -20,7 +20,9 @@ export function PageArea({ children }: { children?: ReactNode }) {
         bottom: Math.max(0, window.innerHeight - rect.bottom),
         left: Math.max(0, rect.left),
       }
-      const key = JSON.stringify(insets)
+      // A zoom of the chrome UI changes devicePixelRatio but not always the insets; main scales
+      // them by the zoom factor, so it needs them again.
+      const key = JSON.stringify([insets, window.devicePixelRatio])
       if (key === last) return
       last = key
       window.antimony.navigation.setInsets(insets).catch((reason: unknown) => console.error(reason))

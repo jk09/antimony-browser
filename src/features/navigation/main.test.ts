@@ -53,11 +53,12 @@ function setup() {
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
   const windowListeners = new Map<string, Listener>()
   let size = [1000, 700]
+  let zoom = 1
   const ctx = {
     window: {
       getContentSize: () => size,
       contentView: { addChildView: vi.fn() },
-      webContents: { focus: vi.fn() },
+      webContents: { focus: vi.fn(), getZoomFactor: () => zoom },
       on: (event: string, listener: Listener) => windowListeners.set(event, listener),
     },
     browsingSession: { name: 'browsing' },
@@ -74,6 +75,9 @@ function setup() {
     resize: (width: number, height: number) => {
       size = [width, height]
       windowListeners.get('resize')!()
+    },
+    setZoom: (factor: number) => {
+      zoom = factor
     },
   }
 }
@@ -179,6 +183,17 @@ describe('navigation main', () => {
     expect(page.setBounds).toHaveBeenLastCalledWith({ x: 2, y: 120, width: 578, height: 578 })
     resize(1200, 800)
     expect(page.setBounds).toHaveBeenLastCalledWith({ x: 2, y: 120, width: 778, height: 678 })
+  })
+
+  it('scales the insets by the chrome UI zoom, so the page view meets a zoomed panel', () => {
+    const { go, page, call, setZoom } = setup()
+    go('example.com')
+    setZoom(0.5)
+    call(channels.setInsets, { top: 0, right: 400, bottom: 0, left: 0 })
+    expect(page.setBounds).toHaveBeenLastCalledWith({ x: 0, y: 0, width: 800, height: 700 })
+    setZoom(1.25)
+    call(channels.setInsets, { top: 0, right: 400, bottom: 0, left: 3 })
+    expect(page.setBounds).toHaveBeenLastCalledWith({ x: 4, y: 0, width: 496, height: 700 })
   })
 
   it('rejects invalid insets', () => {

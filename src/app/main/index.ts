@@ -6,6 +6,7 @@ import { features } from './features'
 import { createChromeUiIpc } from './ipc'
 import { appMenuTemplate } from './menu'
 import { denyAllPermissions, hardenApp, hardenChromeUi, secureWebPreferences } from './security'
+import { nextZoomFactor, type ZoomDirection } from './zoom'
 
 const BROWSING_PARTITION = 'persist:browsing'
 
@@ -40,7 +41,12 @@ async function createWindow(): Promise<void> {
   const ipc = createChromeUiIpc(window.webContents)
   const fileMenu: MenuItemConstructorOptions[] = []
   for (const register of features) await register({ window, browsingSession, ipc, fileMenu })
-  Menu.setApplicationMenu(Menu.buildFromTemplate(appMenuTemplate(fileMenu, process.platform)))
+  // Ctrl/Cmd + / - / 0 zoom the chrome UI; navigation scales the page area's insets to match.
+  const zoom = (direction: ZoomDirection) => {
+    const chromeUi = window.webContents
+    chromeUi.setZoomFactor(nextZoomFactor(chromeUi.getZoomFactor(), direction))
+  }
+  Menu.setApplicationMenu(Menu.buildFromTemplate(appMenuTemplate(fileMenu, process.platform, zoom)))
 
   await window.loadURL(url)
 }
