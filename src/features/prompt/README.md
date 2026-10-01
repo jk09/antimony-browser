@@ -4,7 +4,7 @@ The assistant panel docked on the right of the window, with a location bar shape
 
 ## Entry points
 - UI: `ui/AssistantPanel.tsx` – mounted on the right edge in `App.tsx`: page title and URL, the `conversation` and `form` slots (agent's `Conversation`, skills' `SaveSkill`), then `ui/Prompt.tsx`; 400 px, resizable 300–720 px, × hides it, Ctrl/Cmd+L, an approval or a skill save shows it
-- UI: `ui/Prompt.tsx` – the card at the panel's bottom, suggestions above the input; its model picker groups Claude and installed Ollama models (`agent.models()`, refreshed at start, on Ctrl/Cmd+L and on focus); `ui/commands.ts` built-in commands, `ui/attachments.ts`, `ui/SuggestionList.tsx`
+- UI: `ui/Prompt.tsx` – the card at the panel's bottom, suggestions above the input; while a run is active the status line shows what the assistant is doing and the send button becomes Stop; its model picker groups Claude and installed Ollama models (`agent.models()`, refreshed at start, on Ctrl/Cmd+L and on focus); `ui/commands.ts` built-in commands, `ui/attachments.ts`, `ui/SuggestionList.tsx`
 - IPC: `prompt:history`, `prompt:record`, `prompt:clear-history` (UI → main), `prompt:open` (main → UI, no payload) – `ipc.ts`
 - Main: `register` in `main.ts` – File → Prompt… (Ctrl/Cmd+L), prompt history store
 - Shared: `shared/classify.ts` (URL / command / query, no network), `shared/suggest.ts`, `shared/history.ts`
