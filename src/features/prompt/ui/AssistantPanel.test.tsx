@@ -59,6 +59,30 @@ describe('AssistantPanel', () => {
     expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Prompt' }))
   })
 
+  it('toggles with Ctrl/Cmd+B: hiding focuses the page, showing focuses the prompt', async () => {
+    const { api, emit } = await renderPanel()
+    act(() => emit.toggle())
+    expect(panel()).toBeNull()
+    expect(api.prompt.focusPage).toHaveBeenCalledOnce()
+    act(() => emit.toggle())
+    expect(panel()).toBeTruthy()
+    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Prompt' }))
+    expect(api.prompt.focusPage).toHaveBeenCalledOnce()
+  })
+
+  it('stays shown on Ctrl/Cmd+B while an approval is pending', async () => {
+    const { api, emit } = await renderPanel()
+    act(() =>
+      emit.state({ ...idleState, status: 'awaiting-approval', approval: { description: 'Click' } }),
+    )
+    act(() => emit.toggle())
+    expect(panel()).toBeTruthy()
+    expect(api.prompt.focusPage).not.toHaveBeenCalled()
+    act(() => emit.state(idleState))
+    act(() => emit.toggle())
+    expect(panel()).toBeNull()
+  })
+
   it('shows itself for an approval and for a skill save', async () => {
     const { emit } = await renderPanel()
     fireEvent.click(screen.getByRole('button', { name: 'Hide assistant' }))

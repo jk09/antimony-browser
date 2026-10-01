@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import type { MainContext } from '../../app/main/features'
 import { createJsonStore } from '../../app/main/json-store'
+import { getPage } from '../navigation/main'
 import { channels, HISTORY_LIMIT, type HistoryEntry, type HistoryKind } from './ipc'
 import { addEntry, historyText } from './shared/history'
 
@@ -46,6 +47,7 @@ export function register({ window, ipc, fileMenu }: MainContext): void {
     store.set(addEntry(store.get(), { kind, text }, Date.now()))
   })
   ipc.handle(channels.clearHistory, () => store.set([]))
+  ipc.handle(channels.focusPage, () => getPage()?.contents()?.focus())
 
   fileMenu.push({
     id: 'prompt',
@@ -55,6 +57,16 @@ export function register({ window, ipc, fileMenu }: MainContext): void {
       // The page view may have focus; the prompt lives in the chrome UI.
       window.webContents.focus()
       ipc.send(channels.open, null)
+    },
+  })
+  fileMenu.push({
+    id: 'prompt-toggle',
+    label: 'Toggle Assistant',
+    accelerator: 'CmdOrCtrl+B',
+    click: () => {
+      // Showing focuses the prompt; hiding hands focus back to the page (`focusPage`).
+      window.webContents.focus()
+      ipc.send(channels.toggle, null)
     },
   })
 }

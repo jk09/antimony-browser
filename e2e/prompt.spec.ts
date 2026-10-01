@@ -222,6 +222,22 @@ test('the menu bar is hidden; its shortcuts work and /menu runs its items', asyn
     await pressInPage([{ keyCode: 'L', modifiers: ['control'] }])
     await expect(prompt).toBeFocused()
 
+    // Ctrl+B in the page hides the assistant and keeps the page focused; again shows it.
+    const assistant = window.getByRole('complementary', { name: 'Assistant' })
+    await pressInPage([{ keyCode: 'B', modifiers: ['control'] }])
+    await expect(assistant).toBeHidden()
+    await expect
+      .poll(() =>
+        app.evaluate(({ BrowserWindow }) => {
+          const [view] = BrowserWindow.getAllWindows()[0]!.contentView.children
+          return (view as Electron.WebContentsView).webContents.isFocused()
+        }),
+      )
+      .toBe(true)
+    await pressInPage([{ keyCode: 'B', modifiers: ['control'] }])
+    await expect(assistant).toBeVisible()
+    await expect(prompt).toBeFocused()
+
     // Alt shows the menu bar (Windows, Linux); the page view shrinks with the window's content.
     const layout = () =>
       app.evaluate(({ BrowserWindow }) => {
