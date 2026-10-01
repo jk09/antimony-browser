@@ -56,7 +56,13 @@ test.beforeAll(async () => {
   await new Promise<void>((resolve) => pages.listen(0, '127.0.0.1', resolve))
   origin = `http://127.0.0.1:${(pages.address() as AddressInfo).port}`
 
+  // Also plays a local Ollama: its model list, and the same /v1/messages API.
   anthropic = createServer((request, response) => {
+    if (request.method === 'GET' && request.url === '/api/tags') {
+      response.writeHead(200, { 'content-type': 'application/json' })
+      response.end(JSON.stringify({ models: [{ name: 'qwen3:8b', model: 'qwen3:8b' }] }))
+      return
+    }
     let raw = ''
     request.on('data', (chunk) => (raw += chunk))
     request.on('end', () => {
@@ -94,13 +100,14 @@ test.afterAll(async () => {
 })
 
 // A fresh profile per launch: settings, history and skills don't leak between tests.
-const launch = () =>
+const launch = (env: Record<string, string> = {}) =>
   electron.launch({
     args: [...args, `--user-data-dir=${mkdtempSync(join(tmpdir(), 'antimony-e2e-'))}`],
     env: {
       ...process.env,
       ANTHROPIC_API_KEY: 'sk-ant-e2e-test',
       ANTHROPIC_BASE_URL: `http://127.0.0.1:${(anthropic.address() as AddressInfo).port}`,
+      ...env,
     },
   })
 
@@ -170,6 +177,33 @@ test('a question runs the assistant, which drives the browser; the run replays a
     await prompt.press('Enter')
     await expect.poll(() => pageUrls(app)).toEqual([`${origin}/hello`])
     expect(requests).toHaveLength(2)
+  } finally {
+    await app.close()
+  }
+})
+
+test('an installed Ollama model runs the assistant without an API key', async () => {
+  const app = await launch({
+    ANTHROPIC_API_KEY: '',
+    OLLAMA_HOST: `127.0.0.1:${(anthropic.address() as AddressInfo).port}`,
+  })
+  try {
+    const window = await app.firstWindow()
+    const prompt = await openPrompt(app, window)
+    const picker = window.getByRole('combobox', { name: 'Model' })
+    await expect(picker.getByRole('option', { name: 'qwen3:8b (Ollama)' })).toBeAttached()
+    await picker.selectOption('ollama:qwen3:8b')
+    await expect(picker).toHaveValue('ollama:qwen3:8b')
+
+    await prompt.fill('open the test page')
+    await prompt.press('Enter')
+    const conversation = window.getByRole('region', { name: 'Conversation' })
+    await expect(conversation).toContainText('Opened the test page.')
+    await expect.poll(() => pageUrls(app)).toEqual([`${origin}/hello`])
+    expect(requests).toHaveLength(2)
+    expect(requests[0]!.headers['x-api-key']).toBeUndefined()
+    expect(requests[0]!.body).toMatchObject({ model: 'qwen3:8b' })
+    expect(requests[0]!.body).not.toHaveProperty('thinking')
   } finally {
     await app.close()
   }

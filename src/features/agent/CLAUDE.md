@@ -5,3 +5,4 @@
 - Keep the model history append-only (thinking blocks are bound to it): never edit or drop earlier messages; answer every `tool_use`.
 - Keep `SYSTEM_PROMPT` and the tool list stable (prompt caching); per-turn state goes in the user message's `<browser_state>`.
 - New page-reading tools are `kind: 'read'`, anything with side effects is `kind: 'action'` (approval).
+- Ollama (`ollama:<name>`) shares the Messages API client: Anthropic-only request fields and headers (caching, thinking, effort, fallbacks, betas, the key) go only in the Claude branch of `buildRequest`/`createMessage`.

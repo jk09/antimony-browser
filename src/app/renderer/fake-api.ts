@@ -1,6 +1,12 @@
 // Test helper: a fake window.antimony whose events tests can fire.
 import { vi } from 'vitest'
-import type { AgentSettings, AgentState, DebugEvent } from '../../features/agent/ipc'
+import {
+  claudeModels,
+  type AgentSettings,
+  type AgentState,
+  type DebugEvent,
+  type ModelList,
+} from '../../features/agent/ipc'
 import type { NavigationState } from '../../features/navigation/ipc'
 import { toUrl } from '../../features/navigation/shared/to-url'
 import type { Skill } from '../../features/skills/ipc'
@@ -24,6 +30,7 @@ function channel<T>() {
 export const idleState: AgentState = { status: 'idle', items: [], approval: null, savableSteps: 0 }
 export const defaultSettings: AgentSettings = {
   model: 'claude-sonnet-5-5',
+  provider: 'anthropic',
   pageAccess: false,
   hasKey: true,
   keyPersisted: true,
@@ -36,7 +43,14 @@ export const builtins: Skill[] = ['back', 'forward', 'reload', 'stop'].map((name
   builtin: true,
 }))
 
-export function fakeApi(options: { settings?: Partial<AgentSettings>; skills?: Skill[] } = {}) {
+export const defaultModels: ModelList = {
+  claude: claudeModels.map(({ id, label }) => ({ id, label })),
+  ollama: { models: [{ id: 'ollama:qwen3:8b', label: 'qwen3:8b (Ollama)' }] },
+}
+
+export function fakeApi(
+  options: { settings?: Partial<AgentSettings>; skills?: Skill[]; models?: ModelList } = {},
+) {
   const open = channel<void>()
   const state = channel<AgentState>()
   const settings = channel<AgentSettings>()
@@ -60,6 +74,7 @@ export function fakeApi(options: { settings?: Partial<AgentSettings>; skills?: S
       updateSettings: vi.fn(async (update) => ({ ...currentSettings, ...update })),
       setKey: vi.fn(async (key: string | null) => ({ ...currentSettings, hasKey: key !== null })),
       onSettingsChanged: settings.subscribe,
+      models: vi.fn(async () => options.models ?? defaultModels),
       debugLog: vi.fn(async () => []),
       onDebugEvent: (listener: (event: DebugEvent, label: string) => void) =>
         debugEvent.subscribe(({ event, label }) => listener(event, label)),

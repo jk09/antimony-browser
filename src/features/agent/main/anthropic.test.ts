@@ -47,7 +47,75 @@ describe('buildRequest', () => {
   })
 })
 
+describe('buildRequest for Ollama', () => {
+  it('sends the bare model name and only what Ollama understands', () => {
+    const { body, headers } = buildRequest(request('ollama:qwen3:8b'))
+    expect(body).toEqual({
+      model: 'qwen3:8b',
+      max_tokens: 16_000,
+      system: 'system',
+      messages: request('ollama:qwen3:8b').messages,
+      tools: request('ollama:qwen3:8b').tools,
+    })
+    expect(headers).toEqual({})
+  })
+})
+
 describe('createMessage', () => {
+  it('posts Ollama requests to its /v1/messages without an API key', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify(reply), { status: 200 }))
+    await createMessage(request('ollama:qwen3:8b'), { baseUrl: 'http://localhost:11434', fetch })
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe('http://localhost:11434/v1/messages')
+    expect(init.headers).not.toHaveProperty('x-api-key')
+    expect(init.headers).not.toHaveProperty('anthropic-beta')
+  })
+
+  it('words Ollama errors for the user', async () => {
+    const options = (response: Response | Error) => ({
+      baseUrl: 'http://localhost:11434',
+      fetch: vi.fn(async () => {
+        if (response instanceof Error) throw response
+        return response
+      }),
+    })
+    const fail = (response: Response | Error) =>
+      createMessage(request('ollama:qwen3:8b'), options(response)).catch((e: unknown) =>
+        describeError(e),
+      )
+    expect(await fail(new TypeError('fetch failed'))).toBe(
+      "Couldn't reach Ollama at http://localhost:11434. Is it running (ollama serve)?",
+    )
+    expect(
+      await fail(
+        new Response(JSON.stringify({ error: "model 'qwen3:8b' not found" }), { status: 404 }),
+      ),
+    ).toBe('Ollama has no model qwen3:8b. Pull it with: ollama pull qwen3:8b')
+    expect(
+      await fail(
+        new Response(
+          JSON.stringify({
+            type: 'error',
+            error: { type: 'api_error', message: 'qwen3:8b does not support tools' },
+          }),
+          { status: 400 },
+        ),
+      ),
+    ).toBe("qwen3:8b can't use tools; pick a model with tool support (e.g. qwen3, llama3.1).")
+    expect(await fail(new Response('boom', { status: 500 }))).toBe('Ollama error 500: boom')
+    // Ollama before 0.14 has no /v1/messages.
+    expect(await fail(new Response('404 page not found', { status: 404 }))).toBe(
+      "Ollama at http://localhost:11434 doesn't speak the Messages API; update it to version 0.14 or newer.",
+    )
+    expect(await fail(new Response('{}', { status: 200 }))).toContain('version 0.14 or newer')
+  })
+
+  it('lets a stop through as an abort, not a connection error', async () => {
+    const abort = Object.assign(new Error('aborted'), { name: 'AbortError' })
+    const fetch = vi.fn(async () => Promise.reject(abort))
+    await expect(createMessage(request('ollama:qwen3:8b'), { fetch })).rejects.toBe(abort)
+  })
+
   it('posts to /v1/messages with the key and version headers', async () => {
     const fetch = vi.fn(async () => new Response(JSON.stringify(reply), { status: 200 }))
     const result = await createMessage(request('claude-sonnet-5-5'), {
@@ -91,5 +159,8 @@ describe('createMessage', () => {
     )
     expect(describeError(new ApiError('busy', 529, 'overloaded_error'))).toContain('overloaded')
     expect(describeError(new TypeError('fetch failed'))).toContain("Couldn't reach")
+    expect(describeError(new ApiError('ECONNREFUSED', 0, 'connection_error'))).toBe(
+      "Couldn't reach the Anthropic API: ECONNREFUSED",
+    )
   })
 })
