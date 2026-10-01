@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -9,7 +10,14 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react'
-import { models, type AgentSettings, type AgentState, type Attachment } from '../../agent/ipc'
+import {
+  claudeModels,
+  type AgentSettings,
+  type AgentState,
+  type Attachment,
+  type ModelInfo,
+  type ModelList,
+} from '../../agent/ipc'
 import type { NavigationState } from '../../navigation/ipc'
 import type { Skill } from '../../skills/ipc'
 import { promptCommands, type HistoryEntry } from '../ipc'
@@ -72,6 +80,7 @@ export function Prompt({ conversation }: { conversation?: ReactNode }) {
   const settings = useSubscription<AgentSettings>(api.agent.settings, api.agent.onSettingsChanged)
   const skillList = useSubscription<Skill[]>(api.skills.list, api.skills.onListChanged)
   const skills = useMemo(() => skillList ?? [], [skillList])
+  const [modelList, setModelList] = useState<ModelList | null>(null)
   const running = agent !== null && agent.status !== 'idle'
 
   useEffect(
@@ -86,16 +95,25 @@ export function Prompt({ conversation }: { conversation?: ReactNode }) {
   // An approval is asked in the conversation, so the card stays expanded while one is pending.
   const expanded = open || agent?.status === 'awaiting-approval'
 
-  // Load history on every open, and focus on every request (also when already open).
+  // Asks Ollama which models are installed; the picker shows the Claude models meanwhile.
+  const refreshModels = useCallback(() => {
+    api.agent
+      .models()
+      .then(setModelList)
+      .catch((reason: unknown) => console.error(reason))
+  }, [api])
+
+  // Load history and models on every open, and focus on every request (also when already open).
   useEffect(() => {
     if (!expanded) return
     api.prompt
       .history()
       .then(setHistory)
       .catch((reason: unknown) => console.error(reason))
+    refreshModels()
     ;(keyMode ? keyInput : input).current?.focus()
     input.current?.select()
-  }, [api, expanded, requests, keyMode])
+  }, [api, expanded, requests, keyMode, refreshModels])
 
   // Grow the text area with its content, up to a limit.
   useEffect(() => {
@@ -109,7 +127,14 @@ export function Prompt({ conversation }: { conversation?: ReactNode }) {
     const saved = skills.filter((skill) => !skill.builtin).map((skill) => skill.name)
     return [
       ...promptCommands.map((command) =>
-        command.name === 'forget' ? { ...command, options: saved } : command,
+        command.name === 'forget'
+          ? { ...command, options: saved }
+          : command.name === 'model' && modelList && 'models' in modelList.ollama
+            ? {
+                ...command,
+                options: [...(command.options ?? []), ...modelList.ollama.models.map((m) => m.id)],
+              }
+            : command,
       ),
       ...skills.map((skill) => ({
         name: skill.name,
@@ -117,7 +142,7 @@ export function Prompt({ conversation }: { conversation?: ReactNode }) {
         description: skill.description || (skill.builtin ? 'Built-in skill' : 'Saved skill'),
       })),
     ].sort((a, b) => a.name.localeCompare(b.name))
-  }, [skills])
+  }, [skills, modelList])
 
   const suggestions = useMemo(
     () => (listHidden || recall !== -1 ? [] : suggest(text, history, commands)),
@@ -170,8 +195,11 @@ export function Prompt({ conversation }: { conversation?: ReactNode }) {
             setMessage({ kind: 'error', text: 'Stop the current run first (Esc).' })
             return
           }
-          if (!settings?.hasKey) {
-            setMessage({ kind: 'error', text: 'No Anthropic API key yet. Type /key to add one.' })
+          if (settings?.provider !== 'ollama' && !settings?.hasKey) {
+            setMessage({
+              kind: 'error',
+              text: 'No Anthropic API key yet. Type /key to add one, or pick an Ollama model.',
+            })
             return
           }
           if (parsed.text) record('query', parsed.text)
@@ -491,20 +519,12 @@ export function Prompt({ conversation }: { conversation?: ReactNode }) {
           {settings?.pageAccess ? 'Page access on' : 'Page access off'}
         </button>
         <span className="prompt-spacer" />
-        <select
-          className="prompt-model"
-          aria-label="Model"
-          value={settings?.model ?? models[0].id}
-          onChange={(event) =>
-            void api.agent.updateSettings({ model: event.target.value as AgentSettings['model'] })
-          }
-        >
-          {models.map((model) => (
-            <option key={model.id} value={model.id}>
-              {model.label}
-            </option>
-          ))}
-        </select>
+        <ModelPicker
+          value={settings?.model ?? claudeModels[0].id}
+          list={modelList}
+          onFocus={refreshModels}
+          onChange={(model) => void api.agent.updateSettings({ model })}
+        />
         {running ? (
           <button
             type="button"
@@ -529,5 +549,56 @@ export function Prompt({ conversation }: { conversation?: ReactNode }) {
         )}
       </div>
     </div>
+  )
+}
+
+/** Claude and Ollama models in two groups; the selected model always shows, even if not listed. */
+function ModelPicker({
+  value,
+  list,
+  onFocus,
+  onChange,
+}: {
+  value: AgentSettings['model']
+  list: ModelList | null
+  onFocus: () => void
+  onChange: (model: AgentSettings['model']) => void
+}) {
+  const claude: ModelInfo[] = list?.claude ?? claudeModels.map(({ id, label }) => ({ id, label }))
+  const ollama: ModelInfo[] = list && 'models' in list.ollama ? [...list.ollama.models] : []
+  const ollamaError = list && 'error' in list.ollama ? list.ollama.error : null
+  if (![...claude, ...ollama].some((model) => model.id === value)) {
+    ollama.unshift({ id: value, label: `${value.replace(/^ollama:/, '')} (Ollama)` })
+  }
+  return (
+    <select
+      className="prompt-model"
+      aria-label="Model"
+      value={value}
+      onFocus={onFocus}
+      onChange={(event) => onChange(event.target.value as AgentSettings['model'])}
+    >
+      <optgroup label="Claude">
+        {claude.map((model) => (
+          <option key={model.id} value={model.id}>
+            {model.label}
+          </option>
+        ))}
+      </optgroup>
+      {(ollama.length > 0 || ollamaError) && (
+        <optgroup label="Ollama">
+          {ollama.map((model) => (
+            <option key={model.id} value={model.id}>
+              {model.label}
+            </option>
+          ))}
+          {ollamaError && (
+            <option disabled value="">
+              {ollamaError}
+            </option>
+          )}
+        </optgroup>
+      )}
+    </select>
   )
 }

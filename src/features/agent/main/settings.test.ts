@@ -35,6 +35,7 @@ describe('SettingsService', () => {
     const settings = new SettingsService(memoryStore(), crypto(true), undefined)
     expect(settings.get()).toEqual({
       model: 'claude-sonnet-5-5',
+      provider: 'anthropic',
       pageAccess: false,
       hasKey: false,
       keyPersisted: true,
@@ -80,6 +81,24 @@ describe('parsing', () => {
     expect(() => parseUpdate({ pageAccess: 'yes' })).toThrow()
     expect(() => parseUpdate({ encryptedKey: 'x' })).toThrow()
     expect(() => parseUpdate(null)).toThrow()
+  })
+
+  it('accepts well-formed Ollama model ids, installed or not', () => {
+    for (const model of ['ollama:qwen3:8b', 'ollama:library/llama3.2:latest', 'ollama:x']) {
+      expect(parseUpdate({ model })).toEqual({ model })
+    }
+    for (const model of ['ollama:', 'ollama: qwen', 'ollama:-x', 'ollama:a b', 'qwen3:8b']) {
+      expect(() => parseUpdate({ model }), model).toThrow()
+    }
+    expect(() => parseUpdate({ model: `ollama:${'x'.repeat(201)}` })).toThrow()
+  })
+
+  it('derives the provider from the model', () => {
+    const store = memoryStore({ model: 'ollama:qwen3:8b', pageAccess: false })
+    const settings = new SettingsService(store, crypto(true), undefined)
+    expect(settings.get()).toMatchObject({ model: 'ollama:qwen3:8b', provider: 'ollama' })
+    expect(parseSettings({ model: 'ollama:qwen3:8b' }).model).toBe('ollama:qwen3:8b')
+    expect(settings.update({ model: 'claude-opus-5-5' }).provider).toBe('anthropic')
   })
 
   it('validates keys', () => {

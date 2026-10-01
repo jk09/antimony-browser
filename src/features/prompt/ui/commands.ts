@@ -1,4 +1,4 @@
-import { models, type AgentSettings } from '../../agent/ipc'
+import { isOllamaModel, ollamaId, type AgentSettings, type ModelInfo } from '../../agent/ipc'
 import type { Skill } from '../../skills/ipc'
 import { promptCommands } from '../ipc'
 
@@ -46,10 +46,22 @@ export async function runCommand(
       }
       return { keyMode: true }
     case 'model': {
-      const model = models.find(
-        (m) => m.id === args || m.label.toLowerCase() === args.toLowerCase(),
+      const list = await api.agent.models()
+      const available: ModelInfo[] = [
+        ...list.claude,
+        ...('models' in list.ollama ? list.ollama.models : []),
+      ]
+      const wanted = args.toLowerCase()
+      const model = available.find(
+        (m) =>
+          m.id === args ||
+          m.label.toLowerCase() === wanted ||
+          (isOllamaModel(m.id) && m.id === ollamaId(args)),
       )
-      if (!model) return error(`Choose one of: ${models.map((m) => m.id).join(', ')}`)
+      if (!model) {
+        const ollamaError = 'error' in list.ollama ? ` ${list.ollama.error}` : ''
+        return error(`Choose one of: ${available.map((m) => m.id).join(', ')}.${ollamaError}`)
+      }
       await api.agent.updateSettings({ model: model.id })
       return info(`Using ${model.label}.`)
     }

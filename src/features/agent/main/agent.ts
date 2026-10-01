@@ -45,7 +45,8 @@ export interface AgentDeps {
   callModel(request: ModelRequest, signal: AbortSignal): Promise<ModelResponse>
   browser(): BrowserPort | null
   settings(): { model: ModelId; pageAccess: boolean }
-  hasKey(): boolean
+  /** Why a model run can't start (e.g. no API key for a Claude model), or null. */
+  missingSetup(): string | null
   onState(state: AgentState): void
   onDebug(event: DebugEvent, label: string): void
 }
@@ -175,9 +176,8 @@ export class Agent {
     const steps: Step[] = []
     const flags: RunFlags = { allowAll: false, readPage: false }
     try {
-      if (!this.deps.hasKey()) {
-        throw new ToolError('No Anthropic API key is set. Use /key to add one.')
-      }
+      const missing = this.deps.missingSetup()
+      if (missing) throw new ToolError(missing)
       this.messages.push({ role: 'user', content: this.userContent(input) })
 
       let step = 0
@@ -224,7 +224,7 @@ export class Agent {
           .trim()
         if (text) this.addItem({ kind: 'assistant', text })
         if (response.stop_reason === 'refusal') {
-          this.addItem({ kind: 'notice', text: 'Claude declined this request.' })
+          this.addItem({ kind: 'notice', text: 'The model declined this request.' })
         } else if (response.stop_reason === 'max_tokens') {
           this.addItem({ kind: 'notice', text: 'The answer was cut off (too long).' })
         }

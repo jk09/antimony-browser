@@ -1,5 +1,11 @@
 import type { JsonStore } from '../../../app/main/json-store'
-import { models, type AgentSettings, type ModelId, type SettingsUpdate } from '../ipc'
+import {
+  isModelId,
+  providerOf,
+  type AgentSettings,
+  type ModelId,
+  type SettingsUpdate,
+} from '../ipc'
 
 export interface StoredSettings {
   model: ModelId
@@ -13,13 +19,11 @@ export const defaultSettings = (): StoredSettings => ({
   pageAccess: false,
 })
 
-const isModel = (value: unknown): value is ModelId => models.some((model) => model.id === value)
-
 export function parseSettings(raw: unknown): StoredSettings {
   if (typeof raw !== 'object' || raw === null) throw new TypeError('settings must be an object')
   const record = raw as Record<string, unknown>
   return {
-    model: isModel(record['model']) ? record['model'] : defaultSettings().model,
+    model: isModelId(record['model']) ? record['model'] : defaultSettings().model,
     pageAccess: record['pageAccess'] === true,
     ...(typeof record['encryptedKey'] === 'string' && { encryptedKey: record['encryptedKey'] }),
   }
@@ -34,7 +38,7 @@ export function parseUpdate(value: unknown): SettingsUpdate {
     if (key !== 'model' && key !== 'pageAccess') throw new TypeError(`unknown setting ${key}`)
   }
   if ('model' in record) {
-    if (!isModel(record['model'])) throw new TypeError('unknown model')
+    if (!isModelId(record['model'])) throw new TypeError('unknown model')
     update.model = record['model']
   }
   if ('pageAccess' in record) {
@@ -75,6 +79,7 @@ export class SettingsService {
     const { model, pageAccess, encryptedKey } = this.store.get()
     return {
       model,
+      provider: providerOf(model),
       pageAccess,
       hasKey: this.apiKey() !== null,
       keyPersisted: encryptedKey !== undefined || this.sessionKey === null,

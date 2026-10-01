@@ -219,6 +219,82 @@ describe('Prompt', () => {
     expect(api.agent.updateSettings).toHaveBeenCalledWith({ pageAccess: true })
   })
 
+  it('sends queries to an Ollama model without an API key', async () => {
+    const { api, box } = await openPrompt({
+      settings: { model: 'ollama:qwen3:8b', provider: 'ollama', hasKey: false },
+    })
+    type(box, 'hello there')
+    press(box, 'Enter')
+    await waitFor(() =>
+      expect(api.agent.run).toHaveBeenCalledWith({ text: 'hello there', attachments: [] }),
+    )
+  })
+
+  it('groups Claude and installed Ollama models in the picker', async () => {
+    const { api } = await openPrompt()
+    const picker = screen.getByRole('combobox', { name: 'Model' })
+    await waitFor(() => expect(within(picker).getAllByRole('group')).toHaveLength(2))
+    const [claude, ollama] = within(picker).getAllByRole('group')
+    expect(claude!.getAttribute('label')).toBe('Claude')
+    expect(
+      within(claude!)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['Sonnet 5.5', 'Opus 5.5', 'Haiku 4.5'])
+    expect(ollama!.getAttribute('label')).toBe('Ollama')
+    expect(
+      within(ollama!)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['qwen3:8b (Ollama)'])
+    fireEvent.change(picker, { target: { value: 'ollama:qwen3:8b' } })
+    expect(api.agent.updateSettings).toHaveBeenCalledWith({ model: 'ollama:qwen3:8b' })
+    // Asks Ollama again when the picker gets focus.
+    const calls = api.agent.models.mock.calls.length
+    fireEvent.focus(picker)
+    expect(api.agent.models).toHaveBeenCalledTimes(calls + 1)
+  })
+
+  it("shows Ollama's error and keeps an unlisted selected Ollama model", async () => {
+    await openPrompt({
+      settings: { model: 'ollama:llama3.1:latest', provider: 'ollama' },
+      models: {
+        claude: [{ id: 'claude-sonnet-5-5', label: 'Sonnet 5.5' }],
+        ollama: { error: "Ollama isn't running at http://localhost:11434." },
+      },
+    })
+    const picker = screen.getByRole('combobox', { name: 'Model' }) as HTMLSelectElement
+    await waitFor(() => expect(picker.textContent).toContain("isn't running"))
+    expect(picker.value).toBe('ollama:llama3.1:latest')
+    const ollama = within(picker).getAllByRole('group')[1]!
+    const options = within(ollama).getAllByRole('option') as HTMLOptionElement[]
+    expect(options.map((o) => [o.textContent, o.disabled])).toEqual([
+      ['llama3.1:latest (Ollama)', false],
+      ["Ollama isn't running at http://localhost:11434.", true],
+    ])
+  })
+
+  it('/model picks Ollama models by id or bare name and suggests them', async () => {
+    const { api, box } = await openPrompt()
+    type(box, '/model oll')
+    const suggested = within(await screen.findByRole('listbox')).getAllByRole('option')
+    expect(suggested.map((o) => o.textContent).join(' ')).toContain('ollama:qwen3:8b')
+
+    type(box, '/model qwen3:8b')
+    press(box, 'Enter')
+    await waitFor(() =>
+      expect(api.agent.updateSettings).toHaveBeenCalledWith({ model: 'ollama:qwen3:8b' }),
+    )
+    expect((await screen.findByRole('status')).textContent).toContain('qwen3:8b (Ollama)')
+
+    type(box, '/model ollama:mistral')
+    press(box, 'Enter')
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Choose one of: claude-sonnet-5-5, claude-opus-5-5, claude-haiku-4-5, ollama:qwen3:8b',
+    )
+    expect(api.agent.updateSettings).toHaveBeenCalledTimes(1)
+  })
+
   it('opens by itself when the assistant needs an approval', async () => {
     const fake = fakeApi()
     render(<Prompt />)

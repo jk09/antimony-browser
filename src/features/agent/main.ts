@@ -3,10 +3,11 @@ import { app, safeStorage } from 'electron'
 import type { MainContext } from '../../app/main/features'
 import { createJsonStore } from '../../app/main/json-store'
 import { getPage } from '../navigation/main'
-import { channels } from './ipc'
+import { channels, claudeModels, isOllamaModel, providerOf, type ModelList } from './ipc'
 import { Agent, type Step } from './main/agent'
 import { createMessage, DEFAULT_BASE_URL } from './main/anthropic'
 import { pageBrowser } from './main/browser'
+import { listOllamaModels, ollamaUrl } from './main/ollama'
 import { toolNamed } from './main/tools'
 import {
   defaultSettings,
@@ -54,11 +55,16 @@ export function register({ ipc, fileMenu }: MainContext): void {
   app.on('will-quit', () => store.flush())
   const settings = new SettingsService(store, safeStorageCrypto, process.env['ANTHROPIC_API_KEY'])
   const baseUrl = process.env['ANTHROPIC_BASE_URL'] || DEFAULT_BASE_URL
+  const ollamaBaseUrl = ollamaUrl(process.env['OLLAMA_HOST'])
+  const noKey = 'No Anthropic API key is set. Use /key to add one, or pick an Ollama model.'
 
   const current = new Agent({
     callModel: (request, signal) => {
+      if (isOllamaModel(request.model)) {
+        return createMessage(request, { baseUrl: ollamaBaseUrl, signal })
+      }
       const apiKey = settings.apiKey()
-      if (!apiKey) throw new Error('No Anthropic API key is set. Use /key to add one.')
+      if (!apiKey) throw new Error(noKey)
       return createMessage(request, { apiKey, baseUrl, signal })
     },
     browser: () => {
@@ -66,7 +72,8 @@ export function register({ ipc, fileMenu }: MainContext): void {
       return page ? pageBrowser(page) : null
     },
     settings: () => settings.get(),
-    hasKey: () => settings.apiKey() !== null,
+    missingSetup: () =>
+      providerOf(settings.get().model) === 'anthropic' && settings.apiKey() === null ? noKey : null,
     onState: (state) => ipc.send(channels.stateChanged, state),
     onDebug: (event, label) => ipc.send(channels.debugLogChanged, { event, label }),
   })
@@ -96,6 +103,10 @@ export function register({ ipc, fileMenu }: MainContext): void {
     settings.setKey(parseKey(value))
     return publishSettings()
   })
+  ipc.handle(channels.models, async (): Promise<ModelList> => ({
+    claude: claudeModels.map(({ id, label }) => ({ id, label })),
+    ollama: await listOllamaModels(ollamaBaseUrl),
+  }))
   ipc.handle(channels.debugLog, () => current.debugLog())
   ipc.handle(channels.toggleDebug, () => ipc.send(channels.debugToggled, null))
 

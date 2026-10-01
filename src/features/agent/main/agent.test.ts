@@ -22,7 +22,7 @@ function setup(
   replies: ((request: ModelRequest, signal: AbortSignal) => Promise<ModelResponse>)[],
   options: {
     pageAccess?: boolean
-    hasKey?: boolean
+    missingSetup?: string
     elements?: Parameters<typeof fakeBrowser>[0]
   } = {},
 ) {
@@ -41,7 +41,7 @@ function setup(
     }),
     browser: () => browser,
     settings: () => settings,
-    hasKey: () => options.hasKey ?? true,
+    missingSetup: () => options.missingSetup ?? null,
     onState: (value) => states.push(structuredClone(value)),
     onDebug: (event) => events.push(event),
   }
@@ -257,8 +257,8 @@ describe('Agent.run', () => {
     expect(agent.state().items.at(-1)).toMatchObject({ kind: 'error' })
   })
 
-  it('shows API errors and asks for a key when there is none', async () => {
-    const noKey = setup([], { hasKey: false })
+  it('shows API errors and what setup is missing', async () => {
+    const noKey = setup([], { missingSetup: 'No Anthropic API key is set. Use /key to add one.' })
     await noKey.agent.run(input('hi'))
     expect(noKey.requests).toHaveLength(0)
     expect(noKey.agent.state().items.at(-1)).toMatchObject({
