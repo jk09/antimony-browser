@@ -144,12 +144,6 @@ textarea {
   padding: 10px 12px 8px;
 }
 
-.assistant-hint {
-  margin: auto 0 0;
-  color: var(--muted);
-  text-align: center;
-}
-
 .prompt-card {
   display: flex;
   flex-shrink: 0;

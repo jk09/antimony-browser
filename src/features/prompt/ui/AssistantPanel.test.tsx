@@ -21,14 +21,13 @@ async function renderPanel() {
 const panel = () => screen.queryByRole('complementary', { name: 'Assistant' })
 
 describe('AssistantPanel', () => {
-  it('is shown at start with a hint until there is a conversation', async () => {
+  it('is shown at start, with no conversation area until there is a conversation', async () => {
     const { emit } = await renderPanel()
     expect(panel()).toBeTruthy()
-    expect(screen.getByText(/Ask about this page/)).toBeTruthy()
+    expect(screen.queryByText(/Ask about this page/)).toBeNull()
     expect(screen.queryByRole('region', { name: 'Conversation' })).toBeNull()
     act(() => emit.state({ ...idleState, items: [{ kind: 'user', text: 'hi', attachments: [] }] }))
     expect(screen.getByRole('region', { name: 'Conversation' })).toBeTruthy()
-    expect(screen.queryByText(/Ask about this page/)).toBeNull()
   })
 
   it('stacks header, conversation, form and prompt, with suggestions above the input', async () => {

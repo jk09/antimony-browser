@@ -119,11 +119,7 @@ export function AssistantPanel({
         </button>
       </header>
       <div className="assistant-body">
-        {hasConversation ? (
-          conversation
-        ) : (
-          <p className="assistant-hint">Ask about this page, type a URL, or / for skills.</p>
-        )}
+        {hasConversation && conversation}
         {overlay}
       </div>
       {form}

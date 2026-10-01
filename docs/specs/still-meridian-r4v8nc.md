@@ -11,7 +11,7 @@
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-01 02:45 +00:00 |
-| **Last updated** | 2026-10-01 04:00 +00:00 |
+| **Last updated** | 2026-10-01 05:00 +00:00 |
 | **Affected features** | prompt, agent, skills, navigation |
 | **Target release** | 0.1.0 |
 | **Related links** | [violet-harbinger-p7w3kd](./violet-harbinger-p7w3kd.md) (LLM prompt bar; its card-on-top layout is replaced by this) |
@@ -61,7 +61,7 @@
 ### Panel (feature `prompt`)
 4. From top to bottom the panel shows: a header, the conversation, the skill save form (when open), and the prompt card.
    - Header: the page title and URL (one line each, ellipsized; "New tab" with no page), and a hide (×) button.
-   - Conversation: fills the remaining height and scrolls; it stays scrolled to the newest item while new items arrive, unless the user has scrolled up. With no conversation, the area shows a short hint ("Ask about this page, type a URL, or / for skills").
+   - Conversation: fills the remaining height and scrolls; it stays scrolled to the newest item while new items arrive, unless the user has scrolled up. With no conversation, the area is empty.
    - Skill save form: scrolls by itself, at most half the panel's height.
    - Prompt card: the existing card (status, message, attachments, preview, input or key field, button row), anchored to the bottom. The suggestion list opens above the input instead of below it.
 5. The prompt card is always expanded while the panel is shown; there is no collapsed bar any more. The card's own height is capped (input ≤ 200 px as today, attachment preview ≤ 240 px), so a long input can't push the conversation off the panel.
@@ -136,3 +136,4 @@
 - **Suggestion labels keep at least 60 % of a row** in the narrower panel, so `/key` and `/model` aren't cut to `/…`.
 - **e2e ran in this session** (the Electron binary could be downloaded): all 9 tests pass under `xvfb-run`. Screenshots at 1 400 × 800 confirmed the layout in light mode; dark mode uses the existing color tokens but couldn't be switched in Xvfb, so it wasn't checked visually.
 - **History reloads after each submit**, not only when the prompt opens: the panel no longer closes and reopens, so suggestions would otherwise miss what was just typed.
+- **The empty-conversation hint was removed** (req. 4): it repeated the input's placeholder ("Ask, type a URL, or / for skills") right above it; found on a screenshot.
