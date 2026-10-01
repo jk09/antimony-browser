@@ -7,7 +7,7 @@ export interface CommandResult {
   message?: { kind: 'error' | 'info'; text: string }
   /** Ask for the API key in a password field. */
   keyMode?: boolean
-  /** Collapse the prompt (navigation commands). */
+  /** Clear the message and key field (navigation commands). */
   close?: boolean
 }
 

@@ -5,7 +5,7 @@ Owns the page view: loads web pages (from the prompt or the assistant), keeps it
 ## Entry points
 - UI: `ui/PageArea.tsx` – mounted in `App.tsx`; reports its box to main as page insets
 - IPC: `navigation:go|back|forward|reload|stop|set-insets` (UI → main), `navigation:state-changed` (main → UI) – `ipc.ts`; the bridge's `toUrl` runs in the preload, without IPC
-- Main: `register` in `main.ts` – owns the page `WebContentsView`, adds it on the first load, lays it out on `resize` and inset changes, and sets the page's window-open handler; exports `getPage()` (page controls for the agent)
+- Main: `register` in `main.ts` – owns the page `WebContentsView`, adds it on the first load, lays it out on `resize` and inset changes (none until the UI reports them), focuses it after `navigation:go`, and sets the page's window-open handler; exports `getPage()` (page controls for the agent)
 - Shared: `shared/to-url.ts` – `toUrl` (typed text → http(s) URL or null), `isWebUrl`
 
 ## Invariants
@@ -31,4 +31,4 @@ Owns the page view: loads web pages (from the prompt or the assistant), keeps it
 |---|---|---|---|
 | – | | | |
 
-Specs: amber-lantern-8qp2hb, silver-thistle-qk30tb, violet-harbinger-p7w3kd · ADRs: 0003, 0004
+Specs: amber-lantern-8qp2hb, silver-thistle-qk30tb, violet-harbinger-p7w3kd, still-meridian-r4v8nc · ADRs: 0003, 0004

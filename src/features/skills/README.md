@@ -3,7 +3,7 @@
 Turns an assistant run into a `/command` that replays the same browser tool calls without the model, optionally with `{{parameters}}` typed after the command; `/back`, `/forward`, `/reload` and `/stop` ship as built-in skills.
 
 ## Entry points
-- UI: `ui/SaveSkill.tsx` – mounted in the toolbar (`App.tsx`), opened by `/save` or "Save as skill"
+- UI: `ui/SaveSkill.tsx` – mounted in the assistant panel above the prompt (`App.tsx`), opened by `/save` or "Save as skill"
 - IPC: `skills:list|draft|save|delete|run|request-save` (UI → main), `skills:list-changed`, `skills:save-requested` (main → UI) – `ipc.ts`
 - Main: `register` in `main.ts` – skill store, argument binding, replay through the agent
 - Shared: `shared/params.ts` (names, `{{params}}`, argument parsing), `shared/builtins.ts`
@@ -27,4 +27,4 @@ Turns an assistant run into a `/command` that replays the same browser tool call
 |---|---|---|---|
 | – | | | |
 
-Spec: violet-harbinger-p7w3kd · ADRs: 0004
+Spec: violet-harbinger-p7w3kd, still-meridian-r4v8nc · ADRs: 0004

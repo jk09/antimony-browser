@@ -46,7 +46,7 @@ class FakeView {
 
 vi.mock('electron', () => ({ app: {}, WebContentsView: FakeView }))
 
-const { register, getPage, TOOLBAR_HEIGHT } = await import('./main')
+const { register, getPage } = await import('./main')
 const { channels } = await import('./ipc')
 
 function setup() {
@@ -104,7 +104,7 @@ describe('navigation main', () => {
     expect(ctx.window.contentView.addChildView).not.toHaveBeenCalled()
   })
 
-  it('loads valid URLs and adds the page view once, below the toolbar', () => {
+  it('loads valid URLs, focuses the page and adds its view once, with no insets yet', () => {
     const { go, page, ctx } = setup()
     go('example.com')
     go('https://example.org/')
@@ -116,9 +116,9 @@ describe('navigation main', () => {
     expect(ctx.window.contentView.addChildView).toHaveBeenCalledTimes(1)
     expect(page.setBounds).toHaveBeenLastCalledWith({
       x: 0,
-      y: TOOLBAR_HEIGHT,
+      y: 0,
       width: 1000,
-      height: 700 - TOOLBAR_HEIGHT,
+      height: 700,
     })
   })
 
@@ -128,9 +128,9 @@ describe('navigation main', () => {
     resize(800, 500)
     expect(page.setBounds).toHaveBeenLastCalledWith({
       x: 0,
-      y: TOOLBAR_HEIGHT,
+      y: 0,
       width: 800,
-      height: 500 - TOOLBAR_HEIGHT,
+      height: 500,
     })
   })
 

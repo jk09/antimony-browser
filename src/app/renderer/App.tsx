@@ -2,21 +2,17 @@ import { ActingFrame } from '../../features/agent/ui/ActingFrame'
 import { Conversation } from '../../features/agent/ui/Conversation'
 import { DebugPanel } from '../../features/agent/ui/DebugPanel'
 import { PageArea } from '../../features/navigation/ui/PageArea'
-import { Prompt } from '../../features/prompt/ui/Prompt'
+import { AssistantPanel } from '../../features/prompt/ui/AssistantPanel'
 import { SaveSkill } from '../../features/skills/ui/SaveSkill'
 
 /**
- * The chrome UI: prompt on top, page area below (the page view is laid over it), debugger on the
- * right. Features mount their UI here.
+ * The chrome UI: page area on the left (the page view is laid over it), then the debugger, then
+ * the assistant panel on the right. Features mount their UI here.
  */
 export function App() {
   const { chrome, electron } = window.antimony.versions
   return (
     <div className="shell">
-      <header className="toolbar" data-testid="toolbar">
-        <Prompt conversation={<Conversation />} />
-        <SaveSkill />
-      </header>
       <div className="workspace">
         <ActingFrame>
           <PageArea>
@@ -27,6 +23,7 @@ export function App() {
         </ActingFrame>
         <DebugPanel />
       </div>
+      <AssistantPanel conversation={<Conversation />} form={<SaveSkill />} />
     </div>
   )
 }

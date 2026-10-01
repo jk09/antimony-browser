@@ -3,7 +3,7 @@
 Lets Claude (Anthropic Messages API) or a local Ollama model carry out requests typed into the prompt by calling the browser's own tools: navigate, read the page, click and type, each page action only with the user's approval. Its debugger shows every model request, response, tool call and result of a run.
 
 ## Entry points
-- UI: `ui/Conversation.tsx` (conversation, approvals, "Save as skill") inside the prompt card; `ui/ActingFrame.tsx` around the page area; `ui/DebugPanel.tsx` docked on the right – all mounted in `App.tsx`
+- UI: `ui/Conversation.tsx` (conversation, approvals, "Save as skill") filling the assistant panel above the prompt, following new items unless scrolled up; `ui/ActingFrame.tsx` around the page area; `ui/DebugPanel.tsx` docked between the page area and the assistant panel – all mounted in `App.tsx`
 - IPC: `agent:run|stop|approve|new-conversation|state|settings|update-settings|set-key|models|debug-log|toggle-debug` (UI → main); `agent:state-changed`, `agent:settings-changed`, `agent:debug-log-changed`, `agent:debug-toggled` (main → UI) – `ipc.ts`
 - Main: `register` in `main.ts` – File → Toggle Assistant Debugger (Ctrl/Cmd+Shift+D); exports `replay`, `savableSteps`, `isReplayableTool` for skills. Run loop `main/agent.ts`, client `main/anthropic.ts` (fetch, no SDK; also Ollama's compatible `/v1/messages`), Ollama address and model list `main/ollama.ts`, tools `main/tools.ts`, page adapter `main/browser.ts`, key and settings `main/settings.ts`
 - Shared: `shared/page-scripts.ts` – the fixed scripts run in the page's isolated world
@@ -34,4 +34,4 @@ Lets Claude (Anthropic Messages API) or a local Ollama model carry out requests 
 |---|---|---|---|
 | – | | | |
 
-Spec: violet-harbinger-p7w3kd, copper-lantern-o7l4ma · ADRs: 0004, 0005
+Spec: violet-harbinger-p7w3kd, copper-lantern-o7l4ma, still-meridian-r4v8nc · ADRs: 0004, 0005

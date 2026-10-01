@@ -66,14 +66,30 @@ test('File → Prompt… (Ctrl+L) loads a typed URL in the page view', async () 
   const app = await launch()
   try {
     const window = await app.firstWindow()
-    await expect(window.getByRole('textbox', { name: 'Prompt' })).toBeHidden()
+    await expect(window.getByRole('textbox', { name: 'Prompt' })).toBeVisible()
 
     const location = await openLocation(app, window)
     await location.fill(`${origin}/hello`)
     await location.press('Enter')
 
-    await expect(location).toBeHidden()
     await expect.poll(() => pageUrls(app)).toContain(`${origin}/hello`)
+    await expect(location).toHaveValue('')
+    await expect(location).toBeVisible()
+    // Like an address bar: the page gets the keyboard after Enter.
+    await expect
+      .poll(() =>
+        app.evaluate(({ BrowserWindow }) => {
+          const [view] = BrowserWindow.getAllWindows()[0]!.contentView.children
+          return (view as Electron.WebContentsView).webContents.isFocused()
+        }),
+      )
+      .toBe(true)
+
+    // × hides the panel; Ctrl+L brings it back.
+    await window.getByRole('button', { name: 'Hide assistant' }).click()
+    await expect(location).toBeHidden()
+    await openLocation(app, window)
+    await expect(location).toBeVisible()
   } finally {
     await app.close()
   }
@@ -92,7 +108,7 @@ test('text that is not a web address goes to the assistant, which needs a key', 
     expect(await pageUrls(app)).toEqual([''])
 
     await location.press('Escape')
-    await expect(location).toBeHidden()
+    await expect(location).toBeVisible()
   } finally {
     await app.close()
   }

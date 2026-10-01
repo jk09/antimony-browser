@@ -20,12 +20,12 @@ Antimony is a minimal Chromium-based browser built on [Electron](https://www.ele
 ```
 
 - **Main process = backend.** Everything with privileges lives here: creating and positioning `WebContentsView`s for pages, navigation, the browsing `session` (cookies, cache, downloads via `will-download`, permission prompts via `setPermissionRequestHandler`, request filtering via `webRequest`), and persistence under `app.getPath('userData')`. Use the built-in `node:sqlite` for history and bookmarks (no native module to rebuild) and JSON files for small settings.
-- **Chrome UI = frontend.** The `BrowserWindow`'s own webContents renders the toolbar, tab strip and address bar in React. It has no Node access; it calls `window.antimony.<feature>.*`, which the preload maps to `ipcRenderer.invoke`, and subscribes to events the main process sends.
-- **Web pages** are separate `WebContentsView`s added to `window.contentView` and laid out by the main process under the toolbar. They run on their own session partition, get no preload and can reach the app only through normal browser behaviour (navigation, `window.open`, permission requests), which the main process intercepts.
+- **Chrome UI = frontend.** The `BrowserWindow`'s own webContents renders the browser's own UI (assistant panel with the prompt, debugger) in React. It has no Node access; it calls `window.antimony.<feature>.*`, which the preload maps to `ipcRenderer.invoke`, and subscribes to events the main process sends.
+- **Web pages** are separate `WebContentsView`s added to `window.contentView` and laid out by the main process in the page area, left of the assistant panel. They run on their own session partition, get no preload and can reach the app only through normal browser behaviour (navigation, `window.open`, permission requests), which the main process intercepts.
 
 ## UI notes
 
-- Layout: the UI reports its toolbar height (or the main process owns a constant) and the main process sets page view bounds on `resize`. Pages sit *above* the chrome UI's webContents, so anything that must overlap a page (menus, the address bar dropdown) needs a native `Menu`, a temporary resize, or a small popup `WebContentsView`.
+- Layout: `PageArea` reports the page area's box as insets and the main process sets page view bounds on inset changes and `resize`. Keep UI that grows with content (conversation, suggestions, forms) in the assistant panel, not above or below the page, so the page keeps its size. Pages sit *above* the chrome UI's webContents, so anything that must overlap a page (menus, the address bar dropdown) needs a native `Menu`, a temporary resize, or a small popup `WebContentsView`.
 - Keyboard shortcuts must work while a page has focus: define them as application `Menu` accelerators in the main process (items pushed onto `ctx.fileMenu`, [ADR 0003](./adr/0003-build-the-application-menu-from-feature-contributions.md)) or `before-input-event` on page views, not DOM key handlers in the UI.
 - Styling stays plain CSS with custom properties and `prefers-color-scheme`; add a UI library only with an ADR.
 

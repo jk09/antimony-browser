@@ -8,7 +8,6 @@ import {
   type DragEvent,
   type FormEvent,
   type KeyboardEvent,
-  type ReactNode,
 } from 'react'
 import {
   claudeModels,
@@ -18,7 +17,6 @@ import {
   type ModelInfo,
   type ModelList,
 } from '../../agent/ipc'
-import type { NavigationState } from '../../navigation/ipc'
 import type { Skill } from '../../skills/ipc'
 import { promptCommands, type HistoryEntry } from '../ipc'
 import { classify } from '../shared/classify'
@@ -27,40 +25,19 @@ import { suggest, type SuggestCommand, type Suggestion } from '../shared/suggest
 import { imageUrl, isLongPaste, readImages } from './attachments'
 import { runCommand } from './commands'
 import { suggestionId, SuggestionList } from './SuggestionList'
+import { useSubscription } from './useSubscription'
 
 type Message = { kind: 'error' | 'info'; text: string }
 
 const MAX_INPUT_HEIGHT = 200
 
-function useSubscription<T>(
-  load: () => Promise<T>,
-  subscribe: (listener: (value: T) => void) => () => void,
-): T | null {
-  const [value, setValue] = useState<T | null>(null)
-  useEffect(() => {
-    let live = true
-    load()
-      .then((initial) => live && setValue((current) => current ?? initial))
-      .catch((reason: unknown) => console.error(reason))
-    const unsubscribe = subscribe(setValue)
-    return () => {
-      live = false
-      unsubscribe()
-    }
-    // load and subscribe are stable bridge functions.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-  return value
-}
-
 /**
- * The prompt: Ctrl/Cmd+L expands a Claude-style card in the toolbar. URLs and /commands are
- * handled without the model; everything else goes to the assistant.
+ * The prompt: a Claude-style card at the bottom of the assistant panel. URLs and /commands are
+ * handled without the model; everything else goes to the assistant. `focusRequest` changes on
+ * every Ctrl/Cmd+L, which focuses the input and selects its text.
  */
-export function Prompt({ conversation }: { conversation?: ReactNode }) {
+export function Prompt({ focusRequest = 0 }: { focusRequest?: number }) {
   const api = window.antimony
-  const [open, setOpen] = useState(false)
-  const [requests, setRequests] = useState(0)
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [preview, setPreview] = useState<number | null>(null)
@@ -74,26 +51,12 @@ export function Prompt({ conversation }: { conversation?: ReactNode }) {
   const keyInput = useRef<HTMLInputElement>(null)
   const files = useRef<HTMLInputElement>(null)
 
-  const [navigation, setNavigation] = useState<NavigationState | null>(null)
-  useEffect(() => api.navigation.onStateChanged(setNavigation), [api])
   const agent = useSubscription<AgentState>(api.agent.state, api.agent.onStateChanged)
   const settings = useSubscription<AgentSettings>(api.agent.settings, api.agent.onSettingsChanged)
   const skillList = useSubscription<Skill[]>(api.skills.list, api.skills.onListChanged)
   const skills = useMemo(() => skillList ?? [], [skillList])
   const [modelList, setModelList] = useState<ModelList | null>(null)
   const running = agent !== null && agent.status !== 'idle'
-
-  useEffect(
-    () =>
-      api.prompt.onOpen(() => {
-        setOpen(true)
-        setRequests((n) => n + 1)
-      }),
-    [api],
-  )
-
-  // An approval is asked in the conversation, so the card stays expanded while one is pending.
-  const expanded = open || agent?.status === 'awaiting-approval'
 
   // Asks Ollama which models are installed; the picker shows the Claude models meanwhile.
   const refreshModels = useCallback(() => {
@@ -103,9 +66,8 @@ export function Prompt({ conversation }: { conversation?: ReactNode }) {
       .catch((reason: unknown) => console.error(reason))
   }, [api])
 
-  // Load history and models on every open, and focus on every request (also when already open).
+  // Load history and models, and focus, at start and on every request.
   useEffect(() => {
-    if (!expanded) return
     api.prompt
       .history()
       .then(setHistory)
@@ -113,7 +75,7 @@ export function Prompt({ conversation }: { conversation?: ReactNode }) {
     refreshModels()
     ;(keyMode ? keyInput : input).current?.focus()
     input.current?.select()
-  }, [api, expanded, requests, keyMode, refreshModels])
+  }, [api, focusRequest, keyMode, refreshModels])
 
   // Grow the text area with its content, up to a limit.
   useEffect(() => {
@@ -121,7 +83,7 @@ export function Prompt({ conversation }: { conversation?: ReactNode }) {
     if (!area) return
     area.style.height = 'auto'
     area.style.height = `${Math.min(area.scrollHeight, MAX_INPUT_HEIGHT)}px`
-  }, [text, expanded])
+  }, [text])
 
   const commands = useMemo<SuggestCommand[]>(() => {
     const saved = skills.filter((skill) => !skill.builtin).map((skill) => skill.name)
@@ -157,8 +119,8 @@ export function Prompt({ conversation }: { conversation?: ReactNode }) {
     setRecall(-1)
   }
 
-  const close = () => {
-    setOpen(false)
+  /** Clears what's left of the last input once it has been handled. */
+  const reset = () => {
     setKeyMode(false)
     setMessage(null)
     setPreview(null)
@@ -166,8 +128,13 @@ export function Prompt({ conversation }: { conversation?: ReactNode }) {
     setRecall(-1)
   }
 
+  // The panel stays open, so suggestions pick up each new entry right away.
   const record = (kind: HistoryEntry['kind'], value: string) => {
-    api.prompt.record({ kind, text: value }).catch((reason: unknown) => console.error(reason))
+    api.prompt
+      .record({ kind, text: value })
+      .then(() => api.prompt.history())
+      .then(setHistory)
+      .catch((reason: unknown) => console.error(reason))
   }
 
   const addAttachments = (added: Attachment[], error: string | null) => {
@@ -187,7 +154,7 @@ export function Prompt({ conversation }: { conversation?: ReactNode }) {
         case 'url':
           record('url', parsed.url)
           setText('')
-          close()
+          reset()
           await api.navigation.go(parsed.url)
           return
         case 'query':
@@ -214,7 +181,7 @@ export function Prompt({ conversation }: { conversation?: ReactNode }) {
           const result = await runCommand(parsed.name, parsed.args, { skills, settings })
           setMessage(result.message ?? null)
           if (result.keyMode) setKeyMode(true)
-          if (result.close) close()
+          if (result.close) reset()
           return
         }
       }
@@ -281,7 +248,6 @@ export function Prompt({ conversation }: { conversation?: ReactNode }) {
         event.preventDefault()
         if (listed) setListHidden(true)
         else if (running) void api.agent.stop()
-        else close()
         return
     }
   }
@@ -340,35 +306,6 @@ export function Prompt({ conversation }: { conversation?: ReactNode }) {
     </span>
   ) : null
 
-  if (!expanded) {
-    const title = navigation?.title || navigation?.url
-    return (
-      <div className="prompt-collapsed">
-        <button
-          type="button"
-          className="prompt-bar"
-          aria-label="Open prompt"
-          onClick={() => {
-            setOpen(true)
-            setRequests((n) => n + 1)
-          }}
-        >
-          {title ? (
-            <>
-              <span className="prompt-bar-title">{navigation?.title || navigation?.url}</span>
-              {navigation?.title && <span className="prompt-bar-url">{navigation.url}</span>}
-            </>
-          ) : (
-            <span className="prompt-bar-placeholder">
-              Ask, type a URL, or / for skills (Ctrl+L)
-            </span>
-          )}
-        </button>
-        {status}
-      </div>
-    )
-  }
-
   const hasInput = text.trim() !== '' || attachments.length > 0
   return (
     <div
@@ -378,7 +315,6 @@ export function Prompt({ conversation }: { conversation?: ReactNode }) {
       onDragOver={(event) => event.preventDefault()}
       onDrop={onDrop}
     >
-      {conversation}
       {status}
       {message && (
         <p
@@ -430,6 +366,13 @@ export function Prompt({ conversation }: { conversation?: ReactNode }) {
           )}
         </div>
       )}
+      {suggestions.length > 0 && !keyMode && (
+        <SuggestionList
+          suggestions={suggestions}
+          selected={selected}
+          onPick={(suggestion) => accept(suggestion, true)}
+        />
+      )}
       {keyMode ? (
         <form className="prompt-key" onSubmit={submitKey}>
           <input
@@ -462,13 +405,6 @@ export function Prompt({ conversation }: { conversation?: ReactNode }) {
           onChange={(event) => edit(event.target.value)}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
-        />
-      )}
-      {suggestions.length > 0 && !keyMode && (
-        <SuggestionList
-          suggestions={suggestions}
-          selected={selected}
-          onPick={(suggestion) => accept(suggestion, true)}
         />
       )}
       <div className="prompt-row">

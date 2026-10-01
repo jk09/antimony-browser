@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, describe, expect, it } from 'vitest'
 import { builtins, fakeApi, idleState } from '../../../app/renderer/fake-api'
 import type { HistoryEntry } from '../ipc'
-import { Prompt } from './Prompt'
+import { AssistantPanel } from './AssistantPanel'
 
 afterEach(cleanup)
 
@@ -13,7 +13,7 @@ async function openPrompt(
 ) {
   const fake = fakeApi(options)
   fake.api.prompt.history.mockResolvedValue(history as never)
-  render(<Prompt />)
+  render(<AssistantPanel />)
   // Let the initial state, settings and skills load.
   await act(async () => {})
   act(() => fake.emit.open())
@@ -27,21 +27,25 @@ const press = (box: HTMLTextAreaElement, key: string, extra: object = {}) =>
   fireEvent.keyDown(box, { key, ...extra })
 
 describe('Prompt', () => {
-  it('is collapsed until Ctrl/Cmd+L, then focused; Escape collapses it', async () => {
+  it('is shown and focused at start; Ctrl/Cmd+L refocuses and selects; Escape keeps it', async () => {
     const fake = fakeApi()
-    render(<Prompt />)
-    expect(screen.queryByRole('textbox', { name: 'Prompt' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Open prompt' })).toBeTruthy()
-    act(() => fake.emit.open())
-    const box = screen.getByRole('textbox', { name: 'Prompt' })
+    render(<AssistantPanel />)
+    await act(async () => {})
+    const box = screen.getByRole('textbox', { name: 'Prompt' }) as HTMLTextAreaElement
     expect(document.activeElement).toBe(box)
-    press(box as HTMLTextAreaElement, 'Escape')
-    expect(screen.queryByRole('textbox', { name: 'Prompt' })).toBeNull()
+    type(box, 'example')
+    box.blur()
+    act(() => fake.emit.open())
+    expect(document.activeElement).toBe(box)
+    expect(box.selectionEnd - box.selectionStart).toBe('example'.length)
+    press(box, 'Escape')
+    expect(screen.getByRole('textbox', { name: 'Prompt' })).toBe(box)
   })
 
-  it('shows the page title and URL when collapsed', async () => {
+  it('shows the page title and URL in the panel header', async () => {
     const fake = fakeApi()
-    render(<Prompt />)
+    render(<AssistantPanel />)
+    expect(screen.getByTestId('page-info').textContent).toBe('New tab')
     act(() =>
       fake.emit.navigation({
         url: 'https://example.com/',
@@ -51,9 +55,9 @@ describe('Prompt', () => {
         canGoForward: false,
       }),
     )
-    const bar = screen.getByRole('button', { name: 'Open prompt' })
-    expect(bar.textContent).toContain('Example Domain')
-    expect(bar.textContent).toContain('https://example.com/')
+    const header = screen.getByTestId('page-info')
+    expect(header.textContent).toContain('Example Domain')
+    expect(header.textContent).toContain('https://example.com/')
   })
 
   it('navigates to URLs without asking the model', async () => {
@@ -63,7 +67,8 @@ describe('Prompt', () => {
     await waitFor(() => expect(api.navigation.go).toHaveBeenCalledWith('https://example.com/'))
     expect(api.agent.run).not.toHaveBeenCalled()
     expect(api.prompt.record).toHaveBeenCalledWith({ kind: 'url', text: 'https://example.com/' })
-    expect(screen.queryByRole('textbox', { name: 'Prompt' })).toBeNull()
+    expect(box.value).toBe('')
+    expect(screen.getByRole('textbox', { name: 'Prompt' })).toBe(box)
   })
 
   it('sends other text to the assistant; Shift+Enter adds a line', async () => {
@@ -87,12 +92,13 @@ describe('Prompt', () => {
     expect(api.agent.run).not.toHaveBeenCalled()
   })
 
-  it('runs built-in skills and collapses', async () => {
+  it('runs built-in skills and clears the input', async () => {
     const { api, box } = await openPrompt()
     type(box, '/reload')
     press(box, 'Enter')
     await waitFor(() => expect(api.skills.run).toHaveBeenCalledWith('reload', ''))
-    await waitFor(() => expect(screen.queryByRole('textbox', { name: 'Prompt' })).toBeNull())
+    expect(box.value).toBe('')
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('reports unknown commands without calling anything', async () => {
@@ -200,7 +206,7 @@ describe('Prompt', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('only PNG, JPEG, GIF and WebP')
   })
 
-  it('Escape stops a running assistant instead of collapsing', async () => {
+  it('Escape stops a running assistant', async () => {
     const { api, emit, box } = await openPrompt()
     act(() => emit.state({ ...idleState, status: 'running' }))
     expect(screen.getByRole('status').textContent).toContain('Assistant is acting')
@@ -295,21 +301,6 @@ describe('Prompt', () => {
     expect(api.agent.updateSettings).toHaveBeenCalledTimes(1)
   })
 
-  it('opens by itself when the assistant needs an approval', async () => {
-    const fake = fakeApi()
-    render(<Prompt />)
-    await act(async () => {})
-    expect(screen.queryByRole('textbox', { name: 'Prompt' })).toBeNull()
-    act(() =>
-      fake.emit.state({
-        ...idleState,
-        status: 'awaiting-approval',
-        approval: { description: 'Click' },
-      }),
-    )
-    expect(screen.getByRole('textbox', { name: 'Prompt' })).toBeTruthy()
-  })
-
   it('/debug toggles the debugger and /page-access switches page access', async () => {
     const { api, box } = await openPrompt()
     type(box, '/debug')
@@ -319,5 +310,17 @@ describe('Prompt', () => {
     press(box, 'Enter')
     await waitFor(() => expect(api.agent.updateSettings).toHaveBeenCalledWith({ pageAccess: true }))
     expect((await screen.findByRole('status')).textContent).toContain('Page access on')
+  })
+
+  it('suggests what was just submitted without reopening', async () => {
+    const { api, box } = await openPrompt()
+    api.prompt.history.mockResolvedValue([
+      { kind: 'url', text: 'https://example.com/', at: 1 },
+    ] as never)
+    type(box, 'example.com')
+    press(box, 'Enter')
+    await waitFor(() => expect(api.prompt.record).toHaveBeenCalled())
+    type(box, 'exa')
+    expect((await screen.findByRole('listbox')).textContent).toContain('https://example.com/')
   })
 })

@@ -52,16 +52,38 @@ function Item({ item }: { item: ConversationItem }) {
   }
 }
 
-/** The assistant conversation shown in the prompt card, with approvals and "Save as skill". */
+/** How close to the bottom (px) still counts as "at the newest item". */
+const STICK_DISTANCE = 24
+
+/**
+ * The assistant conversation, filling the assistant panel above the prompt, with approvals and
+ * "Save as skill". It follows new items unless the user has scrolled up; a new question follows
+ * again.
+ */
 export function Conversation() {
   const state = useAgentState()
   const list = useRef<HTMLOListElement>(null)
+  const stick = useRef(true)
   const items = state?.items ?? []
 
   useEffect(() => {
     const element = list.current
-    if (element) element.scrollTop = element.scrollHeight
-  }, [items.length, state?.status])
+    if (!element) return
+    if (state?.items.at(-1)?.kind === 'user') stick.current = true
+    if (stick.current) element.scrollTop = element.scrollHeight
+  }, [state])
+
+  // The prompt below grows (suggestions, attachments): keep the newest item in view.
+  const listed = state !== null && (state.items.length > 0 || state.approval !== null)
+  useEffect(() => {
+    const element = list.current
+    if (!element) return
+    const observer = new ResizeObserver(() => {
+      if (stick.current) element.scrollTop = element.scrollHeight
+    })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [listed])
 
   if (!state || (items.length === 0 && !state.approval)) return null
   const decide = (decision: Decision) => {
@@ -69,7 +91,15 @@ export function Conversation() {
   }
   return (
     <section className="conversation" aria-label="Conversation">
-      <ol ref={list} className="conversation-items">
+      <ol
+        ref={list}
+        className="conversation-items"
+        onScroll={(event) => {
+          const element = event.currentTarget
+          stick.current =
+            element.scrollHeight - element.scrollTop - element.clientHeight <= STICK_DISTANCE
+        }}
+      >
         {items.map((item, index) => (
           <Item key={index} item={item} />
         ))}
