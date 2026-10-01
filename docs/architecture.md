@@ -90,7 +90,7 @@ Set up in `src/app/main/security.ts` and `src/app/main/ipc.ts`; see the Security
 Each is one spec (`spec` skill) and one folder under `src/features/`:
 
 1. **navigation** – address bar (URL or search), one page view, back / forward / reload / stop, loading state, page title in the window title.
-2. **tabs** – several page views, tab strip, new / close / switch, `window.open` and middle-click open a tab, keyboard shortcuts.
+2. **tabs** – several page views, `window.open` and middle-click open a tab: done in navigation, with **stacks** as the tab UI (a navigation tree per tab in the panel header, [ADR 0008](./adr/0008-keep-live-tabs-and-show-each-tabs-navigation-as-a-tree.md)); still open: keyboard shortcuts.
 3. **history** – record visits (`node:sqlite`), address bar suggestions, history page.
 4. **bookmarks** – star button, bookmarks bar or menu.
 5. **downloads** – `will-download`, progress, open / show in folder.

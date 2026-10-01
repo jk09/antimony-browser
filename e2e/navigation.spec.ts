@@ -105,7 +105,8 @@ test('text that is not a web address goes to the assistant, which needs a key', 
 
     await expect(window.getByRole('alert')).toContainText('/key')
     await expect(location).toBeVisible()
-    expect(await pageUrls(app)).toEqual([''])
+    // No tab is created until a page is loaded.
+    expect(await pageUrls(app)).toEqual([])
 
     await location.press('Escape')
     await expect(location).toBeVisible()
@@ -114,7 +115,7 @@ test('text that is not a web address goes to the assistant, which needs a key', 
   }
 })
 
-test('links that open a new window load in the page view', async () => {
+test('links that open a new window open a new tab and stack', async () => {
   const app = await launch()
   try {
     const window = await app.firstWindow()
@@ -126,8 +127,12 @@ test('links that open a new window load in the page view', async () => {
     const page = app.windows().find((candidate) => candidate.url() === `${origin}/links`)!
     await page.getByRole('link', { name: 'New window' }).click()
 
-    await expect.poll(() => pageUrls(app)).toEqual([`${origin}/hello`])
-    expect(app.windows()).toHaveLength(2)
+    // The first tab keeps its page; the new one is shown instead. No window is created.
+    await expect
+      .poll(async () => (await pageUrls(app)).sort())
+      .toEqual([`${origin}/hello`, `${origin}/links`])
+    expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1)
+    await expect(window.getByRole('button', { name: /@test-page/ })).toBeVisible()
   } finally {
     await app.close()
   }

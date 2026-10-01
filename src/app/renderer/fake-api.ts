@@ -12,6 +12,7 @@ import type { MenuEntry, RunResult } from '../../features/menu/ipc'
 import type { NavigationState } from '../../features/navigation/ipc'
 import { toUrl } from '../../features/navigation/shared/to-url'
 import type { Skill } from '../../features/skills/ipc'
+import type { StacksState } from '../../features/stacks/ipc'
 import type { AntimonyApi } from '../../shared/api'
 
 type Listener<T> = (value: T) => void
@@ -56,6 +57,7 @@ export function fakeApi(
     skills?: Skill[]
     models?: ModelList
     menu?: MenuEntry[]
+    stacks?: StacksState
   } = {},
 ) {
   const open = channel<void>()
@@ -70,6 +72,7 @@ export function fakeApi(
   const historyOpen = channel<OpenRequest>()
   const historyChanged = channel<void>()
   const historySettings = channel<HistorySettings>()
+  const stacks = channel<StacksState>()
   const currentSettings = { ...defaultSettings, ...options.settings }
 
   const api = {
@@ -139,6 +142,15 @@ export function fakeApi(
       requestSave: vi.fn(async (name?: string) => saveRequested.emit(name ?? '')),
       onSaveRequested: saveRequested.subscribe,
     },
+    stacks: {
+      state: vi.fn(async () => options.stacks ?? { current: null, stacks: [] }),
+      goToNode: vi.fn(async (_nodeId: number) => {}),
+      switch: vi.fn(async (_stackId: string) => {}),
+      create: vi.fn(async () => {}),
+      close: vi.fn(async (_stackId: string) => {}),
+      outline: vi.fn(async (name: string) => `Navigation stack @${name}`),
+      onChanged: stacks.subscribe,
+    },
   } satisfies AntimonyApi
 
   window.antimony = api
@@ -156,6 +168,7 @@ export function fakeApi(
       navigation: navigation.emit,
       historyOpen: historyOpen.emit,
       historyChanged: () => historyChanged.emit(),
+      stacks: stacks.emit,
     },
   }
 }

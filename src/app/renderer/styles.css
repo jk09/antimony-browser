@@ -102,6 +102,257 @@ textarea {
   border-bottom: 1px solid var(--field-border);
 }
 
+.assistant-header.custom {
+  position: relative;
+  align-items: flex-start;
+  height: auto;
+  min-height: 40px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.stack-header {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.stack-name {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.stack-name:hover {
+  background: var(--hover);
+}
+
+.stack-list {
+  position: absolute;
+  top: 30px;
+  left: 8px;
+  right: 8px;
+  z-index: 20;
+  max-height: 60vh;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--field-border);
+  border-radius: 8px;
+  background: var(--card-bg);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+}
+
+.stack-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stack-list li {
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+}
+
+.stack-list li.current {
+  background: var(--hover);
+}
+
+.stack-list-item {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stack-list-name,
+.stack-list-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stack-list-detail,
+.stack-list-note {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.stack-list-note {
+  margin: 4px 8px;
+}
+
+.stack-list-close,
+.stack-list-new,
+.stack-overlay-head button {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.stack-list-close {
+  width: 24px;
+  height: 24px;
+}
+
+.stack-list-new {
+  width: 100%;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.stack-list button:not(:disabled):hover,
+.stack-overlay-head button:hover {
+  background: var(--hover);
+}
+
+.stack-list button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.stack-tree {
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stack-row {
+  display: flex;
+  gap: 4px;
+  min-height: 22px;
+  box-sizing: border-box;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.stack-row:hover {
+  background: var(--hover);
+}
+
+.stack-row.active {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.stack-row:focus-visible,
+.stack-more:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.stack-connector {
+  flex-shrink: 0;
+  padding-left: 6px;
+  color: var(--muted);
+  line-height: 22px;
+}
+
+.stack-row-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 3px 6px 3px 2px;
+}
+
+.stack-row:not(:has(.stack-connector)) .stack-row-text {
+  padding-left: 6px;
+}
+
+.stack-row-title,
+.stack-row-url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stack-row-url {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.stack-loading {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: middle;
+  animation: stack-pulse 1s ease-in-out infinite;
+}
+
+@keyframes stack-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.stack-more {
+  width: 100%;
+  height: 22px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stack-more:hover {
+  background: var(--hover);
+}
+
+.stack-overlay {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  max-height: 70vh;
+  padding: 4px 8px 8px;
+  border-bottom: 1px solid var(--field-border);
+  background: var(--card-bg);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+}
+
+.stack-overlay-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.stack-overlay .stack-tree {
+  overflow: auto;
+}
+
 .assistant-page {
   display: flex;
   flex: 1;

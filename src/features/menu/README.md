@@ -16,7 +16,7 @@ Lets you run any application menu item from the prompt with `/menu`, picking the
 - Items run against the page when there is one – `main.test.ts › runs an item as if clicked…`
 
 ## Dependencies
-- Features: navigation (`getPage().contents()` from its `main.ts`); prompt calls this feature's bridge
+- Features: navigation (`getPage().contents()` from its `main.ts`, the active tab); prompt calls this feature's bridge
 - Electron: `Menu`, `MenuItem.click`; the menu itself is built by the app shell (`src/app/main/menu.ts`, ADR 0003)
 - Stored data: –
 

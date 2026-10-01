@@ -6,12 +6,12 @@
 | --- | --- |
 | **Feature name** | Navigation stacks: a vertical, branching breadcrumb tree replacing the page title/URL in the assistant panel header, one stack per tab |
 | **Spec ID** | branching-trail-k4w9zp |
-| **Status** | Draft <!-- one of: Draft, Active, Done --> |
+| **Status** | Active <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-01 18:51 +00:00 |
-| **Last updated** | 2026-10-01 18:51 +00:00 |
+| **Last updated** | 2026-10-01 19:12 +00:00 |
 | **Affected features** | stacks (new), navigation, prompt, agent, history, menu |
 | **Target release** | 0.1.0 |
 | **Related links** | [still-meridian-r4v8nc](./still-meridian-r4v8nc.md) (assistant panel; its header is replaced here) |
@@ -151,21 +151,21 @@
 
 ## 11. Acceptance Criteria
 
-- [ ] Navigating A → B → C by links gives a stack A ⟶ B ⟶ C with C active (unit: `shared/tree.test.ts`; e2e).
-- [ ] Clicking A (or B) in the tree loads it, keeps all three rows, and highlights only the clicked row (unit: UI test; e2e).
-- [ ] From C, going to B and following another link gives B with children C and C′, C′ active (unit; e2e).
-- [ ] `/back` and `/forward` move to parent / most recently visited child; reload changes nothing; following a link to an existing child's URL reuses it (unit).
-- [ ] A `target="_blank"` / `window.open` / middle-click link creates a new tab and a new stack; `background-tab` keeps the current tab active; the old tab keeps its page state (unit: `navigation/main.test.ts`; e2e).
-- [ ] Stack names: derived from the root title, slugged, max 32 chars, unique with `-2` (unit).
-- [ ] The switcher lists stacks most recently used first, switches, creates and closes them; closing the current switches to the next; closing the last shows "New tab"; all disabled while the assistant runs (unit).
-- [ ] A tree larger than the limit shows root, ellipsis, tail; the active row is never hidden; clicking the ellipsis opens the full overlay scrolled to the active row; Escape closes it (unit).
-- [ ] `@` opens stack suggestions; submitting only `@name` switches without a model call; `@name` in a question adds a text attachment with the outline, unknown names stay text (unit: `Prompt.test.tsx`, `suggest.test.ts`).
-- [ ] Stacks persist to `stacks.json` and are restored at start; only the current stack's tab is created; switching to another creates its tab at its active node (unit with json-store; e2e restart if feasible).
-- [ ] New IPC channels reject unknown ids and wrong types (unit).
-- [ ] History records only the active tab's visits and a switch counts as a back/forward visit; agent and menu act on the active tab (unit).
-- [ ] Limits and `/history-clear all` pruning (unit).
-- [ ] `npm run check` passes; e2e updated (CI).
-- [ ] stacks README (new), navigation, prompt, history, agent, menu READMEs, `docs/features.md`, `docs/architecture.md` and a new ADR updated.
+- [x] Navigating A → B → C by links gives a stack A ⟶ B ⟶ C with C active (unit: `shared/tree.test.ts`; e2e).
+- [x] Clicking A (or B) in the tree loads it, keeps all three rows, and highlights only the clicked row (unit: UI test; e2e).
+- [x] From C, going to B and following another link gives B with children C and C′, C′ active (unit; e2e).
+- [x] `/back` and `/forward` move to parent / most recently visited child; reload changes nothing; following a link to an existing child's URL reuses it (unit).
+- [x] A `target="_blank"` / `window.open` / middle-click link creates a new tab and a new stack; `background-tab` keeps the current tab active; the old tab keeps its page state (unit: `navigation/main.test.ts`; e2e).
+- [x] Stack names: derived from the root title, slugged, max 32 chars, unique with `-2` (unit).
+- [x] The switcher lists stacks most recently used first, switches, creates and closes them; closing the current switches to the next; closing the last shows "New tab"; all disabled while the assistant runs (unit).
+- [x] A tree larger than the limit shows root, ellipsis, tail; the active row is never hidden; clicking the ellipsis opens the full overlay scrolled to the active row; Escape closes it (unit).
+- [x] `@` opens stack suggestions; submitting only `@name` switches without a model call; `@name` in a question adds a text attachment with the outline, unknown names stay text (unit: `Prompt.test.tsx`, `suggest.test.ts`).
+- [x] Stacks persist to `stacks.json` and are restored at start; only the current stack's tab is created; switching to another creates its tab at its active node (unit with json-store; e2e restart if feasible).
+- [x] New IPC channels reject unknown ids and wrong types (unit).
+- [x] History records only the active tab's visits and a switch counts as a back/forward visit; agent and menu act on the active tab (unit).
+- [x] Limits and `/history-clear all` pruning (unit).
+- [x] `npm run check` passes; e2e updated (CI).
+- [x] stacks README (new), navigation, prompt, history, agent, menu READMEs, `docs/features.md`, `docs/architecture.md` and a new ADR updated.
 
 ## 12. Testing / Verification
 
@@ -180,3 +180,12 @@
 
 ## 14. Changes during implementation
 
+- **Fragment links on the same page don't add nodes** (req. 8): a navigation to the active page's URL with only another fragment updates the active node, so anchor jumps inside a document don't clutter the tree. pushState to another path still adds a child.
+- **`@name` attachments are added on submit, not shown as chips while typing** (req. 25): the outline is fetched when the question is sent; the user turn lists the `@name` attachments. Exceeding the 5-attachment limit shows an error instead of sending.
+- **The collapsed tree uses at least 4 lines, not 3** (req. 17): root, ellipsis, active row and a second ellipsis can need 4.
+- **The stack list is a dialog of buttons** (switch, × close, + New stack), not a `listbox`, because each entry has two actions.
+- **Blocking switches while the assistant runs is enforced in the UI** (switcher, `@name` alone), not in main: main can't see the agent's state without a new dependency.
+- **Page-initiated history moves** (`history.back()`) are recognised by the session-history index: navigation reports each navigation's entry change (`new`, `replaced`, `back`, `forward`) and stacks maps back/forward to the matching ancestor/child. navigation also gained `failed`, `opened` and `activated` page events.
+- **Mouse back/forward buttons**: Windows `app-command` (`browser-backward` / `browser-forward`) goes through the tree; macOS swipe isn't mapped yet.
+- **The tree's 35 % limit is measured against the window height** (the panel is full height).
+- **e2e ran in this session** (Electron binary downloaded): all 13 tests pass under `xvfb-run`, including `e2e/stacks.spec.ts` (A → B → C, back by click, branch, new-tab stack, `@name` switch, restart restore). Screenshots of the chrome UI confirmed the tree, ellipsis and overlay in light mode; dark mode uses the existing color tokens and wasn't checked visually.
