@@ -14,6 +14,10 @@ vi.mock('electron', () => ({
   },
 }))
 
+const page = { focus: vi.fn() }
+let pageContents: typeof page | null = page
+vi.mock('../navigation/main', () => ({ getPage: () => ({ contents: () => pageContents }) }))
+
 const { register } = await import('./main')
 const { channels } = await import('./ipc')
 
@@ -66,5 +70,23 @@ describe('prompt main', () => {
     ;(item!.click as () => void)()
     expect(ctx.window.webContents.focus).toHaveBeenCalled()
     expect(ctx.ipc.send).toHaveBeenCalledWith(channels.open, null)
+  })
+
+  it('adds File → Toggle Assistant (Ctrl/Cmd+B), which focuses the chrome UI and toggles', () => {
+    const { ctx } = setup()
+    const item = ctx.fileMenu.find((entry) => entry.id === 'prompt-toggle')
+    expect(item).toMatchObject({ label: 'Toggle Assistant', accelerator: 'CmdOrCtrl+B' })
+    ;(item!.click as () => void)()
+    expect(ctx.window.webContents.focus).toHaveBeenCalled()
+    expect(ctx.ipc.send).toHaveBeenCalledWith(channels.toggle, null)
+  })
+
+  it('focuses the page on request, and does nothing without one', () => {
+    const { call } = setup()
+    call(channels.focusPage)
+    expect(page.focus).toHaveBeenCalledOnce()
+    pageContents = null
+    expect(() => call(channels.focusPage)).not.toThrow()
+    pageContents = page
   })
 })

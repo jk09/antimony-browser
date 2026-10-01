@@ -4,6 +4,9 @@ export const channels = {
   clearHistory: 'prompt:clear-history',
   // A command from the application menu (Ctrl/Cmd+L), not a state change.
   open: 'prompt:open',
+  // Ctrl/Cmd+B: show the panel if hidden, hide it if shown (main → UI, no payload).
+  toggle: 'prompt:toggle',
+  focusPage: 'prompt:focus-page',
 } as const
 
 export type HistoryKind = 'url' | 'query' | 'command'
@@ -76,4 +79,8 @@ export interface PromptApi {
   clearHistory(): Promise<void>
   /** Called when the user presses Ctrl/Cmd+L. Returns an unsubscribe function. */
   onOpen(listener: () => void): () => void
+  /** Called when the user presses Ctrl/Cmd+B. Returns an unsubscribe function. */
+  onToggle(listener: () => void): () => void
+  /** Gives keyboard focus to the page view, if there is one. */
+  focusPage(): Promise<void>
 }

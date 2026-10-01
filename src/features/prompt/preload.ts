@@ -10,4 +10,10 @@ export const promptBridge: PromptApi = {
     ipcRenderer.on(channels.open, wrapped)
     return () => ipcRenderer.off(channels.open, wrapped)
   },
+  onToggle: (listener) => {
+    const wrapped = () => listener()
+    ipcRenderer.on(channels.toggle, wrapped)
+    return () => ipcRenderer.off(channels.toggle, wrapped)
+  },
+  focusPage: () => ipcRenderer.invoke(channels.focusPage),
 }
