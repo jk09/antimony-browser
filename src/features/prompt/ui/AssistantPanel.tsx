@@ -18,7 +18,7 @@ export function clampWidth(requested: number): number {
  * The assistant panel, docked on the right edge of the window: page title and URL, the
  * conversation filling the height, the skill form, and the prompt at the bottom. Its width only
  * changes when the user drags its edge, so the page view keeps its size while the conversation
- * grows. Ctrl/Cmd+L shows it and focuses the prompt; it also shows itself for an approval or a
+ * grows. Ctrl/Cmd+L shows it and focuses the prompt, Ctrl/Cmd+B shows or hides it; it also shows itself for an approval or a
  * skill save.
  */
 export function AssistantPanel({
@@ -57,7 +57,19 @@ export function AssistantPanel({
       }),
     [api],
   )
-  const visible = shown || agent?.status === 'awaiting-approval'
+  const pending = agent?.status === 'awaiting-approval'
+  useEffect(
+    () =>
+      api.prompt.onToggle(() => {
+        // While an approval is pending the panel stays shown.
+        if (pending) return
+        setShown(!shown)
+        if (shown) void api.prompt.focusPage()
+        else setFocusRequest((n) => n + 1)
+      }),
+    [api, shown, pending],
+  )
+  const visible = shown || pending
 
   const startResize = (event: PointerEvent<HTMLDivElement>) => {
     const handle = event.currentTarget
@@ -112,7 +124,7 @@ export function AssistantPanel({
           type="button"
           className="assistant-hide"
           aria-label="Hide assistant"
-          title="Hide (Ctrl+L shows it again)"
+          title="Hide (Ctrl+B)"
           onClick={() => setShown(false)}
         >
           ×
