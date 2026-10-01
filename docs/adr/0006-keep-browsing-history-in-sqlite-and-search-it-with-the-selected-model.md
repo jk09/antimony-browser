@@ -1,6 +1,6 @@
 # 0006. Keep browsing history in SQLite and search it with the selected model
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-01
 - Features: history, navigation, agent, prompt
 - Spec: ember-ledger-h3x8vq

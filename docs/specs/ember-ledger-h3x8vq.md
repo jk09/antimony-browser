@@ -172,4 +172,4 @@
 - **agent:** `buildRequest` omits `tools` when a request has none (`complete`); the assistant's own requests always have tools, so its prompt cache is unaffected.
 - **CSP:** `img-src 'self' data:` already allowed the thumbnails; unchanged.
 - **e2e ran in this session** under `xvfb-run` (Electron binary downloaded with curl): all 11 tests pass, including `e2e/history.spec.ts`.
-- **ADR 0006** is Proposed; it needs the owner's acceptance.
+- **ADR 0006** accepted by the owner.
