@@ -6,12 +6,12 @@
 | --- | --- |
 | **Feature name** | Stack toolbar: reload and new-stack buttons at the top of the navigation stack, a close × on every page of the tree, Ctrl/Cmd+R, +N and +W, and a home page for new stacks |
 | **Spec ID** | nimble-anchor-w3p8kd |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-01 20:30 +00:00 |
-| **Last updated** | 2026-10-02 09:00 +00:00 |
+| **Last updated** | 2026-10-02 08:00 +00:00 |
 | **Affected features** | stacks, prompt |
 | **Target release** | 0.1.0 |
 | **Related links** | [branching-trail-k4w9zp](./branching-trail-k4w9zp.md) (navigation stacks) |
