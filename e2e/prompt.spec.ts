@@ -286,6 +286,109 @@ test('the menu bar is hidden; its shortcuts work and /menu runs its items', asyn
   }
 })
 
+test('Ctrl+B hides and shows the assistant, and the page view follows each time', async () => {
+  const app = await launch()
+  try {
+    const window = await app.firstWindow()
+    const prompt = await openPrompt(app, window)
+    await prompt.fill(`${origin}/hello`)
+    await prompt.press('Enter')
+    await expect.poll(() => pageUrls(app)).toContain(`${origin}/hello`)
+
+    const assistant = window.getByRole('complementary', { name: 'Assistant' })
+    /** Presses Ctrl+B in the page view or in the chrome UI, as keyboard input to that view. */
+    const pressB = (target: 'page' | 'chrome', repeat = false) =>
+      app.evaluate(
+        ({ BrowserWindow }, { target, repeat }) => {
+          const window = BrowserWindow.getAllWindows()[0]!
+          const [view] = window.contentView.children
+          const contents =
+            target === 'page' ? (view as Electron.WebContentsView).webContents : window.webContents
+          contents.focus()
+          const key = { keyCode: 'B', modifiers: ['control'] as ['control'] }
+          contents.sendInputEvent({ type: 'keyDown', ...key })
+          if (repeat) {
+            contents.sendInputEvent({
+              type: 'keyDown',
+              ...key,
+              modifiers: ['control', 'isautorepeat'],
+            })
+          }
+          contents.sendInputEvent({ type: 'keyUp', ...key })
+        },
+        { target, repeat },
+      )
+    // The page view fills the window's width when hidden, and ends where the panel starts when shown.
+    const fullWidth = async () => {
+      const page = (await pageBounds(app))!
+      return page.x === 0 && page.width === page.windowWidth
+    }
+    const besidePanel = async () => {
+      const page = (await pageBounds(app))!
+      const panel = await assistant.boundingBox()
+      return (
+        panel !== null &&
+        page.width < page.windowWidth &&
+        Math.abs(page.x + page.width - Math.round(panel.x)) <= 1
+      )
+    }
+    const hidden = async () => {
+      await expect(assistant).toBeHidden()
+      await expect.poll(fullWidth).toBe(true)
+    }
+    const shown = async () => {
+      await expect(assistant).toBeVisible()
+      await expect.poll(besidePanel).toBe(true)
+      await expect(prompt).toBeFocused()
+    }
+
+    await expect.poll(besidePanel).toBe(true)
+    // Covered by a full-width page view, a throttled chrome UI is marked hidden and stops
+    // rendering, so it never reports the page area shrinking when the panel comes back. Playwright
+    // can't show that: while it is attached the chrome UI counts as captured and is never hidden.
+    expect(
+      await app.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()[0]!.webContents.getBackgroundThrottling(),
+      ),
+    ).toBe(false)
+    // From the page, several times over: each press toggles once and the page view follows.
+    for (let round = 0; round < 3; round++) {
+      await pressB('page')
+      await hidden()
+      await pressB('page')
+      await shown()
+    }
+    // From the prompt (chrome UI focused), then back from the page.
+    await pressB('chrome')
+    await hidden()
+    await pressB('page')
+    await shown()
+    // A held key doesn't toggle again.
+    await pressB('page', true)
+    await hidden()
+    await pressB('page', true)
+    await shown()
+    // Ctrl+L shows a hidden panel too.
+    await pressB('page')
+    await hidden()
+    await app.evaluate(({ Menu }) => Menu.getApplicationMenu()!.getMenuItemById('prompt')!.click())
+    await shown()
+    // A resized panel comes back at its new width.
+    await assistant.getByRole('separator', { name: 'Resize assistant' }).focus()
+    await window.keyboard.press('ArrowLeft')
+    await window.keyboard.press('ArrowLeft')
+    await expect.poll(besidePanel).toBe(true)
+    const width = (await assistant.boundingBox())!.width
+    await pressB('page')
+    await hidden()
+    await pressB('page')
+    await shown()
+    expect((await assistant.boundingBox())!.width).toBe(width)
+  } finally {
+    await app.close()
+  }
+})
+
 test('a question runs the assistant, which drives the browser; the run replays as a skill', async () => {
   const app = await launch()
   try {

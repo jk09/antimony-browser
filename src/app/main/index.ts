@@ -31,6 +31,10 @@ async function createWindow(): Promise<void> {
     webPreferences: {
       ...secureWebPreferences,
       preload: join(import.meta.dirname, '../preload/index.cjs'),
+      // A page view covering the whole window (assistant panel hidden) would otherwise mark the
+      // chrome UI hidden and stop its rendering: it couldn't report the page area shrinking when
+      // the panel comes back, so the page view would stay over the panel until a window resize.
+      backgroundThrottling: false,
     },
   })
   window.once('ready-to-show', () => window.show())
