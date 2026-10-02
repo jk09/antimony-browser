@@ -29,14 +29,17 @@ describe('appMenuTemplate', () => {
   it('adds the app menu and closes instead of quitting on macOS', () => {
     const menu = appMenuTemplate([], 'darwin', noZoom)
     expect(labels(menu)).toEqual(['appMenu', 'File', 'editMenu', 'View', 'windowMenu'])
-    expect(labels(menu[1]!.submenu as MenuItemConstructorOptions[])).toEqual(['close'])
+    const file = menu[1]!.submenu as MenuItemConstructorOptions[]
+    expect(labels(file)).toEqual(['close'])
+    // Cmd+W closes the page instead.
+    expect(file[0]!.accelerator).toBe('Cmd+Shift+W')
   })
 
   it('zooms the chrome UI from the View menu and the usual zoom keys', () => {
     const zoom = vi.fn()
     const view = appMenuTemplate([], 'linux', zoom)[2]!.submenu as MenuItemConstructorOptions[]
+    // Ctrl/Cmd+R reloads the page (stacks), not the chrome UI.
     expect(labels(view.filter((item) => item.visible !== false))).toEqual([
-      'reload',
       'forceReload',
       'toggleDevTools',
       undefined,

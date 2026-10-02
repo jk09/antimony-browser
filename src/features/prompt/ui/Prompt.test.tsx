@@ -269,7 +269,7 @@ describe('Prompt', () => {
       },
     ]
     const { api, box } = await openPrompt({ menu })
-    type(box, '/me')
+    type(box, '/men')
     expect(within(await screen.findByRole('listbox')).getByRole('option').textContent).toContain(
       '/menu <menu> <item>',
     )
@@ -456,6 +456,26 @@ describe('Prompt', () => {
     press(box, 'Enter')
     await waitFor(() => expect(api.agent.updateSettings).toHaveBeenCalledWith({ pageAccess: true }))
     expect((await screen.findByRole('status')).textContent).toContain('Page access on')
+  })
+
+  it('/home sets, shows and clears the page new stacks open at', async () => {
+    const { api, box } = await openPrompt()
+    type(box, '/home example.com')
+    press(box, 'Enter')
+    await waitFor(() => expect(api.stacks.setHome).toHaveBeenCalledWith('https://example.com/'))
+    type(box, '/home')
+    press(box, 'Enter')
+    await waitFor(async () =>
+      expect((await screen.findByRole('status')).textContent).toContain(
+        'New stacks open at https://example.com/. Use',
+      ),
+    )
+    type(box, '/home clear')
+    press(box, 'Enter')
+    await waitFor(() => expect(api.stacks.setHome).toHaveBeenLastCalledWith(null))
+    type(box, '/home not a url')
+    press(box, 'Enter')
+    expect((await screen.findByRole('alert')).textContent).toContain('is not a web address')
   })
 
   it('suggests what was just submitted without reopening', async () => {

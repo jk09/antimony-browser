@@ -46,6 +46,12 @@ export const promptCommands: CommandInfo[] = [
     description: 'Let the assistant read and act on the page',
     options: ['on', 'off'],
   },
+  {
+    name: 'home',
+    usage: '<url>',
+    description: 'Set the page new stacks open at (Ctrl/Cmd+N); /home clear removes it',
+    options: ['clear'],
+  },
   { name: 'menu', usage: '<menu> <item>', description: 'Run an item from the application menu' },
   { name: 'save', usage: '<name>', description: 'Save the last run as a skill' },
   { name: 'skills', usage: '', description: 'List saved skills' },

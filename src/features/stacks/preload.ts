@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import { channels, type StacksApi, type StacksState } from './ipc'
+import { channels, type StackCommand, type StacksApi, type StacksState } from './ipc'
 
 export const stacksBridge: StacksApi = {
   state: () => ipcRenderer.invoke(channels.state),
@@ -8,9 +8,17 @@ export const stacksBridge: StacksApi = {
   create: () => ipcRenderer.invoke(channels.create),
   close: (stackId) => ipcRenderer.invoke(channels.close, stackId),
   outline: (name) => ipcRenderer.invoke(channels.outline, name),
+  closeNode: (nodeId) => ipcRenderer.invoke(channels.closeNode, nodeId),
+  home: () => ipcRenderer.invoke(channels.home),
+  setHome: (url) => ipcRenderer.invoke(channels.setHome, url),
   onChanged: (listener) => {
     const wrapped = (_: unknown, state: StacksState) => listener(state)
     ipcRenderer.on(channels.stateChanged, wrapped)
     return () => ipcRenderer.off(channels.stateChanged, wrapped)
+  },
+  onCommand: (listener) => {
+    const wrapped = (_: unknown, command: StackCommand) => listener(command)
+    ipcRenderer.on(channels.command, wrapped)
+    return () => ipcRenderer.off(channels.command, wrapped)
   },
 }

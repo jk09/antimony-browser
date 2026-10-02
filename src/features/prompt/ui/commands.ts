@@ -77,6 +77,24 @@ export async function runCommand(
           ? 'Page access on: the assistant can read this page and, with your approval, act on it.'
           : 'Page access off: the assistant only sees the page address and title.',
       )
+    case 'home': {
+      if (!args) {
+        const home = await api.stacks.home()
+        return info(
+          home
+            ? `New stacks open at ${home}. Use /home <url> to change it or /home clear.`
+            : 'New stacks open empty. Use /home <url> to set a home page.',
+        )
+      }
+      if (args === 'clear') {
+        await api.stacks.setHome(null)
+        return info('Home page removed: new stacks open empty.')
+      }
+      const url = api.navigation.toUrl(args)
+      if (!url) return error(`${args} is not a web address.`)
+      await api.stacks.setHome(url)
+      return info(`New stacks open at ${url}.`)
+    }
     case 'menu': {
       if (!args) {
         const menus = await api.menu.items()
