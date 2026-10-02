@@ -461,7 +461,7 @@ describe('Prompt', () => {
     expect((await screen.findByRole('status')).textContent).toContain('Page access on')
   })
 
-  it('/home sets, shows and clears the page new stacks open at', async () => {
+  it('/home sets, shows, clears and resets the page new stacks open at', async () => {
     const { api, box } = await openPrompt()
     type(box, '/home example.com')
     press(box, 'Enter')
@@ -476,6 +476,11 @@ describe('Prompt', () => {
     type(box, '/home clear')
     press(box, 'Enter')
     await waitFor(() => expect(api.stacks.setHome).toHaveBeenLastCalledWith(null))
+    type(box, '/home reset')
+    press(box, 'Enter')
+    await waitFor(() =>
+      expect(api.stacks.setHome).toHaveBeenLastCalledWith('https://www.bing.com/'),
+    )
     type(box, '/home not a url')
     press(box, 'Enter')
     expect((await screen.findByRole('alert')).textContent).toContain('is not a web address')

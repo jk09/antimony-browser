@@ -79,7 +79,17 @@ vi.mock('../history/main', () => ({
 const { register } = await import('./main')
 const { channels } = await import('./ipc')
 
-function setup(dir = mkdtempSync(join(tmpdir(), 'antimony-stacks-'))) {
+/**
+ * Registers stacks on `dir`. A fresh directory gets a stacks.json with `home` (none by default,
+ * so nothing opens at start); 'default' writes no file, as on a first run.
+ */
+function setup(dir?: string, home: string | null = null) {
+  if (dir === undefined) {
+    dir = mkdtempSync(join(tmpdir(), 'antimony-stacks-'))
+    if (home !== 'default') {
+      writeFileSync(join(dir, 'stacks.json'), JSON.stringify({ current: null, stacks: [], home }))
+    }
+  }
   userData = dir
   tabs = new FakeTabs()
   quitListeners.length = 0
@@ -321,6 +331,41 @@ describe('stacks main', () => {
     expect(tabs.calls).toEqual(['create 1 active', 'load 1 https://start.example/'])
   })
 
+  it('opens a new stack at the default home page at start and after the last one closes', () => {
+    const { call, nav, title, state, rowsOf } = setup(undefined, 'default')
+    expect(call(channels.home)).toBe('https://www.bing.com/')
+    expect(tabs.calls).toEqual(['create 1 https://www.bing.com/ active'])
+    nav(1, 'https://www.bing.com/')
+    title(1, 'Bing')
+    fire({ tabId: 1, type: 'loaded', url: 'https://www.bing.com/' })
+    expect(rowsOf()).toEqual(['Bing'])
+    // Named after the first page reached from the home page, not the home page.
+    expect(state().current!.name).toBe('')
+    nav(1, 'https://site.example/Rust')
+    title(1, 'Rust')
+    expect(rowsOf()).toEqual(['Bing', '.Rust'])
+    expect(state().current!.name).toBe('rust')
+    expect(state().stacks[0]!.rootTitle).toBe('Rust')
+
+    // A link-opened stack doesn't load the home page.
+    tabs.open.add(tabs.next++)
+    fire({ tabId: 2, type: 'opened', openerId: 1, active: false })
+    expect(tabs.calls).toHaveLength(1)
+
+    for (const stack of state().stacks) call(channels.close, stack.id)
+    expect(tabs.calls.at(-1)).toBe('create 3 https://www.bing.com/ active')
+    expect(state().stacks).toHaveLength(1)
+  })
+
+  it('opens nothing at start or after the last stack without a home page', () => {
+    const { call, state } = setup()
+    expect(tabs.calls).toEqual([])
+    call(channels.create)
+    call(channels.close, state().current!.id)
+    expect(state().stacks).toEqual([])
+    expect(tabs.calls).toEqual(['create 1 active', 'close 1'])
+  })
+
   it('sends Ctrl/Cmd+R, +N and +W to the UI and lists them in the File menu', () => {
     const { press, send, fileMenu } = setup()
     expect(fileMenu.map((item) => [item.label, item.accelerator])).toEqual([
@@ -425,7 +470,9 @@ describe('stacks main', () => {
     writeFileSync(join(dir, 'stacks.json'), JSON.stringify({ stacks: [{ id: 'x' }] }))
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { state } = setup(dir)
-    expect(state()).toEqual({ current: null, stacks: [] })
+    // The fallback has no stacks and the default home page, so one opens there.
+    expect(tabs.calls).toEqual(['create 1 https://www.bing.com/ active'])
+    expect(state().stacks).toHaveLength(1)
   })
 
   it('clears stacks with all of the browsing history', () => {

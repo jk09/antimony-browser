@@ -42,7 +42,12 @@ export interface Stack {
   activeId: number | null
   nextNodeId: number
   lastUsedAt: number
+  /** The root was opened as the home page: the stack is named after the root's first child. */
+  startRoot?: boolean
 }
+
+/** The home page until `/home` changes or clears it. */
+export const DEFAULT_HOME = 'https://www.bing.com/'
 
 /** A row of the tree as the header shows it, in depth-first order. */
 export interface StackRow {

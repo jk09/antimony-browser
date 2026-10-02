@@ -1,5 +1,5 @@
 // Validation of stacks.json. Pure: no electron, Node or React imports.
-import type { Stack, StackNode } from '../ipc'
+import { DEFAULT_HOME, type Stack, type StackNode } from '../ipc'
 
 /** stacks.json: the stacks, which one is current and the home page new stacks open at. */
 export interface StoredStacks {
@@ -35,7 +35,7 @@ function parseNode(key: string, raw: unknown): StackNode {
 
 function parseStack(raw: unknown): Stack {
   if (!isRecord(raw)) fail('a stack is not an object')
-  const { id, name, nodes, rootId, activeId, nextNodeId, lastUsedAt } = raw
+  const { id, name, nodes, rootId, activeId, nextNodeId, lastUsedAt, startRoot } = raw
   if (typeof id !== 'string' || !id) fail('a stack has no id')
   if (name !== null && typeof name !== 'string') fail(`stack ${id} has a wrong name`)
   if (!isRecord(nodes)) fail(`stack ${id} has no nodes`)
@@ -59,6 +59,8 @@ function parseStack(raw: unknown): Stack {
     fail(`stack ${id} has a wrong next node id`)
   }
   if (typeof lastUsedAt !== 'number') fail(`stack ${id} has no last use time`)
+  if (startRoot !== undefined && typeof startRoot !== 'boolean')
+    fail(`stack ${id} has a wrong startRoot`)
   return {
     id,
     name,
@@ -67,6 +69,7 @@ function parseStack(raw: unknown): Stack {
     activeId: activeId as number | null,
     nextNodeId,
     lastUsedAt,
+    ...(startRoot === true && { startRoot }),
   }
 }
 
@@ -75,7 +78,7 @@ export function parseStoredStacks(raw: unknown): StoredStacks {
   const stacks = raw['stacks'].map(parseStack)
   const current = raw['current']
   if (current !== null && typeof current !== 'string') fail('current is not a stack id')
-  // A home page that isn't a web URL is dropped (it's optional, older files have none).
-  const home = isWebUrl(raw['home']) ? raw['home'] : null
+  // Older files have no home page: the default. One that isn't a web URL is dropped.
+  const home = !('home' in raw) ? DEFAULT_HOME : isWebUrl(raw['home']) ? raw['home'] : null
   return { current: stacks.some((stack) => stack.id === current) ? current : null, stacks, home }
 }

@@ -1,9 +1,7 @@
-import { mkdtempSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
+import { newProfile } from './profile'
 
 const args = ['.', ...(process.getuid?.() === 0 ? ['--no-sandbox'] : [])]
 
@@ -46,7 +44,7 @@ const pageWindow = (app: ElectronApplication, path: string) =>
     .then(() => app.windows().find((candidate) => candidate.url() === `${origin}${path}`)!)
 
 test('the header shows a branching stack, goes back by clicks and keeps stacks per tab', async () => {
-  const profile = mkdtempSync(join(tmpdir(), 'antimony-e2e-'))
+  const profile = newProfile()
   const launch = () => electron.launch({ args: [...args, `--user-data-dir=${profile}`], env })
   let app = await launch()
   try {
@@ -129,7 +127,7 @@ const pressCtrl = (app: ElectronApplication, keyCode: string, target: 'page' | '
   )
 
 test('closes pages with × and Ctrl+W and opens new stacks at the home page with Ctrl+N', async () => {
-  const profile = mkdtempSync(join(tmpdir(), 'antimony-e2e-'))
+  const profile = newProfile()
   const app = await electron.launch({ args: [...args, `--user-data-dir=${profile}`], env })
   try {
     const window = await app.firstWindow()
@@ -173,7 +171,7 @@ test('closes pages with × and Ctrl+W and opens new stacks at the home page with
 })
 
 test('Ctrl+Tab switches to the previous stack on release, and back again', async () => {
-  const profile = mkdtempSync(join(tmpdir(), 'antimony-e2e-'))
+  const profile = newProfile()
   const app = await electron.launch({ args: [...args, `--user-data-dir=${profile}`], env })
   try {
     const window = await app.firstWindow()

@@ -1,5 +1,6 @@
 import { isOllamaModel, ollamaId, type AgentSettings, type ModelInfo } from '../../agent/ipc'
 import type { Skill } from '../../skills/ipc'
+import { DEFAULT_HOME } from '../../stacks/ipc'
 import { promptCommands } from '../ipc'
 
 export interface CommandResult {
@@ -90,7 +91,7 @@ export async function runCommand(
         await api.stacks.setHome(null)
         return info('Home page removed: new stacks open empty.')
       }
-      const url = api.navigation.toUrl(args)
+      const url = args === 'reset' ? DEFAULT_HOME : api.navigation.toUrl(args)
       if (!url) return error(`${args} is not a web address.`)
       await api.stacks.setHome(url)
       return info(`New stacks open at ${url}.`)

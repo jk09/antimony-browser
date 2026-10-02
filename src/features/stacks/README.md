@@ -1,17 +1,18 @@
 # stacks
 
-Shows each tab's navigation in the assistant panel header as a vertical, branching tree of breadcrumbs: click any page to go back (or forward) to it without changing the tree, and follow another link to start a branch. Links that open a new tab start a new stack in its own live tab; stacks are named after their first page, switched in the header or with `@name` in the prompt (`@name` inside a question attaches the stack's outline for the model) and come back after a restart. Buttons at the top reload the selected page (Ctrl/Cmd+R) and open a new stack at the home page set with `/home` (Ctrl/Cmd+N); each page's × closes it with its branch (Ctrl/Cmd+W the selected one). Ctrl+Tab returns to the previously used stack; holding Ctrl and pressing Tab again walks older ones in the open list, releasing switches.
+Shows each tab's navigation in the assistant panel header as a vertical, branching tree of breadcrumbs: click any page to go back (or forward) to it without changing the tree, and follow another link to start a branch. Links that open a new tab start a new stack in its own live tab; stacks are named after their first page, switched in the header or with `@name` in the prompt (`@name` inside a question attaches the stack's outline for the model) and come back after a restart. Buttons at the top reload the selected page (Ctrl/Cmd+R) and open a new stack at the home page (bing.com until `/home` changes or clears it; Ctrl/Cmd+N), which is also where a stack opens at start and after the last one closes; such a stack is named after the first page reached from it; each page's × closes it with its branch (Ctrl/Cmd+W the selected one). Ctrl+Tab returns to the previously used stack; holding Ctrl and pressing Tab again walks older ones in the open list, releasing switches.
 
 ## Entry points
 - UI: `ui/StackHeader.tsx` – the panel's `header` slot (`App.tsx`): switcher (`@name ▾`: list, switch, close, New stack; disabled while the assistant runs), ↻ Reload and + New stack buttons (hints name the shortcuts), the tree with a × per row (Delete on a focused row; disabled while the assistant runs) (at most 8 lines and 35 % of the window; longer trees collapse to root, `⋯ N more`, the rows around the active one) and the full-stack overlay
 - IPC: `stacks:state|go-to-node|switch|create|close|close-node|outline|home|set-home` (UI → main), `stacks:state-changed` (main → UI, batched per 16 ms), `stacks:command` (main → UI: `reload|new|close-page`, run like the buttons; `cycle-next|cycle-previous|cycle-end|cycle-cancel` for Ctrl+[Shift+]Tab, the UI keeps the most-recently-used snapshot and the highlight) – `ipc.ts`
-- Main: `register` in `main.ts` – one stack per navigation tab; applies `onPageEvent` navigations to the tree, starts navigations from nodes (nearest session-history entry via `goToIndex`, else a load), is navigation's history resolver (back = parent, forward = last visited child), restores the current stack's tab at start; File → Reload Page / New Stack / Close Page (Ctrl/Cmd+R, N, W, also caught in `before-input-event` of the chrome UI and every browsing-session webContents, like Ctrl/Cmd+B); a new stack without a home page opens the prompt; Ctrl+[Shift+]Tab passes through `before-input-event` unconsumed (a consumed key-down makes Chromium drop the key-up of Ctrl, which ends the cycle), Escape cancels, window blur cancels; File → Next/Previous Stack show the keys unregistered and step once
+- Main: `register` in `main.ts` – one stack per navigation tab; applies `onPageEvent` navigations to the tree, starts navigations from nodes (nearest session-history entry via `goToIndex`, else a load), is navigation's history resolver (back = parent, forward = last visited child), restores the current stack's tab at start, else opens one at the home page (also after the last stack closes); File → Reload Page / New Stack / Close Page (Ctrl/Cmd+R, N, W, also caught in `before-input-event` of the chrome UI and every browsing-session webContents, like Ctrl/Cmd+B); a new stack without a home page opens the prompt; Ctrl+[Shift+]Tab passes through `before-input-event` unconsumed (a consumed key-down makes Chromium drop the key-up of Ctrl, which ends the cycle), Escape cancels, window blur cancels; File → Next/Previous Stack show the keys unregistered and step once
 - Shared: `shared/tree.ts` (tree updates, names, collapse layout, outline, pruning, `removeBranch`), `shared/stored.ts` (`stacks.json` validation), `shared/keys.ts` (shortcuts and their hints)
 
 ## Invariants
 - Following links builds A → B → C; going to a node only moves the active one; a link from B after going back adds a sibling branch – `shared/tree.test.ts`, `e2e/stacks.spec.ts`
 - Same page (ignoring the fragment) or a known child is reused, never duplicated; reload and replaceState update the active node – `shared/tree.test.ts`
-- Names are slugs of the root title (else host), ≤ 32 chars, unique with `-2`…, set once – `shared/tree.test.ts › names stacks…`
+- Names are slugs of the root title (else host), ≤ 32 chars, unique with `-2`…, set once; a stack opened at the home page uses the root's first child – `shared/tree.test.ts › names stacks…`, `› names a stack opened on the new-stack page…`
+- With a home page, a stack opens at it at start and after the last stack closes; never for link-opened stacks; files without `home` get bing.com – `main.test.ts › opens a new stack at the default home page…`, `› opens nothing at start…`, `shared/stored.test.ts`
 - The collapsed tree never hides the active row – `shared/tree.test.ts › collapses…`, `ui/StackHeader.test.tsx`
 - Only the current stack gets a tab at start; others when switched to – `main.test.ts › persists stacks…`
 - IPC arguments must name an open stack or a node of the current one; the home page is http(s) or null – `main.test.ts › starts a new stack…`, `› opens new stacks at the home page…`
@@ -23,10 +24,10 @@ Shows each tab's navigation in the assistant panel header as a vertical, branchi
 ## Dependencies
 - Features: navigation (`getTabs`, `onPageEvent`, `setHistoryResolver` from `main.ts`; `navigation.reload` bridge), history (`onHistoryCleared` from `main.ts`), agent (`AgentState` type: switching is disabled while it runs), prompt (`prompt:open` channel to focus the prompt for an empty new stack); prompt hosts the header and calls this bridge for `@name` and `/home`
 - App: `createJsonStore`
-- Stored data: `userData/stacks.json` (names, URLs and titles of open stacks' pages; closing a stack or page deletes it; the home page URL, removed by `/home clear`)
+- Stored data: `userData/stacks.json` (names, URLs and titles of open stacks' pages; closing a stack or page deletes it; the home page URL, bing.com when the file has none, removed by `/home clear`)
 
 ## Security surface
-- IPC: the chrome UI reads stacks and their outlines, loads a stack node's URL (only http(s), checked by navigation), switches, creates and closes stacks, closes pages and sets the home page (http(s) only).
+- IPC: the chrome UI reads stacks and their outlines, loads a stack node's URL (only http(s), checked by navigation), switches, creates and closes stacks, closes pages and sets the home page (http(s) only). By default new stacks load bing.com, so a first start contacts it; `/home clear` stops that.
 - Keys: consumes Ctrl/Cmd+R, N and W before web pages see them (and Escape while cycling); sees Ctrl+Tab and the Ctrl key-up without consuming them.
 - Web content: – (new-tab handling is navigation's)
 
@@ -35,4 +36,4 @@ Shows each tab's navigation in the assistant panel header as a vertical, branchi
 |---|---|---|---|
 | – | | | |
 
-Spec: branching-trail-k4w9zp, nimble-anchor-w3p8kd, swift-carousel-t6m2xa · ADRs: 0008
+Spec: branching-trail-k4w9zp, nimble-anchor-w3p8kd, swift-carousel-t6m2xa, fresh-anchor-w6p3jd · ADRs: 0008
