@@ -25,15 +25,32 @@ export const claudeModels = [
 ] as const
 
 export type ClaudeModelId = (typeof claudeModels)[number]['id']
-/** Claude through the Anthropic API, or `ollama:<name>` for a model served by local Ollama. */
-export type ModelId = ClaudeModelId | `ollama:${string}`
-export type Provider = 'anthropic' | 'ollama'
+/** A Claude model run through the user's Claude Code CLI (its own login). */
+export type CliModelId = `cli:${ClaudeModelId}`
+/**
+ * Claude through the Anthropic API (API key), `cli:<claude id>` through the Claude Code CLI, or
+ * `ollama:<name>` for a model served by local Ollama.
+ */
+export type ModelId = ClaudeModelId | CliModelId | `ollama:${string}`
+export type Provider = 'anthropic' | 'claude-cli' | 'ollama'
 
+const CLI_PREFIX = 'cli:'
 const OLLAMA_PREFIX = 'ollama:'
 const OLLAMA_NAME = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/
 
 export const isClaudeModel = (value: unknown): value is ClaudeModelId =>
   claudeModels.some((model) => model.id === value)
+
+export const isCliModel = (value: unknown): value is CliModelId =>
+  typeof value === 'string' &&
+  value.startsWith(CLI_PREFIX) &&
+  isClaudeModel(value.slice(CLI_PREFIX.length))
+
+export const cliModelId = (model: ClaudeModelId): CliModelId => `${CLI_PREFIX}${model}`
+
+/** The Claude model a `cli:` id runs (what the CLI's --model gets). */
+export const cliClaudeModel = (model: CliModelId): ClaudeModelId =>
+  model.slice(CLI_PREFIX.length) as ClaudeModelId
 
 /** A well-formed `ollama:<name>` id (the model may not be installed). */
 export const isOllamaModel = (value: unknown): value is `ollama:${string}` =>
@@ -42,10 +59,10 @@ export const isOllamaModel = (value: unknown): value is `ollama:${string}` =>
   OLLAMA_NAME.test(value.slice(OLLAMA_PREFIX.length))
 
 export const isModelId = (value: unknown): value is ModelId =>
-  isClaudeModel(value) || isOllamaModel(value)
+  isClaudeModel(value) || isCliModel(value) || isOllamaModel(value)
 
 export const providerOf = (model: ModelId): Provider =>
-  isOllamaModel(model) ? 'ollama' : 'anthropic'
+  isOllamaModel(model) ? 'ollama' : isCliModel(model) ? 'claude-cli' : 'anthropic'
 
 /** The Ollama model name without the `ollama:` prefix. */
 export const ollamaName = (model: `ollama:${string}`): string => model.slice(OLLAMA_PREFIX.length)
@@ -57,9 +74,13 @@ export interface ModelInfo {
   label: string
 }
 
-/** What the model picker offers: Claude models, and Ollama's installed models or why there are none. */
+/**
+ * What the model picker offers: Claude models (API key), the same models through the Claude Code
+ * CLI, and Ollama's installed models – or, for the CLI and Ollama, why there are none.
+ */
 export interface ModelList {
   claude: ModelInfo[]
+  cli: { models: ModelInfo[] } | { error: string }
   ollama: { models: ModelInfo[] } | { error: string }
 }
 
@@ -118,7 +139,7 @@ export interface AgentState {
 
 export interface AgentSettings {
   model: ModelId
-  /** Derived from the model. Ollama needs no API key. */
+  /** Derived from the model. Only 'anthropic' needs the API key; the CLI uses its own login. */
   provider: Provider
   /** Edge-style opt-in: the model may read the page and act on it (with approval). */
   pageAccess: boolean
@@ -164,7 +185,7 @@ export interface AgentApi {
   /** Stores the Anthropic API key (encrypted), or removes it with null. */
   setKey(key: string | null): Promise<AgentSettings>
   onSettingsChanged(listener: (settings: AgentSettings) => void): () => void
-  /** Claude models plus the models installed in Ollama (asks Ollama each time). */
+  /** Claude models, the CLI's (asks the CLI if it's logged in) and Ollama's (asks Ollama each time). */
   models(): Promise<ModelList>
   debugLog(): Promise<DebugRun[]>
   onDebugEvent(listener: (event: DebugEvent, label: string) => void): () => void

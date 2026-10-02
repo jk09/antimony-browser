@@ -93,12 +93,23 @@ describe('parsing', () => {
     expect(() => parseUpdate({ model: `ollama:${'x'.repeat(201)}` })).toThrow()
   })
 
+  it('accepts the Claude Code CLI ids of the Claude models only', () => {
+    for (const model of ['cli:claude-sonnet-5-5', 'cli:claude-opus-5-5', 'cli:claude-haiku-4-5']) {
+      expect(parseUpdate({ model })).toEqual({ model })
+      expect(parseSettings({ model }).model).toBe(model)
+    }
+    for (const model of ['cli:', 'cli:sonnet', 'cli:claude-sonnet-5-5 ', 'cli:ollama:qwen3:8b']) {
+      expect(() => parseUpdate({ model }), model).toThrow()
+    }
+  })
+
   it('derives the provider from the model', () => {
     const store = memoryStore({ model: 'ollama:qwen3:8b', pageAccess: false })
     const settings = new SettingsService(store, crypto(true), undefined)
     expect(settings.get()).toMatchObject({ model: 'ollama:qwen3:8b', provider: 'ollama' })
     expect(parseSettings({ model: 'ollama:qwen3:8b' }).model).toBe('ollama:qwen3:8b')
     expect(settings.update({ model: 'claude-opus-5-5' }).provider).toBe('anthropic')
+    expect(settings.update({ model: 'cli:claude-opus-5-5' }).provider).toBe('claude-cli')
   })
 
   it('validates keys', () => {

@@ -2,7 +2,7 @@ import { mkdtempSync } from 'node:fs'
 import { createServer, type IncomingMessage, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import {
   _electron as electron,
   expect,
@@ -462,6 +462,31 @@ test('an installed Ollama model runs the assistant without an API key', async ()
     expect(requests[0]!.headers['x-api-key']).toBeUndefined()
     expect(requests[0]!.body).toMatchObject({ model: 'qwen3:8b' })
     expect(requests[0]!.body).not.toHaveProperty('thinking')
+  } finally {
+    await app.close()
+  }
+})
+
+test('the Claude Code CLI runs the assistant with its own login and calls tools over MCP', async () => {
+  const app = await launch({
+    ANTHROPIC_API_KEY: '',
+    CLAUDE_CLI_PATH: resolve(import.meta.dirname, 'fixtures/fake-claude.mjs'),
+  })
+  try {
+    const window = await app.firstWindow()
+    const prompt = await openPrompt(app, window)
+    const picker = window.getByRole('combobox', { name: 'Model' })
+    await expect(picker.getByRole('option', { name: 'Haiku 4.5 (Claude Code)' })).toBeAttached()
+    await picker.selectOption('cli:claude-haiku-4-5')
+    await expect(picker).toHaveValue('cli:claude-haiku-4-5')
+
+    await prompt.fill(`open ${origin}/hello`)
+    await prompt.press('Enter')
+    const conversation = window.getByRole('region', { name: 'Conversation' })
+    await expect(conversation).toContainText(`Opened ${origin}/hello`)
+    await expect.poll(() => pageUrls(app)).toEqual([`${origin}/hello`])
+    // Nothing went to the Anthropic API.
+    expect(requests).toHaveLength(0)
   } finally {
     await app.close()
   }

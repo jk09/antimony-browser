@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentState, DebugEvent } from '../ipc'
+import type { AgentState, DebugEvent, ModelId } from '../ipc'
 import { Agent, elideImages, MAX_STEPS, siteOf, type AgentDeps } from './agent'
 import type { ContentBlock, ModelRequest, ModelResponse } from './anthropic'
+import { CLI_NOT_FOUND, CliError, type CliOutcome, type CliTurn } from './claude-cli'
 import { fakeBrowser } from './fake-browser'
 
 const response = (content: ContentBlock[], stop_reason = 'end_turn'): ModelResponse => ({
@@ -24,13 +25,19 @@ function setup(
     pageAccess?: boolean
     missingSetup?: string
     elements?: Parameters<typeof fakeBrowser>[0]
+    model?: ModelId
+    cli?: (turn: CliTurn) => Promise<CliOutcome>
   } = {},
 ) {
   const { browser, state } = fakeBrowser(options.elements)
   const requests: ModelRequest[] = []
   const states: AgentState[] = []
   const events: DebugEvent[] = []
-  const settings = { model: 'claude-sonnet-5-5' as const, pageAccess: options.pageAccess ?? false }
+  const settings: { model: ModelId; pageAccess: boolean } = {
+    model: options.model ?? 'claude-sonnet-5-5',
+    pageAccess: options.pageAccess ?? false,
+  }
+  const turns: CliTurn[] = []
   const deps: AgentDeps = {
     callModel: vi.fn((request, signal) => {
       // Snapshot: the agent keeps appending to the same array.
@@ -39,6 +46,11 @@ function setup(
       if (!next) throw new Error('no more replies')
       return next(request, signal)
     }),
+    runCli: vi.fn((turn: CliTurn) => {
+      turns.push(turn)
+      if (!options.cli) throw new Error('no CLI reply')
+      return options.cli(turn)
+    }),
     browser: () => browser,
     settings: () => settings,
     missingSetup: () => options.missingSetup ?? null,
@@ -46,7 +58,7 @@ function setup(
     onDebug: (event) => events.push(event),
   }
   const agent = new Agent(deps)
-  return { agent, browser, state, requests, states, events, settings, deps }
+  return { agent, browser, state, requests, states, events, settings, deps, turns }
 }
 
 const input = (text: string) => ({ text, attachments: [] })
@@ -397,5 +409,200 @@ describe('elideImages', () => {
       a: [{ data: '<base64 image, 1 KB elided>', media_type: 'image/png' }],
       data: 'short',
     })
+  })
+})
+
+const cliResult = (fields: Partial<CliOutcome['result'] & object> = {}): CliOutcome => ({
+  code: 0,
+  stderr: '',
+  sessionId: 'session-1',
+  result: { type: 'result', subtype: 'success', is_error: false, result: 'Done.', ...fields },
+})
+const assistant = (text: string) => ({
+  type: 'assistant',
+  parent_tool_use_id: null,
+  message: { content: [{ type: 'text', text }] },
+})
+
+describe('Agent.run with the Claude Code CLI', () => {
+  it('runs the turn through the CLI, which calls the tools back, and shows its messages', async () => {
+    const { agent, browser, turns, events } = setup([], {
+      model: 'cli:claude-opus-5-5',
+      cli: async (turn) => {
+        turn.onEvent({ type: 'system', subtype: 'init', session_id: 'session-1', tools: [] })
+        const result = await turn.callTool('navigate', { url: 'example.com' })
+        expect(result).toMatchObject({ type: 'tool_result', content: [{ type: 'text' }] })
+        expect(result).not.toHaveProperty('is_error')
+        turn.onEvent(assistant('Opened example.com.'))
+        turn.onEvent({ type: 'result', subtype: 'success', usage: { input_tokens: 1 } })
+        return cliResult()
+      },
+    })
+    await agent.run(input('open example.com'))
+
+    expect(browser.load).toHaveBeenCalledWith('example.com')
+    const [turn] = turns
+    expect(turn).toMatchObject({ model: 'claude-opus-5-5', maxTurns: MAX_STEPS, resume: null })
+    expect(turn!.tools.map((tool) => tool.name)).toContain('navigate')
+    expect(turn!.tools.map((tool) => tool.name)).not.toContain('read_page')
+    expect(turn!.content[0]).toMatchObject({ type: 'text' })
+    expect(JSON.stringify(turn!.content[0])).toContain('<browser_state>')
+    expect(turn!.content.at(-1)).toEqual({ type: 'text', text: 'open example.com' })
+    const { items, status } = agent.state()
+    expect(status).toBe('idle')
+    expect(items.map((item) => item.kind)).toEqual(['user', 'tool', 'assistant'])
+    expect(items[2]).toMatchObject({ text: 'Opened example.com.' })
+    expect(agent.savableSteps()).toEqual([{ tool: 'navigate', input: { url: 'example.com' } }])
+    expect(events.map((event) => event.type)).toEqual([
+      'request',
+      'response',
+      'tool-call',
+      'tool-result',
+      'response',
+      'response',
+      'done',
+    ])
+    expect(JSON.stringify(events)).not.toContain('input_tokens')
+  })
+
+  it('continues the CLI session on the next run, and /new starts a fresh one', async () => {
+    const { agent, turns } = setup([], {
+      model: 'cli:claude-sonnet-5-5',
+      cli: async () => cliResult({ session_id: 'ignored' }),
+    })
+    await agent.run(input('one'))
+    await agent.run(input('two'))
+    agent.newConversation()
+    await agent.run(input('three'))
+    expect(turns.map((turn) => turn.resume)).toEqual([null, 'session-1', null])
+  })
+
+  it('page actions from the CLI wait for approval, and Deny reaches the CLI as an error', async () => {
+    let denied: ContentBlock | null = null
+    const { agent, browser } = setup([], {
+      model: 'cli:claude-sonnet-5-5',
+      pageAccess: true,
+      elements: { '#buy': { found: true, tag: 'button', name: 'Buy', x: 5, y: 6 } },
+      cli: async (turn) => {
+        expect(turn.tools.map((tool) => tool.name)).toContain('read_page')
+        denied = await turn.callTool('click', { selector: '#buy' })
+        return cliResult()
+      },
+    })
+    const running = agent.run(input('buy it'))
+    await waitFor(() => agent.state().status === 'awaiting-approval')
+    agent.approve('deny')
+    await running
+    expect(browser.click).not.toHaveBeenCalled()
+    expect(denied).toMatchObject({ content: 'The user denied this action.', is_error: true })
+  })
+
+  it('refuses typing into sensitive fields from the CLI without asking', async () => {
+    let refused: ContentBlock | null = null
+    const { agent, browser } = setup([], {
+      model: 'cli:claude-sonnet-5-5',
+      pageAccess: true,
+      elements: { '#pw': { found: true, tag: 'input', sensitive: true, x: 1, y: 1 } },
+      cli: async (turn) => {
+        refused = await turn.callTool('type_text', { selector: '#pw', text: 'hunter2' })
+        return cliResult()
+      },
+    })
+    await agent.run(input('log in'))
+    expect(browser.insertText).not.toHaveBeenCalled()
+    expect(refused).toMatchObject({ is_error: true })
+    expect(agent.state().items.some((item) => item.kind === 'approval')).toBe(false)
+  })
+
+  it('stop during an approval kills the CLI turn and ends the run', async () => {
+    const { agent } = setup([], {
+      model: 'cli:claude-sonnet-5-5',
+      pageAccess: true,
+      elements: { '#a': { found: true, tag: 'a', x: 1, y: 1 } },
+      cli: (turn) =>
+        new Promise((_resolve, reject) => {
+          turn.signal.addEventListener('abort', () => reject(new Error('killed')))
+          void turn.callTool('click', { selector: '#a' }).catch(() => {})
+        }),
+    })
+    const running = agent.run(input('click'))
+    await waitFor(() => agent.state().status === 'awaiting-approval')
+    agent.stop()
+    await running
+    const { items, status } = agent.state()
+    expect(status).toBe('idle')
+    expect(items.find((item) => item.kind === 'approval')).toMatchObject({ decision: 'stopped' })
+    expect(items.at(-1)).toEqual({ kind: 'notice', text: 'Stopped.' })
+  })
+
+  it('closes an approval the CLI left open when it exited', async () => {
+    const { agent } = setup([], {
+      model: 'cli:claude-sonnet-5-5',
+      pageAccess: true,
+      elements: { '#a': { found: true, tag: 'a', x: 1, y: 1 } },
+      cli: async (turn) => {
+        void turn.callTool('click', { selector: '#a' }).catch(() => {})
+        await waitFor(() => agent.state().status === 'awaiting-approval')
+        return { code: 1, stderr: 'crashed', result: null, sessionId: null }
+      },
+    })
+    await agent.run(input('click'))
+    const { items, status } = agent.state()
+    expect(status).toBe('idle')
+    expect(items.find((item) => item.kind === 'approval')).toMatchObject({ decision: 'stopped' })
+    expect(items.at(-1)).toEqual({
+      kind: 'error',
+      message: 'The Claude Code CLI exited with code 1: crashed',
+    })
+  })
+
+  it('shows the step limit, CLI errors, a logged-out CLI and a missing CLI', async () => {
+    const outcomes: (() => Promise<CliOutcome>)[] = [
+      async () => cliResult({ subtype: 'error_max_turns', is_error: true }),
+      async () => cliResult({ subtype: 'success', is_error: true, result: 'Overloaded' }),
+      async () => cliResult({ is_error: true, result: 'Not logged in · Please run /login' }),
+      async () => Promise.reject(new CliError(CLI_NOT_FOUND)),
+    ]
+    const { agent } = setup([], {
+      model: 'cli:claude-sonnet-5-5',
+      cli: () => outcomes.shift()!(),
+    })
+    for (let i = 0; i < 4; i++) await agent.run(input('hi'))
+    expect(
+      agent
+        .state()
+        .items.filter((item) => item.kind === 'error')
+        .map((item) => item.message),
+    ).toEqual([
+      `Stopped after ${MAX_STEPS} steps.`,
+      'Claude Code CLI error: Overloaded',
+      "Claude Code isn't logged in. Run `claude` in a terminal and log in.",
+      CLI_NOT_FOUND,
+    ])
+  })
+
+  it('starts fresh, with a notice, when the provider changes between the CLI and the API', async () => {
+    const { agent, settings, requests, turns } = setup(
+      [
+        async () => response([{ type: 'text', text: 'api 1' }]),
+        async () => response([{ type: 'text', text: 'api 2' }]),
+      ],
+      { cli: async () => cliResult() },
+    )
+    await agent.run(input('api one'))
+    settings.model = 'cli:claude-sonnet-5-5'
+    await agent.run(input('cli one'))
+    await agent.run(input('cli two'))
+    settings.model = 'ollama:qwen3:8b'
+    await agent.run(input('ollama one'))
+
+    expect(turns.map((turn) => turn.resume)).toEqual([null, 'session-1'])
+    // The Ollama run doesn't get the first API turn: the CLI held the conversation in between.
+    expect(requests[1]!.messages).toHaveLength(1)
+    const notices = agent.state().items.filter((item) => item.kind === 'notice')
+    expect(notices).toEqual([
+      { kind: 'notice', text: "The model doesn't see the earlier messages (provider changed)." },
+      { kind: 'notice', text: "The model doesn't see the earlier messages (provider changed)." },
+    ])
   })
 })

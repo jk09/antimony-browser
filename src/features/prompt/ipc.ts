@@ -37,7 +37,7 @@ export const promptCommands: CommandInfo[] = [
   {
     name: 'model',
     usage: '<model>',
-    description: 'Choose the model (Claude or Ollama)',
+    description: 'Choose the model (Claude API key, Claude Code CLI or Ollama)',
     options: ['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-haiku-4-5'],
   },
   {

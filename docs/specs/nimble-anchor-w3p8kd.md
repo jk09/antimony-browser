@@ -6,7 +6,7 @@
 | --- | --- |
 | **Feature name** | Stack toolbar: reload and new-stack buttons at the top of the navigation stack, a close × on every page of the tree, Ctrl/Cmd+R, +N and +W, and a home page for new stacks |
 | **Spec ID** | nimble-anchor-w3p8kd |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
