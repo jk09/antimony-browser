@@ -6,12 +6,12 @@
 | --- | --- |
 | **Feature name** | New-stack page: an empty new stack opens a configurable page (default bing.com) as its root |
 | **Spec ID** | fresh-anchor-w6p3jd |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-02 09:00 +00:00 |
-| **Last updated** | 2026-10-02 20:15 +00:00 |
+| **Last updated** | 2026-10-02 19:10 +00:00 |
 | **Affected features** | stacks, prompt |
 | **Target release** | 0.1.0 |
 | **Related links** | [branching-trail-k4w9zp](./branching-trail-k4w9zp.md) (navigation stacks) |
