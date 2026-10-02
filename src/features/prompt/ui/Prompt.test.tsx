@@ -100,6 +100,9 @@ describe('Prompt', () => {
         .getAllByRole('option')
         .map((option) => option.textContent),
     ).toEqual(['↳@rust-docsRust'])
+    // Ctrl+Tab switches stacks; it doesn't complete.
+    press(box, 'Tab', { ctrlKey: true })
+    expect(box.value).toBe('compare @ru')
     press(box, 'Tab')
     expect(box.value).toBe('compare @rust-docs ')
 
@@ -234,33 +237,6 @@ describe('Prompt', () => {
       expect(api.history.updateSettings).toHaveBeenCalledWith({ summaries: true }),
     )
 
-    type(box, '/new-stack-page')
-    press(box, 'Enter')
-    expect(await screen.findByText(/New stacks open https:\/\/www\.bing\.com\//)).toBeTruthy()
-    type(box, '/new-stack-page example.com')
-    press(box, 'Enter')
-    await waitFor(() =>
-      expect(api.stacks.updateSettings).toHaveBeenLastCalledWith({
-        newStackPage: 'https://example.com/',
-      }),
-    )
-    type(box, '/new-stack-page off')
-    press(box, 'Enter')
-    await waitFor(() =>
-      expect(api.stacks.updateSettings).toHaveBeenLastCalledWith({ newStackPage: null }),
-    )
-    type(box, '/new-stack-page reset')
-    press(box, 'Enter')
-    await waitFor(() =>
-      expect(api.stacks.updateSettings).toHaveBeenLastCalledWith({
-        newStackPage: 'https://www.bing.com/',
-      }),
-    )
-    type(box, '/new-stack-page javascript:alert(1)')
-    press(box, 'Enter')
-    expect(await screen.findByText(/isn't a web address/)).toBeTruthy()
-    expect(api.stacks.updateSettings).toHaveBeenCalledTimes(3)
-
     type(box, '/history-clear everything')
     press(box, 'Enter')
     expect(await screen.findByRole('alert')).toBeTruthy()
@@ -296,7 +272,7 @@ describe('Prompt', () => {
       },
     ]
     const { api, box } = await openPrompt({ menu })
-    type(box, '/me')
+    type(box, '/men')
     expect(within(await screen.findByRole('listbox')).getByRole('option').textContent).toContain(
       '/menu <menu> <item>',
     )
@@ -483,6 +459,31 @@ describe('Prompt', () => {
     press(box, 'Enter')
     await waitFor(() => expect(api.agent.updateSettings).toHaveBeenCalledWith({ pageAccess: true }))
     expect((await screen.findByRole('status')).textContent).toContain('Page access on')
+  })
+
+  it('/home sets, shows, clears and resets the page new stacks open at', async () => {
+    const { api, box } = await openPrompt()
+    type(box, '/home example.com')
+    press(box, 'Enter')
+    await waitFor(() => expect(api.stacks.setHome).toHaveBeenCalledWith('https://example.com/'))
+    type(box, '/home')
+    press(box, 'Enter')
+    await waitFor(async () =>
+      expect((await screen.findByRole('status')).textContent).toContain(
+        'New stacks open at https://example.com/. Use',
+      ),
+    )
+    type(box, '/home clear')
+    press(box, 'Enter')
+    await waitFor(() => expect(api.stacks.setHome).toHaveBeenLastCalledWith(null))
+    type(box, '/home reset')
+    press(box, 'Enter')
+    await waitFor(() =>
+      expect(api.stacks.setHome).toHaveBeenLastCalledWith('https://www.bing.com/'),
+    )
+    type(box, '/home not a url')
+    press(box, 'Enter')
+    expect((await screen.findByRole('alert')).textContent).toContain('is not a web address')
   })
 
   it('suggests what was just submitted without reopening', async () => {

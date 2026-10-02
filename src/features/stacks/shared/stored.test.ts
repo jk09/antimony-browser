@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseStacksSettings, parseStoredStacks } from './stored'
+import { parseStoredStacks } from './stored'
 
 const stack = (extra: object = {}) => ({
   id: 's',
@@ -35,21 +35,12 @@ describe('stored stacks', () => {
     ).toThrow(TypeError)
   })
 
-  it('accepts an http(s) new-stack page or null, nothing else', () => {
-    expect(parseStacksSettings({ newStackPage: 'https://example.com/' })).toEqual({
-      newStackPage: 'https://example.com/',
-    })
-    expect(parseStacksSettings({ newStackPage: null })).toEqual({ newStackPage: null })
-    for (const bad of [
-      null,
-      'https://x',
-      {},
-      { newStackPage: 'javascript:alert(1)' },
-      { newStackPage: 'file:///etc/passwd' },
-      { newStackPage: 'https://' },
-      { newStackPage: 42 },
-    ]) {
-      expect(() => parseStacksSettings(bad)).toThrow(TypeError)
-    }
+  it('defaults the home page to bing.com only in files without one', () => {
+    expect(parseStoredStacks({ current: null, stacks: [] }).home).toBe('https://www.bing.com/')
+    expect(parseStoredStacks({ current: null, stacks: [], home: null }).home).toBeNull()
+    expect(parseStoredStacks({ current: null, stacks: [], home: 'https://a.example/' }).home).toBe(
+      'https://a.example/',
+    )
+    expect(parseStoredStacks({ current: null, stacks: [], home: 'file:///etc' }).home).toBeNull()
   })
 })

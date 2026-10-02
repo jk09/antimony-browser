@@ -5,14 +5,10 @@ import type { MainContext } from '../../app/main/features'
 import { createJsonStore } from '../../app/main/json-store'
 import { onHistoryCleared } from '../history/main'
 import { getTabs, onPageEvent, setHistoryResolver, type PageEvent } from '../navigation/main'
-import {
-  channels,
-  DEFAULT_NEW_STACK_PAGE,
-  type Stack,
-  type StacksSettings,
-  type StacksState,
-} from './ipc'
-import { parseStacksSettings, parseStoredStacks, type StoredStacks } from './shared/stored'
+import { channels as promptChannels } from '../prompt/ipc'
+import { channels, DEFAULT_HOME, type Stack, type StackCommand, type StacksState } from './ipc'
+import { cycleKeyFor, stackCommandFor } from './shared/keys'
+import { parseStoredStacks, type StoredStacks } from './shared/stored'
 import {
   backTarget,
   deriveName,
@@ -24,32 +20,39 @@ import {
   nodeCount,
   outline,
   prune,
+  removeBranch,
   rows,
   setTitle,
   trimToActive,
 } from './shared/tree'
 
 const PUBLISH_DELAY_MS = 16
+const MAX_HOME_LENGTH = 2048
 
-export function register({ ipc }: MainContext): void {
+/** An http(s) URL the home page may be, or null. */
+function parseHome(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length > MAX_HOME_LENGTH) return null
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null
+  } catch {
+    return null
+  }
+}
+
+export function register({ window, browsingSession, ipc, fileMenu }: MainContext): void {
   const tabs = getTabs()
   if (!tabs) throw new Error('stacks needs navigation to be registered first')
 
   const store = createJsonStore(join(app.getPath('userData'), 'stacks.json'), {
     parse: parseStoredStacks,
-    fallback: (): StoredStacks => ({ current: null, stacks: [] }),
+    fallback: (): StoredStacks => ({ current: null, stacks: [], home: DEFAULT_HOME }),
   })
-  const settings = createJsonStore(join(app.getPath('userData'), 'stacks-settings.json'), {
-    parse: parseStacksSettings,
-    fallback: (): StacksSettings => ({ newStackPage: DEFAULT_NEW_STACK_PAGE }),
-  })
-  app.on('will-quit', () => {
-    store.flush()
-    settings.flush()
-  })
+  app.on('will-quit', () => store.flush())
 
   const stacks = new Map<string, Stack>(store.get().stacks.map((stack) => [stack.id, stack]))
   let currentId: string | null = store.get().current
+  let home: string | null = store.get().home
   const tabOfStack = new Map<string, number>()
   const stackOfTab = new Map<number, string>()
   /** The node a navigation was started from, per stack, until it commits or fails. */
@@ -83,7 +86,7 @@ export function register({ ipc }: MainContext): void {
 
   let timer: ReturnType<typeof setTimeout> | null = null
   const changed = () => {
-    store.set({ current: currentId, stacks: [...stacks.values()] })
+    store.set({ current: currentId, stacks: [...stacks.values()], home })
     timer ??= setTimeout(() => {
       timer = null
       ipc.send(channels.stateChanged, state())
@@ -163,20 +166,6 @@ export function register({ ipc }: MainContext): void {
     }
     if (best >= 0) tabs.goToIndex(tabId, best)
     else tabs.load(tabId, node.url, 'back_forward')
-  }
-
-  /**
-   * Makes an empty stack current in a new tab (the empty current stack if it has no tab yet),
-   * loading the new-stack page as its root if one is set.
-   */
-  const openNewStack = () => {
-    const cur = current()
-    const stack = cur && cur.rootId === null && !tabOfStack.has(cur.id) ? cur : addStack()
-    makeCurrent(stack)
-    const url = settings.get().newStackPage
-    if (url !== null) stack.startRoot = true
-    bind(stack, tabs.create({ activate: true, ...(url !== null && { url, transition: 'typed' }) }))
-    changed()
   }
 
   const switchTo = (stack: Stack) => {
@@ -293,20 +282,150 @@ export function register({ ipc }: MainContext): void {
     goToNode(stack, value)
   })
   ipc.handle(channels.switch, (value) => switchTo(parseStackId(channels.switch, value)))
-  ipc.handle(channels.create, () => {
+  /**
+   * Starts a new stack in a new tab, or fills the empty current stack: at the home page (its root,
+   * the stack named after the next page), else empty at the prompt.
+   */
+  const openNewStack = () => {
     const cur = current()
-    // An empty current stack in a tab already is a new one.
-    if (cur && cur.rootId === null && tabOfStack.has(cur.id)) return
-    openNewStack()
-  })
-  ipc.handle(channels.close, (value) => {
-    const stack = parseStackId(channels.close, value)
+    // An empty current stack already is a new one; it only needs the home page.
+    const empty = cur && cur.rootId === null ? cur : null
+    const emptyTab = empty && tabOfStack.get(empty.id)
+    if (empty && home === null) return
+    if (emptyTab !== undefined && emptyTab !== null && home !== null) {
+      empty!.startRoot = true
+      tabs.load(emptyTab, home, 'typed')
+      return
+    }
+    const stack = empty ?? addStack()
+    makeCurrent(stack)
+    // Without a home page the new stack starts at the prompt.
+    if (home === null) {
+      window.webContents.focus()
+      ipc.send(promptChannels.open, null)
+    } else stack.startRoot = true
+    bind(
+      stack,
+      tabs.create({ activate: true, ...(home !== null && { url: home, transition: 'typed' }) }),
+    )
+    changed()
+  }
+  ipc.handle(channels.create, openNewStack)
+  const closeAndSwitch = (stack: Stack) => {
     const wasCurrent = stack.id === currentId
     closeStack(stack)
     const next = byRecentUse()[0]
     if (wasCurrent && next) switchTo(next)
-    else if (wasCurrent && settings.get().newStackPage !== null) openNewStack()
+    // The last stack closed: a new one at the home page.
+    else if (wasCurrent && home !== null) openNewStack()
     changed()
+  }
+  ipc.handle(channels.close, (value) => closeAndSwitch(parseStackId(channels.close, value)))
+  ipc.handle(channels.closeNode, (value) => {
+    const stack = current()
+    if (!stack || typeof value !== 'number' || !stack.nodes[value]) {
+      throw new TypeError(`${channels.closeNode} expects a node of the current stack`)
+    }
+    if (value === stack.rootId) {
+      closeAndSwitch(stack)
+      return
+    }
+    if (removeBranch(stack, value)) goToNode(stack, stack.activeId!)
+    changed()
+  })
+  ipc.handle(channels.home, () => home)
+  ipc.handle(channels.setHome, (value) => {
+    const url = value === null ? null : parseHome(value)
+    if (value !== null && url === null) {
+      throw new TypeError(`${channels.setHome} expects an http(s) URL or null`)
+    }
+    home = url
+    changed()
+  })
+
+  // Ctrl/Cmd+R, +N and +W go to the UI, which runs them like its buttons (and knows whether the
+  // assistant runs). They're caught before the page or the menu sees them, like Ctrl/Cmd+B:
+  // a page view doesn't always pass them on to the menu, and Chromium's own Ctrl+R mustn't run.
+  const command = (name: StackCommand) => {
+    window.webContents.focus()
+    ipc.send(channels.command, name)
+  }
+  fileMenu.push(
+    {
+      id: 'stacks-reload',
+      label: 'Reload Page',
+      accelerator: 'CmdOrCtrl+R',
+      click: () => command('reload'),
+    },
+    {
+      id: 'stacks-new',
+      label: 'New Stack',
+      accelerator: 'CmdOrCtrl+N',
+      click: () => command('new'),
+    },
+    {
+      id: 'stacks-close-page',
+      label: 'Close Page',
+      accelerator: 'CmdOrCtrl+W',
+      click: () => command('close-page'),
+    },
+    // From the menu there's no Ctrl to release: one step, then switch. The keys are only shown
+    // here; before-input-event handles them (registered, they would also run this click).
+    {
+      id: 'stacks-next',
+      label: 'Next Stack',
+      accelerator: 'Ctrl+Tab',
+      registerAccelerator: false,
+      click: () => cycleStep('cycle-next', true),
+    },
+    {
+      id: 'stacks-previous',
+      label: 'Previous Stack',
+      accelerator: 'Ctrl+Shift+Tab',
+      registerAccelerator: false,
+      click: () => cycleStep('cycle-previous', true),
+    },
+  )
+
+  // Ctrl+[Shift+]Tab: the UI keeps the stacks in most-recently-used order and the highlight; main
+  // only knows whether a cycle is open, to end it when Ctrl goes up and cancel it on Escape or
+  // when the window loses focus. Focus stays where it is (the switch moves it to the page).
+  let cycling = false
+  const cycleStep = (name: 'cycle-next' | 'cycle-previous', end: boolean) => {
+    cycling = !end
+    ipc.send(channels.command, name)
+    if (end) ipc.send(channels.command, 'cycle-end')
+  }
+  const finishCycle = (name: 'cycle-end' | 'cycle-cancel') => {
+    if (!cycling) return
+    cycling = false
+    ipc.send(channels.command, name)
+  }
+  window.on('blur', () => finishCycle('cycle-cancel'))
+
+  const catchKeys = (contents: Electron.WebContents) =>
+    contents.on('before-input-event', (event, input) => {
+      const cycle = cycleKeyFor(input)
+      // Ctrl+Tab isn't consumed: after a consumed key-down Chromium drops every key event up to
+      // the next key-down, so Ctrl going up would never arrive. Pages don't act on Ctrl+Tab.
+      if (cycle === 'next' || cycle === 'previous') {
+        cycleStep(cycle === 'next' ? 'cycle-next' : 'cycle-previous', false)
+        return
+      }
+      // The key-up of Ctrl isn't consumed: pages keep seeing their modifier state.
+      if (cycle === 'release') return finishCycle('cycle-end')
+      if (cycle === 'escape' && cycling) {
+        event.preventDefault()
+        return finishCycle('cycle-cancel')
+      }
+      const name = stackCommandFor(input, process.platform)
+      if (name === null) return
+      event.preventDefault()
+      command(name)
+    })
+  catchKeys(window.webContents)
+  app.on('web-contents-created', (_event, contents) => {
+    if (contents.session === browsingSession) catchKeys(contents)
   })
   ipc.handle(channels.outline, (value) => {
     if (typeof value !== 'string') throw new TypeError(`${channels.outline} expects a name`)
@@ -314,15 +433,10 @@ export function register({ ipc }: MainContext): void {
     const stack = [...stacks.values()].find((s) => s.name === name)
     return stack ? outline(stack) : null
   })
-  ipc.handle(channels.settings, () => settings.get())
-  ipc.handle(channels.updateSettings, (value) => {
-    settings.set(parseStacksSettings(value))
-    return settings.get()
-  })
 
   // Restore: only the current stack gets a tab now, at its active page. Without one, a new
-  // stack opens on the new-stack page.
+  // stack opens at the home page.
   const restored = current()
   if (restored && restored.activeId !== null) switchTo(restored)
-  else if (settings.get().newStackPage !== null) openNewStack()
+  else if (home !== null) openNewStack()
 }

@@ -46,6 +46,13 @@ export const promptCommands: CommandInfo[] = [
     description: 'Let the assistant read and act on the page',
     options: ['on', 'off'],
   },
+  {
+    name: 'home',
+    usage: '<url>',
+    description:
+      'Set the page new stacks open at (Ctrl/Cmd+N); /home clear removes it, /home reset restores bing.com',
+    options: ['clear', 'reset'],
+  },
   { name: 'menu', usage: '<menu> <item>', description: 'Run an item from the application menu' },
   { name: 'save', usage: '<name>', description: 'Save the last run as a skill' },
   { name: 'skills', usage: '', description: 'List saved skills' },
@@ -69,12 +76,6 @@ export const promptCommands: CommandInfo[] = [
     usage: 'on|off',
     description: 'Summarise pages you spend time on with the selected model',
     options: ['on', 'off'],
-  },
-  {
-    name: 'new-stack-page',
-    usage: '<url>|off|reset',
-    description: 'Choose the page a new stack opens (default bing.com)',
-    options: ['off', 'reset'],
   },
 ]
 

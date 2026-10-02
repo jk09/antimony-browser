@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { MenuItemConstructorOptions } from 'electron'
 import type { MainContext } from '../../app/main/features'
 import type { HistoryResolver, PageEvent, TabControls } from '../navigation/main'
 import type { StacksState } from './ipc'
@@ -11,7 +12,9 @@ const quitListeners: (() => void)[] = []
 vi.mock('electron', () => ({
   app: {
     getPath: () => userData,
-    on: (_: string, listener: () => void) => quitListeners.push(listener),
+    on: (event: string, listener: () => void) => {
+      if (event === 'will-quit') quitListeners.push(listener)
+    },
   },
 }))
 
@@ -76,22 +79,56 @@ vi.mock('../history/main', () => ({
 const { register } = await import('./main')
 const { channels } = await import('./ipc')
 
-/** `newStackPage`: the stored setting; 'default' writes no settings file (bing.com). */
-function setup(
-  dir = mkdtempSync(join(tmpdir(), 'antimony-stacks-')),
-  newStackPage: string | null = null,
-) {
-  userData = dir
-  if (newStackPage !== 'default') {
-    writeFileSync(join(dir, 'stacks-settings.json'), JSON.stringify({ newStackPage }))
+/**
+ * Registers stacks on `dir`. A fresh directory gets a stacks.json with `home` (none by default,
+ * so nothing opens at start); 'default' writes no file, as on a first run.
+ */
+function setup(dir?: string, home: string | null = null) {
+  if (dir === undefined) {
+    dir = mkdtempSync(join(tmpdir(), 'antimony-stacks-'))
+    if (home !== 'default') {
+      writeFileSync(join(dir, 'stacks.json'), JSON.stringify({ current: null, stacks: [], home }))
+    }
   }
+  userData = dir
   tabs = new FakeTabs()
   quitListeners.length = 0
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
   const send = vi.fn()
+  const fileMenu: MenuItemConstructorOptions[] = []
+  let onInput: ((event: { preventDefault(): void }, input: object) => void) | null = null
+  let onBlur: (() => void) | null = null
   register({
+    window: {
+      on: (_: string, listener: () => void) => (onBlur = listener),
+      webContents: {
+        focus: () => {},
+        on: (_: string, listener: typeof onInput) => (onInput = listener),
+      },
+    },
+    browsingSession: {},
+    fileMenu,
     ipc: { handle: (channel: string, fn: never) => handlers.set(channel, fn), send },
   } as unknown as MainContext)
+  /** Presses Ctrl/Cmd+`key` in the chrome UI; returns whether the key was taken. */
+  const press = (key: string, input: object = {}) => {
+    const preventDefault = vi.fn()
+    onInput!(
+      { preventDefault },
+      {
+        type: 'keyDown',
+        key,
+        control: process.platform !== 'darwin',
+        meta: process.platform === 'darwin',
+        alt: false,
+        shift: false,
+        isAutoRepeat: false,
+        ...input,
+      },
+    )
+    return preventDefault.mock.calls.length > 0
+  }
+  const blur = () => onBlur!()
   const call = (channel: string, ...args: unknown[]) => handlers.get(channel)!(...args)
   const state = () => call(channels.state) as StacksState
   const nav = (tabId: number, url: string, entry: 'new' | 'back' | 'replaced' = 'new') =>
@@ -109,7 +146,21 @@ function setup(
     nav(tabId, `https://site.example/${name}`)
     title(tabId, name)
   }
-  return { call, state, send, nav, title, visit, rowsOf, activeTitle, idOf, dir }
+  return {
+    call,
+    state,
+    send,
+    nav,
+    title,
+    visit,
+    rowsOf,
+    activeTitle,
+    idOf,
+    dir,
+    fileMenu,
+    press,
+    blur,
+  }
 }
 
 describe('stacks main', () => {
@@ -204,9 +255,11 @@ describe('stacks main', () => {
   })
 
   it('creates an empty stack, and the first tab without a stack adopts it', () => {
-    const { call, visit, state } = setup()
+    const { call, visit, state, send } = setup()
     call(channels.create)
     expect(tabs.calls).toEqual(['create 1 active'])
+    // An empty stack starts at the prompt.
+    expect(send).toHaveBeenCalledWith('prompt:open', null)
     call(channels.create)
     expect(tabs.calls).toEqual(['create 1 active'])
     expect(state().current).toMatchObject({ name: '', rows: [] })
@@ -215,14 +268,78 @@ describe('stacks main', () => {
     expect(state().current!.name).toBe('first')
   })
 
-  it('opens the new-stack page in empty new stacks, named after the first page reached', () => {
-    const { call, nav, title, state, rowsOf, dir } = setup(undefined, 'default')
-    // No stack at start: one opens on the default page.
+  it('closes a page with its branch; the root closes the stack', () => {
+    const { call, visit, rowsOf, activeTitle, idOf, state, nav } = setup()
+    tabs.open.add(1)
+    tabs.activeId = 1
+    visit(1, 'A')
+    visit(1, 'B')
+    visit(1, 'C')
+    call(channels.goToNode, idOf('A'))
+    nav(1, 'https://site.example/A')
+    visit(1, 'D')
+    expect(rowsOf()).toEqual(['A', '.B', '..C', '.D'])
+
+    // Another branch: nothing loads.
+    const calls = tabs.calls.length
+    call(channels.closeNode, idOf('B'))
+    expect(rowsOf()).toEqual(['A', '.D'])
+    expect(tabs.calls).toHaveLength(calls)
+
+    // The active page: its parent loads.
+    call(channels.closeNode, idOf('D'))
+    expect(rowsOf()).toEqual(['A'])
+    expect(activeTitle()).toBe('A')
+    expect(tabs.calls.at(-1)).toBe('load 1 https://site.example/A')
+
+    expect(() => call(channels.closeNode, 999)).toThrow(TypeError)
+    expect(() => call(channels.closeNode, 'A')).toThrow(TypeError)
+
+    call(channels.closeNode, idOf('A'))
+    expect(tabs.calls.at(-1)).toBe('close 1')
+    expect(state().stacks).toHaveLength(0)
+  })
+
+  it('opens new stacks at the home page, which persists', () => {
+    const first = setup()
+    expect(first.call(channels.home)).toBeNull()
+    expect(() => first.call(channels.setHome, 'file:///etc/passwd')).toThrow(TypeError)
+    expect(() => first.call(channels.setHome, 'not a url')).toThrow(TypeError)
+    expect(() => first.call(channels.setHome, 42)).toThrow(TypeError)
+    first.call(channels.setHome, 'https://start.example')
+    expect(first.call(channels.home)).toBe('https://start.example/')
+
+    first.call(channels.create)
+    expect(tabs.calls).toEqual(['create 1 https://start.example/ active'])
+    first.visit(1, 'Start')
+    first.call(channels.create)
+    expect(tabs.calls.at(-1)).toBe('create 2 https://start.example/ active')
+    expect(first.state().stacks).toHaveLength(2)
+    quitListeners.forEach((listener) => listener())
+
+    const again = setup(first.dir)
+    expect(again.call(channels.home)).toBe('https://start.example/')
+    again.call(channels.setHome, null)
+    expect(again.call(channels.home)).toBeNull()
+  })
+
+  it('loads the home page in an empty current stack instead of opening another', () => {
+    const { call } = setup()
+    call(channels.create)
+    call(channels.setHome, 'https://start.example/')
+    call(channels.create)
+    expect(tabs.calls).toEqual(['create 1 active', 'load 1 https://start.example/'])
+  })
+
+  it('opens a new stack at the default home page at start and after the last one closes', () => {
+    const { call, nav, title, state, rowsOf } = setup(undefined, 'default')
+    expect(call(channels.home)).toBe('https://www.bing.com/')
     expect(tabs.calls).toEqual(['create 1 https://www.bing.com/ active'])
     nav(1, 'https://www.bing.com/')
     title(1, 'Bing')
     fire({ tabId: 1, type: 'loaded', url: 'https://www.bing.com/' })
     expect(rowsOf()).toEqual(['Bing'])
+    // Named after the first page reached from the home page, not the home page.
     expect(state().current!.name).toBe('')
     nav(1, 'https://site.example/Rust')
     title(1, 'Rust')
@@ -230,39 +347,79 @@ describe('stacks main', () => {
     expect(state().current!.name).toBe('rust')
     expect(state().stacks[0]!.rootTitle).toBe('Rust')
 
-    // New stack; a link-opened stack doesn't load the page.
-    call(channels.create)
-    expect(tabs.calls.at(-1)).toBe('create 2 https://www.bing.com/ active')
+    // A link-opened stack doesn't load the home page.
     tabs.open.add(tabs.next++)
-    fire({ tabId: 3, type: 'opened', openerId: 1, active: false })
-    expect(tabs.calls).toHaveLength(2)
+    fire({ tabId: 2, type: 'opened', openerId: 1, active: false })
+    expect(tabs.calls).toHaveLength(1)
 
-    expect(call(channels.settings)).toEqual({ newStackPage: 'https://www.bing.com/' })
-    expect(call(channels.updateSettings, { newStackPage: 'https://example.com/' })).toEqual({
-      newStackPage: 'https://example.com/',
-    })
-    expect(() => call(channels.updateSettings, { newStackPage: 'file:///etc' })).toThrow(TypeError)
-    expect(() => call(channels.updateSettings, 'https://example.com/')).toThrow(TypeError)
-
-    // Closing the last stacks opens a new one on the page.
     for (const stack of state().stacks) call(channels.close, stack.id)
-    expect(tabs.calls.at(-1)).toBe('create 4 https://example.com/ active')
+    expect(tabs.calls.at(-1)).toBe('create 3 https://www.bing.com/ active')
     expect(state().stacks).toHaveLength(1)
-
-    quitListeners.forEach((listener) => listener())
-    expect(JSON.parse(readFileSync(join(dir, 'stacks-settings.json'), 'utf8'))).toEqual({
-      newStackPage: 'https://example.com/',
-    })
   })
 
-  it('keeps new stacks empty with the new-stack page off', () => {
+  it('opens nothing at start or after the last stack without a home page', () => {
     const { call, state } = setup()
     expect(tabs.calls).toEqual([])
     call(channels.create)
-    expect(tabs.calls).toEqual(['create 1 active'])
     call(channels.close, state().current!.id)
     expect(state().stacks).toEqual([])
     expect(tabs.calls).toEqual(['create 1 active', 'close 1'])
+  })
+
+  it('sends Ctrl/Cmd+R, +N and +W to the UI and lists them in the File menu', () => {
+    const { press, send, fileMenu } = setup()
+    expect(fileMenu.map((item) => [item.label, item.accelerator])).toEqual([
+      ['Reload Page', 'CmdOrCtrl+R'],
+      ['New Stack', 'CmdOrCtrl+N'],
+      ['Close Page', 'CmdOrCtrl+W'],
+      ['Next Stack', 'Ctrl+Tab'],
+      ['Previous Stack', 'Ctrl+Shift+Tab'],
+    ])
+    expect(press('r')).toBe(true)
+    expect(press('n')).toBe(true)
+    expect(press('w')).toBe(true)
+    expect(press('b')).toBe(false)
+    expect(send.mock.calls.filter(([channel]) => channel === channels.command)).toEqual([
+      [channels.command, 'reload'],
+      [channels.command, 'new'],
+      [channels.command, 'close-page'],
+    ])
+  })
+
+  it('sends the Ctrl+Tab cycle to the UI: steps, then end on Ctrl up or cancel', () => {
+    const { press, send, blur, fileMenu } = setup()
+    const ctrl = { control: true, meta: false }
+    const commands = () =>
+      send.mock.calls.filter(([channel]) => channel === channels.command).map(([, name]) => name)
+    const release = () => press('Control', { type: 'keyUp', control: false, meta: false })
+
+    // Escape and Ctrl up before any cycle reach the page untouched.
+    expect(press('Escape', { control: false, meta: false })).toBe(false)
+    expect(release()).toBe(false)
+    expect(commands()).toEqual([])
+
+    // Ctrl+Tab passes on: consumed, Chromium would drop the key-up of Ctrl.
+    expect(press('Tab', ctrl)).toBe(false)
+    expect(press('Tab', { ...ctrl, isAutoRepeat: true })).toBe(false)
+    expect(press('Tab', { ...ctrl, shift: true })).toBe(false)
+    expect(release()).toBe(false)
+    expect(commands()).toEqual(['cycle-next', 'cycle-next', 'cycle-previous', 'cycle-end'])
+
+    send.mockClear()
+    press('Tab', ctrl)
+    expect(press('Escape', { control: true, meta: false })).toBe(true)
+    release()
+    press('Tab', ctrl)
+    blur()
+    blur()
+    expect(commands()).toEqual(['cycle-next', 'cycle-cancel', 'cycle-next', 'cycle-cancel'])
+
+    // The menu only shows the keys: registered, they'd also run the one-step menu click.
+    const cycleItems = fileMenu.filter((item) => item.accelerator?.includes('Tab'))
+    expect(cycleItems.map((item) => item.registerAccelerator)).toEqual([false, false])
+    send.mockClear()
+    ;(fileMenu.find((item) => item.label === 'Previous Stack')!.click as () => void)()
+    expect(commands()).toEqual(['cycle-previous', 'cycle-end'])
   })
 
   it('serves outlines by name and publishes changes once per burst', async () => {
@@ -313,7 +470,9 @@ describe('stacks main', () => {
     writeFileSync(join(dir, 'stacks.json'), JSON.stringify({ stacks: [{ id: 'x' }] }))
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { state } = setup(dir)
-    expect(state()).toEqual({ current: null, stacks: [] })
+    // The fallback has no stacks and the default home page, so one opens there.
+    expect(tabs.calls).toEqual(['create 1 https://www.bing.com/ active'])
+    expect(state().stacks).toHaveLength(1)
   })
 
   it('clears stacks with all of the browsing history', () => {

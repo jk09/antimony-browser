@@ -1,6 +1,6 @@
 import { isOllamaModel, ollamaId, type AgentSettings, type ModelInfo } from '../../agent/ipc'
 import type { Skill } from '../../skills/ipc'
-import { DEFAULT_NEW_STACK_PAGE } from '../../stacks/ipc'
+import { DEFAULT_HOME } from '../../stacks/ipc'
 import { promptCommands } from '../ipc'
 
 export interface CommandResult {
@@ -78,6 +78,24 @@ export async function runCommand(
           ? 'Page access on: the assistant can read this page and, with your approval, act on it.'
           : 'Page access off: the assistant only sees the page address and title.',
       )
+    case 'home': {
+      if (!args) {
+        const home = await api.stacks.home()
+        return info(
+          home
+            ? `New stacks open at ${home}. Use /home <url> to change it or /home clear.`
+            : 'New stacks open empty. Use /home <url> to set a home page.',
+        )
+      }
+      if (args === 'clear') {
+        await api.stacks.setHome(null)
+        return info('Home page removed: new stacks open empty.')
+      }
+      const url = args === 'reset' ? DEFAULT_HOME : api.navigation.toUrl(args)
+      if (!url) return error(`${args} is not a web address.`)
+      await api.stacks.setHome(url)
+      return info(`New stacks open at ${url}.`)
+    }
     case 'menu': {
       if (!args) {
         const menus = await api.menu.items()
@@ -150,25 +168,6 @@ export async function runCommand(
           ? 'Pages you spend 30 s or more on will be summarised by the selected model (their text and a screenshot are sent to it).'
           : 'Page summaries off.',
       )
-    }
-    case 'new-stack-page': {
-      if (!args) {
-        const { newStackPage } = await api.stacks.settings()
-        return info(
-          newStackPage === null
-            ? 'New stacks open empty. Use /new-stack-page <url> to choose a page.'
-            : `New stacks open ${newStackPage}. Use /new-stack-page <url>, off or reset.`,
-        )
-      }
-      let page: string | null = null
-      if (args !== 'off') {
-        page = args === 'reset' ? DEFAULT_NEW_STACK_PAGE : api.navigation.toUrl(args)
-        if (page === null) {
-          return error(`${args} isn't a web address. Use /new-stack-page <url>, off or reset.`)
-        }
-      }
-      await api.stacks.updateSettings({ newStackPage: page })
-      return info(page === null ? 'New stacks open empty.' : `New stacks open ${page}.`)
     }
   }
 

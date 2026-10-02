@@ -1,10 +1,11 @@
 // Validation of stacks.json. Pure: no electron, Node or React imports.
-import type { Stack, StackNode, StacksSettings } from '../ipc'
+import { DEFAULT_HOME, type Stack, type StackNode } from '../ipc'
 
-/** stacks.json: the stacks and which one is current. */
+/** stacks.json: the stacks, which one is current and the home page new stacks open at. */
 export interface StoredStacks {
   current: string | null
   stacks: Stack[]
+  home: string | null
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -77,24 +78,7 @@ export function parseStoredStacks(raw: unknown): StoredStacks {
   const stacks = raw['stacks'].map(parseStack)
   const current = raw['current']
   if (current !== null && typeof current !== 'string') fail('current is not a stack id')
-  return { current: stacks.some((stack) => stack.id === current) ? current : null, stacks }
-}
-
-const parses = (url: string) => {
-  try {
-    new URL(url)
-    return true
-  } catch {
-    return false
-  }
-}
-
-/** Validates `stacks-settings.json` and `stacks:update-settings`: an http(s) URL or null. */
-export function parseStacksSettings(raw: unknown): StacksSettings {
-  if (!isRecord(raw)) throw new TypeError('stacks settings: expected { newStackPage }')
-  const page = raw['newStackPage']
-  if (page !== null && !(isWebUrl(page) && parses(page))) {
-    throw new TypeError('stacks settings: newStackPage must be an http(s) URL or null')
-  }
-  return { newStackPage: page }
+  // Older files have no home page: the default. One that isn't a web URL is dropped.
+  const home = !('home' in raw) ? DEFAULT_HOME : isWebUrl(raw['home']) ? raw['home'] : null
+  return { current: stacks.some((stack) => stack.id === current) ? current : null, stacks, home }
 }

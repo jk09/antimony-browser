@@ -139,6 +139,71 @@ textarea {
   background: var(--hover);
 }
 
+.stack-switcher {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.stack-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.stack-action,
+.stack-row-close {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.stack-action {
+  width: 22px;
+  height: 22px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.stack-action:not(:disabled):hover,
+.stack-row-close:not(:disabled):hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.stack-action:disabled,
+.stack-row-close:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.stack-action:focus-visible,
+.stack-row-close:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+/* The row's × shows on the active row and on hover or focus of the others. */
+.stack-row-close {
+  flex-shrink: 0;
+  align-self: flex-start;
+  width: 20px;
+  height: 20px;
+  margin: 1px 2px 0 auto;
+  visibility: hidden;
+}
+
+.stack-row:hover .stack-row-close,
+.stack-row:focus-within .stack-row-close,
+.stack-row.active .stack-row-close {
+  visibility: visible;
+}
+
 .stack-list {
   position: absolute;
   top: 30px;
@@ -168,6 +233,13 @@ textarea {
 
 .stack-list li.current {
   background: var(--hover);
+}
+
+/* The stack Ctrl+Tab will switch to when Ctrl is released. */
+.stack-list li.target {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
 }
 
 .stack-list-item {

@@ -5,10 +5,20 @@ export const channels = {
   create: 'stacks:create',
   close: 'stacks:close',
   outline: 'stacks:outline',
-  settings: 'stacks:settings',
-  updateSettings: 'stacks:update-settings',
+  closeNode: 'stacks:close-node',
+  home: 'stacks:home',
+  setHome: 'stacks:set-home',
   stateChanged: 'stacks:state-changed',
+  // A shortcut or File menu item (main → UI), not a state change; the UI runs it like its button.
+  command: 'stacks:command',
 } as const
+
+/**
+ * What Ctrl/Cmd+R, +N and +W (and their File menu items) ask the UI to do, and the steps of
+ * Ctrl+[Shift+]Tab: start or step a cycle through the stacks, then switch (end) or not (cancel).
+ */
+export type StackCommand =
+  'reload' | 'new' | 'close-page' | 'cycle-next' | 'cycle-previous' | 'cycle-end' | 'cycle-cancel'
 
 /** One page in a stack's tree. */
 export interface StackNode {
@@ -32,17 +42,12 @@ export interface Stack {
   activeId: number | null
   nextNodeId: number
   lastUsedAt: number
-  /** The root was opened as the new-stack page: the stack is named after the root's first child. */
+  /** The root was opened as the home page: the stack is named after the root's first child. */
   startRoot?: boolean
 }
 
-/** `userData/stacks-settings.json`. */
-export interface StacksSettings {
-  /** The http(s) page an empty new stack opens as its root; null: new stacks stay empty. */
-  newStackPage: string | null
-}
-
-export const DEFAULT_NEW_STACK_PAGE = 'https://www.bing.com/'
+/** The home page until `/home` changes or clears it. */
+export const DEFAULT_HOME = 'https://www.bing.com/'
 
 /** A row of the tree as the header shows it, in depth-first order. */
 export interface StackRow {
@@ -75,14 +80,19 @@ export interface StacksApi {
   goToNode(nodeId: number): Promise<void>
   /** Makes a stack current (its tab is created if it isn't live). */
   switch(stackId: string): Promise<void>
-  /** Starts an empty stack in a new tab and makes it current. */
+  /** Starts a stack in a new tab at the home page (empty without one) and makes it current. */
   create(): Promise<void>
   close(stackId: string): Promise<void>
+  /** Removes a node of the current stack and its branch; the root closes the whole stack. */
+  closeNode(nodeId: number): Promise<void>
+  /** The URL new stacks open at, or null for an empty stack. */
+  home(): Promise<string | null>
+  /** Sets (an http(s) URL) or clears (null) the home page. */
+  setHome(url: string | null): Promise<void>
   /** The stack's outline as text for the model, or null if no stack has that name. */
   outline(name: string): Promise<string | null>
-  settings(): Promise<StacksSettings>
-  /** Main rejects a page that isn't an http(s) URL. Returns the saved settings. */
-  updateSettings(settings: StacksSettings): Promise<StacksSettings>
   /** Called whenever stacks or the current tree change. Returns an unsubscribe function. */
   onChanged(listener: (state: StacksState) => void): () => void
+  /** Called when a stack shortcut is pressed. Returns an unsubscribe function. */
+  onCommand(listener: (command: StackCommand) => void): () => void
 }

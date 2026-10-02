@@ -11,7 +11,7 @@
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-02 09:00 +00:00 |
-| **Last updated** | 2026-10-02 10:30 +00:00 |
+| **Last updated** | 2026-10-02 20:15 +00:00 |
 | **Affected features** | stacks, prompt |
 | **Target release** | 0.1.0 |
 | **Related links** | [branching-trail-k4w9zp](./branching-trail-k4w9zp.md) (navigation stacks) |
@@ -113,5 +113,6 @@
 ## 14. Changes during implementation
 
 - 2c applies only when the current stack is closed and none is left (closing a background stack never opens one).
-- End-to-end profiles write `stacks-settings.json` with `newStackPage: null` (`e2e/profile.ts`), so e2e never reaches bing.com.
+- End-to-end profiles write a `stacks.json` with `home: null` (`e2e/profile.ts`), so e2e never reaches bing.com.
 - The switcher's and `@name` suggestions' page title for a start-page stack is the first child's, matching its name.
+- Merged with nimble-anchor-w3p8kd (PR #21), which had added the same setting as the home page: `/home <url>|clear`, `stacks:home|set-home`, stored as `home` in `stacks.json`. This spec now builds on it instead of a second setting: no `/new-stack-page`, `stacks:settings|update-settings` or `stacks-settings.json`. Requirement 6 is `/home` plus `/home reset` (bing.com); `off` is `/home clear`. The default `https://www.bing.com/` applies when `stacks.json` has no `home` (first start, a corrupt file); profiles that already saved `home: null` keep new stacks empty. Without a home page, New stack still opens the prompt (nimble-anchor-w3p8kd).

@@ -107,3 +107,118 @@ test('the header shows a branching stack, goes back by clicks and keeps stacks p
     await app.close()
   }
 })
+
+/**
+ * Presses Ctrl+`key` as real input in the page (or the chrome UI): Playwright's keyboard goes
+ * through DevTools and skips `before-input-event`, where the shortcuts are caught.
+ */
+const pressCtrl = (app: ElectronApplication, keyCode: string, target: 'page' | 'ui') =>
+  app.evaluate(
+    ({ BrowserWindow }, { keyCode, target }) => {
+      const window = BrowserWindow.getAllWindows()[0]!
+      const [view] = window.contentView.children
+      const contents =
+        target === 'page' ? (view as Electron.WebContentsView).webContents : window.webContents
+      contents.focus()
+      contents.sendInputEvent({ type: 'keyDown', keyCode, modifiers: ['control'] })
+      contents.sendInputEvent({ type: 'keyUp', keyCode, modifiers: ['control'] })
+    },
+    { keyCode, target },
+  )
+
+test('closes pages with × and Ctrl+W and opens new stacks at the home page with Ctrl+N', async () => {
+  const profile = newProfile()
+  const app = await electron.launch({ args: [...args, `--user-data-dir=${profile}`], env })
+  try {
+    const window = await app.firstWindow()
+    const prompt = window.getByRole('textbox', { name: 'Prompt' })
+    const tree = window.getByRole('tree', { name: 'Navigation stack' })
+    const titles = () =>
+      tree.locator('.stack-row-title').evaluateAll((items) => items.map((item) => item.textContent))
+
+    await prompt.fill(`${origin}/a`)
+    await prompt.press('Enter')
+    await (await pageWindow(app, '/a')).getByRole('link', { name: 'to B' }).click()
+    const b = await pageWindow(app, '/b')
+    await b.getByRole('link', { name: 'to C', exact: true }).click()
+    await expect.poll(titles).toEqual(['Page A', 'Page B', 'Page C'])
+    await expect(window.getByRole('button', { name: 'Reload page' })).toHaveAttribute(
+      'title',
+      /Reload page \((Ctrl|Cmd)\+R\)/,
+    )
+
+    // Ctrl+W in the page closes the active page; its parent is shown.
+    await pageWindow(app, '/c')
+    await pressCtrl(app, 'W', 'page')
+    await expect.poll(titles).toEqual(['Page A', 'Page B'])
+    await expect.poll(() => shownUrl(app)).toBe(`${origin}/b`)
+
+    // The × of a page closes it with everything below it.
+    await tree.getByRole('treeitem').filter({ hasText: 'Page B' }).hover()
+    await window.getByRole('button', { name: 'Close Page B' }).click()
+    await expect.poll(titles).toEqual(['Page A'])
+    await expect.poll(() => shownUrl(app)).toBe(`${origin}/a`)
+
+    // Ctrl+N opens a new stack at the home page.
+    await prompt.fill(`/home ${origin}/c2`)
+    await prompt.press('Enter')
+    await pressCtrl(app, 'N', 'ui')
+    await expect.poll(() => shownUrl(app)).toBe(`${origin}/c2`)
+    await expect.poll(titles).toEqual(['Page C2'])
+  } finally {
+    await app.close()
+  }
+})
+
+test('Ctrl+Tab switches to the previous stack on release, and back again', async () => {
+  const profile = newProfile()
+  const app = await electron.launch({ args: [...args, `--user-data-dir=${profile}`], env })
+  try {
+    const window = await app.firstWindow()
+    const prompt = window.getByRole('textbox', { name: 'Prompt' })
+    const switcher = window.getByRole('button', { name: /^@/ })
+
+    // Two stacks: A → B → C, and the page C opens in a new tab.
+    await prompt.fill(`${origin}/a`)
+    await prompt.press('Enter')
+    await (await pageWindow(app, '/a')).getByRole('link', { name: 'to B' }).click()
+    await (await pageWindow(app, '/b')).getByRole('link', { name: 'to C', exact: true }).click()
+    await (await pageWindow(app, '/c')).getByRole('link', { name: 'new tab' }).click()
+    await expect.poll(() => shownUrl(app)).toBe(`${origin}/other`)
+    await expect(switcher).toHaveText(/@other-root/)
+
+    /** Ctrl down, Tab `times` times, Ctrl up – as real input in the page or the chrome UI. */
+    const ctrlTab = (times: number, target: 'page' | 'ui' = 'page') =>
+      app.evaluate(
+        ({ BrowserWindow }, { times, target }) => {
+          const window = BrowserWindow.getAllWindows()[0]!
+          const [view] = window.contentView.children
+          const page =
+            target === 'page' ? (view as Electron.WebContentsView).webContents : window.webContents
+          page.focus()
+          page.sendInputEvent({ type: 'keyDown', keyCode: 'Control', modifiers: ['control'] })
+          for (let i = 0; i < times; i++) {
+            page.sendInputEvent({ type: 'keyDown', keyCode: 'Tab', modifiers: ['control'] })
+            page.sendInputEvent({ type: 'keyUp', keyCode: 'Tab', modifiers: ['control'] })
+          }
+          page.sendInputEvent({ type: 'keyUp', keyCode: 'Control' })
+        },
+        { times, target },
+      )
+
+    await ctrlTab(1)
+    await expect.poll(() => shownUrl(app)).toBe(`${origin}/c`)
+    await expect(switcher).toHaveText(/@page-a/)
+    // Also with focus in the prompt.
+    await prompt.focus()
+    await ctrlTab(1, 'ui')
+    await expect.poll(() => shownUrl(app)).toBe(`${origin}/other`)
+    await expect(switcher).toHaveText(/@other-root/)
+    // Twice around two stacks lands on the current one: nothing changes.
+    await ctrlTab(2)
+    await expect(window.getByRole('dialog', { name: 'Stacks' })).toBeHidden()
+    await expect.poll(() => shownUrl(app)).toBe(`${origin}/other`)
+  } finally {
+    await app.close()
+  }
+})

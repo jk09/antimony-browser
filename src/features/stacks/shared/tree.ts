@@ -291,3 +291,25 @@ export function trimToActive(stack: Stack): void {
   stack.rootId = node.id
   delete stack.startRoot
 }
+
+/**
+ * Removes a node below the root and every node under it. If the active node was among them its
+ * parent becomes active; returns whether that happened (the caller loads the parent).
+ */
+export function removeBranch(stack: Stack, nodeId: number): boolean {
+  const node = stack.nodes[nodeId]
+  if (!node || node.parentId === null) throw new RangeError('removeBranch expects a non-root node')
+  const parent = stack.nodes[node.parentId]!
+  parent.children = parent.children.filter((id) => id !== nodeId)
+  const removed = new Set<number>()
+  const queue = [nodeId]
+  while (queue.length > 0) {
+    const id = queue.pop()!
+    removed.add(id)
+    queue.push(...stack.nodes[id]!.children)
+    delete stack.nodes[id]
+  }
+  if (stack.activeId === null || !removed.has(stack.activeId)) return false
+  stack.activeId = parent.id
+  return true
+}

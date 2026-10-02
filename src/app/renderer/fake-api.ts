@@ -12,7 +12,7 @@ import type { MenuEntry, RunResult } from '../../features/menu/ipc'
 import type { NavigationState } from '../../features/navigation/ipc'
 import { toUrl } from '../../features/navigation/shared/to-url'
 import type { Skill } from '../../features/skills/ipc'
-import type { StacksState } from '../../features/stacks/ipc'
+import type { StackCommand, StacksState } from '../../features/stacks/ipc'
 import type { AntimonyApi } from '../../shared/api'
 
 type Listener<T> = (value: T) => void
@@ -73,6 +73,8 @@ export function fakeApi(
   const historyChanged = channel<void>()
   const historySettings = channel<HistorySettings>()
   const stacks = channel<StacksState>()
+  const stackCommand = channel<StackCommand>()
+  let home: string | null = null
   const currentSettings = { ...defaultSettings, ...options.settings }
 
   const api = {
@@ -149,9 +151,13 @@ export function fakeApi(
       create: vi.fn(async () => {}),
       close: vi.fn(async (_stackId: string) => {}),
       outline: vi.fn(async (name: string) => `Navigation stack @${name}`),
-      settings: vi.fn(async () => ({ newStackPage: 'https://www.bing.com/' as string | null })),
-      updateSettings: vi.fn(async (settings: { newStackPage: string | null }) => settings),
+      closeNode: vi.fn(async (_nodeId: number) => {}),
+      home: vi.fn(async () => home),
+      setHome: vi.fn(async (url: string | null) => {
+        home = url
+      }),
       onChanged: stacks.subscribe,
+      onCommand: stackCommand.subscribe,
     },
   } satisfies AntimonyApi
 
@@ -171,6 +177,7 @@ export function fakeApi(
       historyOpen: historyOpen.emit,
       historyChanged: () => historyChanged.emit(),
       stacks: stacks.emit,
+      stackCommand: stackCommand.emit,
     },
   }
 }
