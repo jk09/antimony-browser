@@ -14,6 +14,11 @@
   --error: #d93025;
   --ok: #188038;
   --code-bg: #f6f7f8;
+  --cloud-0: #c96442;
+  --cloud-1: #1a73e8;
+  --cloud-2: #188038;
+  --cloud-3: #8e44ad;
+  --cloud-4: #b06000;
   font-family: system-ui, sans-serif;
   font-size: 13px;
 }
@@ -34,6 +39,11 @@
     --error: #f28b82;
     --ok: #81c995;
     --code-bg: #262524;
+    --cloud-0: #d97757;
+    --cloud-1: #8ab4f8;
+    --cloud-2: #81c995;
+    --cloud-3: #c58af9;
+    --cloud-4: #fdd663;
   }
 }
 
@@ -1222,4 +1232,271 @@ textarea {
   background: none;
   color: var(--text);
   font-weight: 600;
+}
+
+/* Recall (history): a keyword or picture cloud over the page area, which shrinks to nothing. */
+
+.workspace:has(> .recall-view) > .acting-frame {
+  flex: 0 0 0;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.recall-view {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 8px 12px;
+  background: var(--toolbar-bg);
+}
+
+.recall-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.recall-header h2 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.recall-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.recall-request {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 220px;
+}
+
+.recall-request input[type='search'] {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--field-border);
+  border-radius: 6px;
+  background: var(--field-bg);
+  color: var(--text);
+}
+
+.recall-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.recall-controls button,
+.recall-sketch button {
+  padding: 2px 8px;
+  border: 1px solid var(--field-border);
+  border-radius: 6px;
+  background: var(--field-bg);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.recall-controls [role='radio'][aria-checked='true'],
+.recall-controls button[type='submit'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.recall-controls button:disabled,
+.recall-sketch button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.recall-hint,
+.recall-notice {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.recall-notice.error {
+  color: var(--error);
+}
+
+.recall-sketch {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.recall-sketch canvas {
+  width: 240px;
+  height: 160px;
+  border: 1px solid var(--field-border);
+  border-radius: 6px;
+  background: #ffffff;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.recall-body {
+  display: flex;
+  flex: 1;
+  gap: 12px;
+  min-height: 0;
+}
+
+.recall-cloud {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.recall-cloud-items {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  transform-origin: center;
+}
+
+.recall-cloud-items > li {
+  position: absolute;
+  display: grid;
+  place-items: center;
+}
+
+.recall-word {
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.recall-word:hover,
+.recall-word[aria-pressed='true'] {
+  background: var(--hover);
+  text-decoration: underline;
+}
+
+.recall-colour-0 {
+  color: var(--cloud-0);
+}
+.recall-colour-1 {
+  color: var(--cloud-1);
+}
+.recall-colour-2 {
+  color: var(--cloud-2);
+}
+.recall-colour-3 {
+  color: var(--cloud-3);
+}
+.recall-colour-4 {
+  color: var(--cloud-4);
+}
+
+.recall-tile {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--field-border);
+  border-radius: 8px;
+  background: var(--card-bg);
+  cursor: pointer;
+}
+
+.recall-tile:hover {
+  border-color: var(--accent);
+}
+
+.recall-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+}
+
+.recall-tile-title {
+  display: block;
+  padding: 6px;
+  overflow: hidden;
+  font-size: 12px;
+  text-align: left;
+}
+
+.recall-pages {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 280px;
+  overflow: auto;
+}
+
+.recall-pages h3 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.recall-pages ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recall-pages button {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  width: 100%;
+  padding: 4px;
+  border: 1px solid var(--field-border);
+  border-radius: 6px;
+  background: var(--card-bg);
+  cursor: pointer;
+  text-align: left;
+}
+
+.recall-pages img {
+  grid-row: span 2;
+  width: 72px;
+  height: 45px;
+  object-fit: cover;
+  object-position: top;
+}
+
+.recall-page-title {
+  grid-column: 2;
+  overflow: hidden;
+  color: var(--focus);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recall-page-url {
+  grid-column: 2;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

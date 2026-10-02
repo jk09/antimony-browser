@@ -191,11 +191,28 @@ describe('agent main', () => {
       },
     ])
 
+    // Labelled images: each label, then its image, before the text.
+    await complete({
+      system: 'sys',
+      text: 'which?',
+      images: [
+        { label: 'Sketch:', jpegBase64: 'SSSS' },
+        { label: 'Page 7:', jpegBase64: 'PPPP' },
+      ],
+    })
+    expect(JSON.parse(fetch.mock.calls[1]![1]!.body as string).messages[0].content).toEqual([
+      { type: 'text', text: 'Sketch:' },
+      { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'SSSS' } },
+      { type: 'text', text: 'Page 7:' },
+      { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'PPPP' } },
+      { type: 'text', text: 'which?' },
+    ])
+
     // Claude without a key: rejected, nothing sent.
     call(channels.setKey, null)
     call(channels.updateSettings, { model: 'claude-sonnet-5-5' })
     await expect(complete({ system: 's', text: 't' })).rejects.toThrow(/key/)
-    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(fetch).toHaveBeenCalledTimes(2)
   })
 
   it('runs Claude Code CLI models through the CLI, without the API key, and resumes its session', async () => {

@@ -17,6 +17,14 @@ export const historyBridge: HistoryApi = {
     ipcRenderer.on(channels.open, wrapped)
     return () => ipcRenderer.off(channels.open, wrapped)
   },
+  recall: (request) => ipcRenderer.invoke(channels.recall, request),
+  cancelRecall: () => ipcRenderer.invoke(channels.cancelRecall),
+  requestRecall: (query) => ipcRenderer.invoke(channels.requestRecall, query),
+  onOpenRecall: (listener) => {
+    const wrapped = (_: unknown, query: string) => listener(query)
+    ipcRenderer.on(channels.openRecall, wrapped)
+    return () => ipcRenderer.off(channels.openRecall, wrapped)
+  },
   onChanged: (listener) => {
     const wrapped = () => listener()
     ipcRenderer.on(channels.changed, wrapped)

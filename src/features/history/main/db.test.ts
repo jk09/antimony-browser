@@ -260,6 +260,26 @@ describe('HistoryDb', () => {
     ])
     expect(db.pages([999, a.pageId], true).map((page) => page.id)).toEqual([a.pageId])
   })
+
+  it('lists recent pages with a screenshot for recall by sketch', () => {
+    const a = visit('https://example.com/a', NOW - DAY)
+    const b = visit('https://example.com/b', NOW)
+    visit('https://example.com/c', NOW)
+    for (const { visitId, pageId } of [a, b]) {
+      db.addDwell(visitId, HIGH_DWELL_MS)
+      db.setScreenshot(pageId, new Uint8Array([0xff, 0xd8]), NOW)
+    }
+    expect(db.recentWithScreenshot(10)).toEqual([b.pageId, a.pageId])
+    expect(db.recentWithScreenshot(1)).toEqual([b.pageId])
+    expect(db.candidates([a.pageId])).toEqual([expect.objectContaining({ hasScreenshot: true })])
+    expect(
+      db
+        .explain(
+          'SELECT id FROM pages WHERE screenshot_at IS NOT NULL ORDER BY last_visit_at DESC LIMIT 5',
+        )
+        .join(' '),
+    ).toMatch(/pages_last_visit/)
+  })
 })
 
 describe('HistoryDb on disk', () => {

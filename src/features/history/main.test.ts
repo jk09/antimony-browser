@@ -17,6 +17,15 @@ vi.mock('electron', () => ({
     },
   },
   powerMonitor: { getSystemIdleTime: () => 0, on: vi.fn() },
+  nativeImage: {
+    createFromBuffer: (buffer: Buffer) => ({
+      isEmpty: () => buffer.length === 0,
+      getSize: () => ({ width: 800, height: 500 }),
+      resize: ({ width }: { width: number }) => ({
+        toJPEG: () => Buffer.from(`small-${width}-${buffer.toString('hex')}`),
+      }),
+    }),
+  },
 }))
 
 const complete = vi.fn()
@@ -42,7 +51,7 @@ vi.mock('../navigation/main', () => ({
   },
 }))
 
-const { register, parseOpen, parseSearch } = await import('./main')
+const { register, parseOpen, parseRecallRequest, parseSearch } = await import('./main')
 const { channels, HIGH_DWELL_MS } = await import('./ipc')
 
 const meta = (overrides: Partial<PageMeta> = {}): PageMeta => ({
@@ -124,6 +133,14 @@ describe('history main', () => {
       [channels.updateSettings, { other: true }],
       [channels.requestOpen, { query: 1 }],
       [channels.requestOpen, { path: '/etc' }],
+      [channels.recall, { query: '', sketch: null }],
+      [channels.recall, { query: 'x'.repeat(501), sketch: null }],
+      [channels.recall, { query: 'a', sketch: 'data:image/png;base64,AAAA' }],
+      [channels.recall, { query: 'a', sketch: 'data:image/jpeg;base64,<script>' }],
+      [channels.recall, { query: 'a', sketch: `data:image/jpeg;base64,${'A'.repeat(1_000_000)}` }],
+      [channels.recall, { query: 'a', sketch: null, view: 'words' }],
+      [channels.recall, 'lions'],
+      [channels.requestRecall, 42],
     ]
     for (const [channel, ...args] of bad) {
       expect(() => call(channel, ...args), `${channel} ${JSON.stringify(args)}`).toThrow(TypeError)
@@ -134,6 +151,9 @@ describe('history main', () => {
       bookmarked: true,
     })
     expect(parseOpen(undefined)).toEqual({})
+    expect(
+      parseRecallRequest({ query: ' lions ', sketch: 'data:image/jpeg;base64,/9j/AA==' }),
+    ).toEqual({ query: 'lions', sketch: 'data:image/jpeg;base64,/9j/AA==' })
   })
 
   it('records visits from page events and serves suggestions, search and the current page', async () => {
@@ -286,6 +306,116 @@ describe('history main', () => {
     })) as { pages: { id: number }[]; notice?: string }
     expect(fallback.pages.map((p) => p.id)).toEqual([a.id])
     expect(fallback.notice).toMatch(/No Anthropic API key/)
+  })
+
+  it('recalls pages with keywords, and sends screenshots only with a sketch', async () => {
+    const { call, page } = setup()
+    page({ type: 'navigated', url: 'https://example.com/lions', status: 200, transition: 'link' })
+    await vi.advanceTimersByTimeAsync(HIGH_DWELL_MS + 5000)
+    const lions = call(channels.current) as { id: number }
+    call(channels.setNote, lions.id, 'lions on the savanna')
+    page({ type: 'navigated', url: 'https://example.com/tax', status: 200, transition: 'link' })
+    const tax = call(channels.current) as { id: number }
+    call(channels.setNote, tax.id, 'tax forms')
+
+    complete.mockResolvedValue({
+      text: JSON.stringify({
+        view: 'words',
+        pages: [{ id: lions.id, score: 0.9, keywords: ['Lions', 'savanna'] }],
+      }),
+      model: 'm',
+    })
+    const result = (await call(channels.recall, {
+      query: 'show all pages about lions',
+      sketch: null,
+    })) as {
+      view: string
+      pages: { id: number; score: number; keywords: string[] }[]
+      keywords: unknown[]
+    }
+    expect(result).toEqual({
+      view: 'words',
+      pages: [
+        expect.objectContaining({ id: lions.id, score: 0.9, keywords: ['lions', 'savanna'] }),
+      ],
+      keywords: [
+        { text: 'lions', weight: 0.9, pageIds: [lions.id] },
+        { text: 'savanna', weight: 0.9, pageIds: [lions.id] },
+      ],
+    })
+    const [request] = complete.mock.calls[0]! as [{ text: string; images?: unknown[] }]
+    expect(request.text).toContain('<untrusted_history>')
+    expect(request.text).toContain('Request: show all pages about lions')
+    expect(request.images).toBeUndefined()
+
+    // A sketch: the sketch first, then the screenshots of candidates that have one, scaled down.
+    complete.mockResolvedValue({ text: '{"view":"images","pages":[]}', model: 'm' })
+    const sketched = (await call(channels.recall, {
+      query: '',
+      sketch: 'data:image/jpeg;base64,/9j/SKETCH',
+    })) as { view: string; pages: unknown[] }
+    expect(sketched).toEqual({ view: 'images', pages: [], keywords: [] })
+    const [withSketch] = complete.mock.calls[1]! as [
+      { text: string; images: { label: string; jpegBase64: string }[] },
+    ]
+    expect(withSketch.text).toContain('The first image is the sketch')
+    expect(withSketch.images).toEqual([
+      { label: 'Sketch:', jpegBase64: '/9j/SKETCH' },
+      {
+        label: `Screenshot of page ${lions.id}:`,
+        jpegBase64: Buffer.from('small-320-ffd801').toString('base64'),
+      },
+    ])
+  })
+
+  it('falls back to text matches with title keywords when the model fails', async () => {
+    const { call, page } = setup()
+    pageMeta = meta({ title: 'Lions of the Serengeti', text: 'Lions hunt at dusk.' })
+    page({ type: 'navigated', url: 'https://example.com/lions', status: 200, transition: 'link' })
+    page({ type: 'loaded', url: 'https://example.com/lions' })
+    await vi.advanceTimersByTimeAsync(1500)
+
+    complete.mockRejectedValue(new Error('No Anthropic API key is set.'))
+    const result = (await call(channels.recall, { query: 'lions', sketch: null })) as {
+      pages: { url: string }[]
+      keywords: { text: string }[]
+      notice: string
+    }
+    expect(result.pages.map((p) => p.url)).toEqual(['https://example.com/lions'])
+    expect(result.keywords.map((k) => k.text)).toEqual(['lions', 'serengeti'])
+    expect(result.notice).toMatch(/No Anthropic API key.*text matches/)
+
+    call(channels.setNote, (call(channels.current) as { id: number }).id, 'big cats')
+    const sketchOnly = (await call(channels.recall, {
+      query: '',
+      sketch: 'data:image/jpeg;base64,/9j/',
+    })) as { pages: unknown[]; notice: string }
+    expect(sketchOnly.pages).toEqual([])
+    expect(sketchOnly.notice).toMatch(/Recall failed \(No Anthropic API key/)
+  })
+
+  it('cancels a recall in flight, answering it with nothing', async () => {
+    const { call, page } = setup()
+    page({ type: 'navigated', url: 'https://example.com/a', status: 200, transition: 'link' })
+    const a = call(channels.current) as { id: number }
+    call(channels.setNote, a.id, 'lions')
+    complete.mockImplementation(
+      ({ signal }: { signal: AbortSignal }) =>
+        new Promise((_, reject) => signal.addEventListener('abort', () => reject(signal.reason))),
+    )
+    const pending = call(channels.recall, { query: 'lions', sketch: null }) as Promise<unknown>
+    call(channels.cancelRecall)
+    expect(await pending).toEqual({ view: 'words', pages: [], keywords: [] })
+  })
+
+  it('adds File → Recall from History… (Ctrl/Cmd+Shift+Y) and opens Recall from /recall', () => {
+    const { ctx, call } = setup()
+    const item = ctx.fileMenu.find((entry) => entry.id === 'recall')!
+    expect(item).toMatchObject({ label: 'Recall from History…', accelerator: 'CmdOrCtrl+Shift+Y' })
+    ;(item.click as () => void)()
+    expect(ctx.ipc.send).toHaveBeenCalledWith(channels.openRecall, '')
+    call(channels.requestRecall, 'lions')
+    expect(ctx.ipc.send).toHaveBeenCalledWith(channels.openRecall, 'lions')
   })
 
   it('adds File → Note This Page… (Ctrl/Cmd+D), which opens the note editor', () => {
