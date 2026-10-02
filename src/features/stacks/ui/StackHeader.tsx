@@ -49,6 +49,12 @@ const hint = (command: StackCommand) => shortcutLabel(command, platform())
 const ariaShortcut = (command: StackCommand) =>
   hint(command).replace(/^Cmd/, 'Meta').replace(/^Ctrl/, 'Control')
 
+/** A Ctrl+Tab cycle: stack ids, most recently used first, and the highlighted index. */
+interface Cycle {
+  order: string[]
+  index: number
+}
+
 /** Moves focus between the tree's rows and ellipsis buttons with ↑ ↓ Home End. */
 function moveFocus(event: KeyboardEvent<HTMLElement>) {
   const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('[data-tree-item]'))
@@ -267,10 +273,40 @@ export function StackHeader() {
     if (!running && activeId !== null) api.stacks.closeNode(activeId).catch(report)
   }
 
-  // Ctrl/Cmd+R, +N and +W from main (caught in the page or the chrome UI) do what the buttons do.
-  const commands = useRef({ reload, newStack, closeActive })
+  // Ctrl+[Shift+]Tab: the stacks as they were when the cycle started (most recent first) and the
+  // highlighted one; releasing Ctrl switches to it. The ref is what the handlers read.
+  const cycleRef = useRef<Cycle | null>(null)
+  const [cycle, setCycleState] = useState<Cycle | null>(null)
+  const setCycle = (next: Cycle | null) => {
+    cycleRef.current = next
+    setCycleState(next)
+    setListOpen(next !== null)
+  }
+  const cycleStep = (step: 1 | -1) => {
+    const open = cycleRef.current
+    if (open) {
+      const count = open.order.length
+      setCycle({ ...open, index: (open.index + step + count) % count })
+      return
+    }
+    const order = (stacks?.stacks ?? []).map((stack) => stack.id)
+    if (running || order.length < 2) return
+    setCycle({ order, index: step === 1 ? 1 : order.length - 1 })
+  }
+  const cycleEnd = (switchTo: boolean) => {
+    const open = cycleRef.current
+    if (!open) return
+    setCycle(null)
+    const target = open.order[open.index]!
+    const known = stacks?.stacks.some((stack) => stack.id === target)
+    if (switchTo && known && target !== current?.id) api.stacks.switch(target).catch(report)
+  }
+
+  // Ctrl/Cmd+R, +N, +W and Ctrl+Tab from main (caught in the page or the chrome UI) do what the
+  // buttons and the stack list do.
+  const commands = useRef({ reload, newStack, closeActive, cycleStep, cycleEnd })
   useEffect(() => {
-    commands.current = { reload, newStack, closeActive }
+    commands.current = { reload, newStack, closeActive, cycleStep, cycleEnd }
   })
   useEffect(
     () =>
@@ -278,10 +314,14 @@ export function StackHeader() {
         const run = commands.current
         if (command === 'reload') run.reload()
         else if (command === 'new') run.newStack()
-        else run.closeActive()
+        else if (command === 'close-page') run.closeActive()
+        else if (command === 'cycle-next') run.cycleStep(1)
+        else if (command === 'cycle-previous') run.cycleStep(-1)
+        else run.cycleEnd(command === 'cycle-end')
       }),
     [api],
   )
+  const target = cycle ? cycle.order[cycle.index] : undefined
 
   return (
     <div className="stack-header">
@@ -291,7 +331,8 @@ export function StackHeader() {
           className="stack-name"
           aria-haspopup="dialog"
           aria-expanded={listOpen}
-          title={blocked ?? 'Switch stack'}
+          title={blocked ?? 'Switch stack (Ctrl+Tab)'}
+          aria-keyshortcuts="Control+Tab"
           onClick={() => setListOpen((open) => !open)}
         >
           {name ? `@${name}` : 'New tab'} <span aria-hidden="true">▾</span>
@@ -334,7 +375,15 @@ export function StackHeader() {
             {blocked && <p className="stack-list-note">{blocked}</p>}
             <ul>
               {(stacks?.stacks ?? []).map((stack) => (
-                <li key={stack.id} className={stack.id === current?.id ? 'current' : undefined}>
+                <li
+                  key={stack.id}
+                  className={
+                    [stack.id === current?.id && 'current', stack.id === target && 'target']
+                      .filter(Boolean)
+                      .join(' ') || undefined
+                  }
+                  aria-selected={target === undefined ? undefined : stack.id === target}
+                >
                   <button
                     type="button"
                     className="stack-list-item"

@@ -1,11 +1,11 @@
 # stacks
 
-Shows each tab's navigation in the assistant panel header as a vertical, branching tree of breadcrumbs: click any page to go back (or forward) to it without changing the tree, and follow another link to start a branch. Links that open a new tab start a new stack in its own live tab; stacks are named after their first page, switched in the header or with `@name` in the prompt (`@name` inside a question attaches the stack's outline for the model) and come back after a restart. Buttons at the top reload the selected page (Ctrl/Cmd+R) and open a new stack at the home page set with `/home` (Ctrl/Cmd+N); each page's × closes it with its branch (Ctrl/Cmd+W the selected one).
+Shows each tab's navigation in the assistant panel header as a vertical, branching tree of breadcrumbs: click any page to go back (or forward) to it without changing the tree, and follow another link to start a branch. Links that open a new tab start a new stack in its own live tab; stacks are named after their first page, switched in the header or with `@name` in the prompt (`@name` inside a question attaches the stack's outline for the model) and come back after a restart. Buttons at the top reload the selected page (Ctrl/Cmd+R) and open a new stack at the home page set with `/home` (Ctrl/Cmd+N); each page's × closes it with its branch (Ctrl/Cmd+W the selected one). Ctrl+Tab returns to the previously used stack; holding Ctrl and pressing Tab again walks older ones in the open list, releasing switches.
 
 ## Entry points
 - UI: `ui/StackHeader.tsx` – the panel's `header` slot (`App.tsx`): switcher (`@name ▾`: list, switch, close, New stack; disabled while the assistant runs), ↻ Reload and + New stack buttons (hints name the shortcuts), the tree with a × per row (Delete on a focused row; disabled while the assistant runs) (at most 8 lines and 35 % of the window; longer trees collapse to root, `⋯ N more`, the rows around the active one) and the full-stack overlay
-- IPC: `stacks:state|go-to-node|switch|create|close|close-node|outline|home|set-home` (UI → main), `stacks:state-changed` (main → UI, batched per 16 ms), `stacks:command` (main → UI: `reload|new|close-page`, run like the buttons) – `ipc.ts`
-- Main: `register` in `main.ts` – one stack per navigation tab; applies `onPageEvent` navigations to the tree, starts navigations from nodes (nearest session-history entry via `goToIndex`, else a load), is navigation's history resolver (back = parent, forward = last visited child), restores the current stack's tab at start; File → Reload Page / New Stack / Close Page (Ctrl/Cmd+R, N, W, also caught in `before-input-event` of the chrome UI and every browsing-session webContents, like Ctrl/Cmd+B); a new stack without a home page opens the prompt
+- IPC: `stacks:state|go-to-node|switch|create|close|close-node|outline|home|set-home` (UI → main), `stacks:state-changed` (main → UI, batched per 16 ms), `stacks:command` (main → UI: `reload|new|close-page`, run like the buttons; `cycle-next|cycle-previous|cycle-end|cycle-cancel` for Ctrl+[Shift+]Tab, the UI keeps the most-recently-used snapshot and the highlight) – `ipc.ts`
+- Main: `register` in `main.ts` – one stack per navigation tab; applies `onPageEvent` navigations to the tree, starts navigations from nodes (nearest session-history entry via `goToIndex`, else a load), is navigation's history resolver (back = parent, forward = last visited child), restores the current stack's tab at start; File → Reload Page / New Stack / Close Page (Ctrl/Cmd+R, N, W, also caught in `before-input-event` of the chrome UI and every browsing-session webContents, like Ctrl/Cmd+B); a new stack without a home page opens the prompt; Ctrl+[Shift+]Tab passes through `before-input-event` unconsumed (a consumed key-down makes Chromium drop the key-up of Ctrl, which ends the cycle), Escape cancels, window blur cancels; File → Next/Previous Stack show the keys unregistered and step once
 - Shared: `shared/tree.ts` (tree updates, names, collapse layout, outline, pruning, `removeBranch`), `shared/stored.ts` (`stacks.json` validation), `shared/keys.ts` (shortcuts and their hints)
 
 ## Invariants
@@ -16,6 +16,7 @@ Shows each tab's navigation in the assistant panel header as a vertical, branchi
 - Only the current stack gets a tab at start; others when switched to – `main.test.ts › persists stacks…`
 - IPC arguments must name an open stack or a node of the current one; the home page is http(s) or null – `main.test.ts › starts a new stack…`, `› opens new stacks at the home page…`
 - Closing a page removes its branch; if it held the active page the parent loads; the root closes the stack – `shared/tree.test.ts › removes a branch…`, `main.test.ts › closes a page…`, `e2e/stacks.spec.ts › closes pages…`
+- Ctrl+Tab cycles most recent first, wraps, switches on Ctrl up, cancels on Escape or blur, never while the assistant runs – `main.test.ts › sends the Ctrl+Tab cycle…`, `ui/StackHeader.test.tsx › cycles through stacks…`, `e2e/stacks.spec.ts › Ctrl+Tab switches…`
 - Ctrl/Cmd+R, N, W reach the UI whether the page or the chrome UI has focus; New stack and Close page do nothing while the assistant runs – `main.test.ts › sends Ctrl/Cmd+R…`, `ui/StackHeader.test.tsx › neither closes…`
 - At most 50 stacks, 500 nodes each (old leaves off the active path go); `/history-clear all` keeps only the current stack's active page – `main.test.ts`, `shared/tree.test.ts › prunes…`
 
@@ -26,7 +27,7 @@ Shows each tab's navigation in the assistant panel header as a vertical, branchi
 
 ## Security surface
 - IPC: the chrome UI reads stacks and their outlines, loads a stack node's URL (only http(s), checked by navigation), switches, creates and closes stacks, closes pages and sets the home page (http(s) only).
-- Keys: consumes Ctrl/Cmd+R, N and W before web pages see them.
+- Keys: consumes Ctrl/Cmd+R, N and W before web pages see them (and Escape while cycling); sees Ctrl+Tab and the Ctrl key-up without consuming them.
 - Web content: – (new-tab handling is navigation's)
 
 ## Feature flags
@@ -34,4 +35,4 @@ Shows each tab's navigation in the assistant panel header as a vertical, branchi
 |---|---|---|---|
 | – | | | |
 
-Spec: branching-trail-k4w9zp, nimble-anchor-w3p8kd · ADRs: 0008
+Spec: branching-trail-k4w9zp, nimble-anchor-w3p8kd, swift-carousel-t6m2xa · ADRs: 0008
