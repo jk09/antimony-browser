@@ -110,6 +110,24 @@ test('the header shows a branching stack, goes back by clicks and keeps stacks p
   }
 })
 
+/**
+ * Presses Ctrl+`key` as real input in the page (or the chrome UI): Playwright's keyboard goes
+ * through DevTools and skips `before-input-event`, where the shortcuts are caught.
+ */
+const pressCtrl = (app: ElectronApplication, keyCode: string, target: 'page' | 'ui') =>
+  app.evaluate(
+    ({ BrowserWindow }, { keyCode, target }) => {
+      const window = BrowserWindow.getAllWindows()[0]!
+      const [view] = window.contentView.children
+      const contents =
+        target === 'page' ? (view as Electron.WebContentsView).webContents : window.webContents
+      contents.focus()
+      contents.sendInputEvent({ type: 'keyDown', keyCode, modifiers: ['control'] })
+      contents.sendInputEvent({ type: 'keyUp', keyCode, modifiers: ['control'] })
+    },
+    { keyCode, target },
+  )
+
 test('closes pages with × and Ctrl+W and opens new stacks at the home page with Ctrl+N', async () => {
   const profile = mkdtempSync(join(tmpdir(), 'antimony-e2e-'))
   const app = await electron.launch({ args: [...args, `--user-data-dir=${profile}`], env })
@@ -131,9 +149,9 @@ test('closes pages with × and Ctrl+W and opens new stacks at the home page with
       /Reload page \((Ctrl|Cmd)\+R\)/,
     )
 
-    // Ctrl/Cmd+W in the page closes the active page; its parent is shown.
-    const c = await pageWindow(app, '/c')
-    await c.keyboard.press('ControlOrMeta+w')
+    // Ctrl+W in the page closes the active page; its parent is shown.
+    await pageWindow(app, '/c')
+    await pressCtrl(app, 'W', 'page')
     await expect.poll(titles).toEqual(['Page A', 'Page B'])
     await expect.poll(() => shownUrl(app)).toBe(`${origin}/b`)
 
@@ -143,10 +161,10 @@ test('closes pages with × and Ctrl+W and opens new stacks at the home page with
     await expect.poll(titles).toEqual(['Page A'])
     await expect.poll(() => shownUrl(app)).toBe(`${origin}/a`)
 
-    // Ctrl/Cmd+N opens a new stack at the home page.
+    // Ctrl+N opens a new stack at the home page.
     await prompt.fill(`/home ${origin}/c2`)
     await prompt.press('Enter')
-    await window.keyboard.press('ControlOrMeta+n')
+    await pressCtrl(app, 'N', 'ui')
     await expect.poll(() => shownUrl(app)).toBe(`${origin}/c2`)
     await expect.poll(titles).toEqual(['Page C2'])
   } finally {
