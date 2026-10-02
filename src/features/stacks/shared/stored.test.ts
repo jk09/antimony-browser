@@ -35,12 +35,22 @@ describe('stored stacks', () => {
     ).toThrow(TypeError)
   })
 
-  it('defaults the home page to bing.com only in files without one', () => {
+  it('keeps the home page of version 2 files, null included', () => {
+    const home = (value: unknown) =>
+      parseStoredStacks({ version: 2, current: null, stacks: [], home: value }).home
+    expect(home(null)).toBeNull()
+    expect(home('https://a.example/')).toBe('https://a.example/')
+    expect(home('file:///etc')).toBeNull()
+  })
+
+  it('defaults the home page to bing.com in older files without a web URL', () => {
+    // Older versions saved null when no home page was set.
     expect(parseStoredStacks({ current: null, stacks: [] }).home).toBe('https://www.bing.com/')
-    expect(parseStoredStacks({ current: null, stacks: [], home: null }).home).toBeNull()
+    expect(parseStoredStacks({ current: null, stacks: [], home: null }).home).toBe(
+      'https://www.bing.com/',
+    )
     expect(parseStoredStacks({ current: null, stacks: [], home: 'https://a.example/' }).home).toBe(
       'https://a.example/',
     )
-    expect(parseStoredStacks({ current: null, stacks: [], home: 'file:///etc' }).home).toBeNull()
   })
 })

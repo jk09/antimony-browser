@@ -12,7 +12,7 @@ Shows each tab's navigation in the assistant panel header as a vertical, branchi
 - Following links builds A → B → C; going to a node only moves the active one; a link from B after going back adds a sibling branch – `shared/tree.test.ts`, `e2e/stacks.spec.ts`
 - Same page (ignoring the fragment) or a known child is reused, never duplicated; reload and replaceState update the active node – `shared/tree.test.ts`
 - Names are slugs of the root title (else host), ≤ 32 chars, unique with `-2`…, set once; a stack opened at the home page uses the root's first child – `shared/tree.test.ts › names stacks…`, `› names a stack opened on the new-stack page…`
-- With a home page, a stack opens at it at start and after the last stack closes; never for link-opened stacks; files without `home` get bing.com – `main.test.ts › opens a new stack at the default home page…`, `› opens nothing at start…`, `shared/stored.test.ts`
+- With a home page, a stack opens at it at start and after the last stack closes; never for link-opened stacks; files before `version: 2` without a web URL `home` get bing.com – `main.test.ts › opens a new stack at the default home page…`, `› opens nothing at start…`, `shared/stored.test.ts`
 - The collapsed tree never hides the active row – `shared/tree.test.ts › collapses…`, `ui/StackHeader.test.tsx`
 - Only the current stack gets a tab at start; others when switched to – `main.test.ts › persists stacks…`
 - IPC arguments must name an open stack or a node of the current one; the home page is http(s) or null – `main.test.ts › starts a new stack…`, `› opens new stacks at the home page…`
@@ -24,7 +24,7 @@ Shows each tab's navigation in the assistant panel header as a vertical, branchi
 ## Dependencies
 - Features: navigation (`getTabs`, `onPageEvent`, `setHistoryResolver` from `main.ts`; `navigation.reload` bridge), history (`onHistoryCleared` from `main.ts`), agent (`AgentState` type: switching is disabled while it runs), prompt (`prompt:open` channel to focus the prompt for an empty new stack); prompt hosts the header and calls this bridge for `@name` and `/home`
 - App: `createJsonStore`
-- Stored data: `userData/stacks.json` (names, URLs and titles of open stacks' pages; closing a stack or page deletes it; the home page URL, bing.com when the file has none, removed by `/home clear`)
+- Stored data: `userData/stacks.json` (names, URLs and titles of open stacks' pages; closing a stack or page deletes it; the home page URL, bing.com when a file older than `version: 2` has none, removed by `/home clear`)
 
 ## Security surface
 - IPC: the chrome UI reads stacks and their outlines, loads a stack node's URL (only http(s), checked by navigation), switches, creates and closes stacks, closes pages and sets the home page (http(s) only). By default new stacks load bing.com, so a first start contacts it; `/home clear` stops that.
