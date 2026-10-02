@@ -5,7 +5,9 @@ import type { MainContext } from '../../app/main/features'
 import { createJsonStore } from '../../app/main/json-store'
 import { onHistoryCleared } from '../history/main'
 import { getTabs, onPageEvent, setHistoryResolver, type PageEvent } from '../navigation/main'
-import { channels, type Stack, type StacksState } from './ipc'
+import { channels as promptChannels } from '../prompt/ipc'
+import { channels, type Stack, type StackCommand, type StacksState } from './ipc'
+import { stackCommandFor } from './shared/keys'
 import { parseStoredStacks, type StoredStacks } from './shared/stored'
 import {
   backTarget,
@@ -17,25 +19,39 @@ import {
   nodeCount,
   outline,
   prune,
+  removeBranch,
   rows,
   setTitle,
   trimToActive,
 } from './shared/tree'
 
 const PUBLISH_DELAY_MS = 16
+const MAX_HOME_LENGTH = 2048
 
-export function register({ ipc }: MainContext): void {
+/** An http(s) URL the home page may be, or null. */
+function parseHome(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length > MAX_HOME_LENGTH) return null
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null
+  } catch {
+    return null
+  }
+}
+
+export function register({ window, browsingSession, ipc, fileMenu }: MainContext): void {
   const tabs = getTabs()
   if (!tabs) throw new Error('stacks needs navigation to be registered first')
 
   const store = createJsonStore(join(app.getPath('userData'), 'stacks.json'), {
     parse: parseStoredStacks,
-    fallback: (): StoredStacks => ({ current: null, stacks: [] }),
+    fallback: (): StoredStacks => ({ current: null, stacks: [], home: null }),
   })
   app.on('will-quit', () => store.flush())
 
   const stacks = new Map<string, Stack>(store.get().stacks.map((stack) => [stack.id, stack]))
   let currentId: string | null = store.get().current
+  let home: string | null = store.get().home
   const tabOfStack = new Map<string, number>()
   const stackOfTab = new Map<number, string>()
   /** The node a navigation was started from, per stack, until it commits or fails. */
@@ -64,7 +80,7 @@ export function register({ ipc }: MainContext): void {
 
   let timer: ReturnType<typeof setTimeout> | null = null
   const changed = () => {
-    store.set({ current: currentId, stacks: [...stacks.values()] })
+    store.set({ current: currentId, stacks: [...stacks.values()], home })
     timer ??= setTimeout(() => {
       timer = null
       ipc.send(channels.stateChanged, state())
@@ -262,20 +278,94 @@ export function register({ ipc }: MainContext): void {
   ipc.handle(channels.switch, (value) => switchTo(parseStackId(channels.switch, value)))
   ipc.handle(channels.create, () => {
     const cur = current()
-    // An empty current stack already is a new one.
-    if (cur && cur.rootId === null) return
-    const stack = addStack()
+    // An empty current stack already is a new one; it only needs the home page.
+    const empty = cur && cur.rootId === null ? cur : null
+    const emptyTab = empty && tabOfStack.get(empty.id)
+    if (empty && home === null) return
+    if (emptyTab !== undefined && emptyTab !== null && home !== null) {
+      tabs.load(emptyTab, home, 'typed')
+      return
+    }
+    const stack = empty ?? addStack()
     makeCurrent(stack)
-    bind(stack, tabs.create({ activate: true }))
+    // Without a home page the new stack starts at the prompt.
+    if (home === null) {
+      window.webContents.focus()
+      ipc.send(promptChannels.open, null)
+    }
+    bind(
+      stack,
+      tabs.create({ activate: true, ...(home !== null && { url: home, transition: 'typed' }) }),
+    )
     changed()
   })
-  ipc.handle(channels.close, (value) => {
-    const stack = parseStackId(channels.close, value)
+  const closeAndSwitch = (stack: Stack) => {
     const wasCurrent = stack.id === currentId
     closeStack(stack)
     const next = byRecentUse()[0]
     if (wasCurrent && next) switchTo(next)
     changed()
+  }
+  ipc.handle(channels.close, (value) => closeAndSwitch(parseStackId(channels.close, value)))
+  ipc.handle(channels.closeNode, (value) => {
+    const stack = current()
+    if (!stack || typeof value !== 'number' || !stack.nodes[value]) {
+      throw new TypeError(`${channels.closeNode} expects a node of the current stack`)
+    }
+    if (value === stack.rootId) {
+      closeAndSwitch(stack)
+      return
+    }
+    if (removeBranch(stack, value)) goToNode(stack, stack.activeId!)
+    changed()
+  })
+  ipc.handle(channels.home, () => home)
+  ipc.handle(channels.setHome, (value) => {
+    const url = value === null ? null : parseHome(value)
+    if (value !== null && url === null) {
+      throw new TypeError(`${channels.setHome} expects an http(s) URL or null`)
+    }
+    home = url
+    changed()
+  })
+
+  // Ctrl/Cmd+R, +N and +W go to the UI, which runs them like its buttons (and knows whether the
+  // assistant runs). They're caught before the page or the menu sees them, like Ctrl/Cmd+B:
+  // a page view doesn't always pass them on to the menu, and Chromium's own Ctrl+R mustn't run.
+  const command = (name: StackCommand) => {
+    window.webContents.focus()
+    ipc.send(channels.command, name)
+  }
+  fileMenu.push(
+    {
+      id: 'stacks-reload',
+      label: 'Reload Page',
+      accelerator: 'CmdOrCtrl+R',
+      click: () => command('reload'),
+    },
+    {
+      id: 'stacks-new',
+      label: 'New Stack',
+      accelerator: 'CmdOrCtrl+N',
+      click: () => command('new'),
+    },
+    {
+      id: 'stacks-close-page',
+      label: 'Close Page',
+      accelerator: 'CmdOrCtrl+W',
+      click: () => command('close-page'),
+    },
+  )
+  const catchKeys = (contents: Electron.WebContents) =>
+    contents.on('before-input-event', (event, input) => {
+      const name = stackCommandFor(input, process.platform)
+      if (name === null) return
+      event.preventDefault()
+      command(name)
+    })
+  catchKeys(window.webContents)
+  app.on('web-contents-created', (_event, contents) => {
+    if (contents.session === browsingSession) catchKeys(contents)
   })
   ipc.handle(channels.outline, (value) => {
     if (typeof value !== 'string') throw new TypeError(`${channels.outline} expects a name`)

@@ -109,3 +109,47 @@ test('the header shows a branching stack, goes back by clicks and keeps stacks p
     await app.close()
   }
 })
+
+test('closes pages with × and Ctrl+W and opens new stacks at the home page with Ctrl+N', async () => {
+  const profile = mkdtempSync(join(tmpdir(), 'antimony-e2e-'))
+  const app = await electron.launch({ args: [...args, `--user-data-dir=${profile}`], env })
+  try {
+    const window = await app.firstWindow()
+    const prompt = window.getByRole('textbox', { name: 'Prompt' })
+    const tree = window.getByRole('tree', { name: 'Navigation stack' })
+    const titles = () =>
+      tree.locator('.stack-row-title').evaluateAll((items) => items.map((item) => item.textContent))
+
+    await prompt.fill(`${origin}/a`)
+    await prompt.press('Enter')
+    await (await pageWindow(app, '/a')).getByRole('link', { name: 'to B' }).click()
+    const b = await pageWindow(app, '/b')
+    await b.getByRole('link', { name: 'to C', exact: true }).click()
+    await expect.poll(titles).toEqual(['Page A', 'Page B', 'Page C'])
+    await expect(window.getByRole('button', { name: 'Reload page' })).toHaveAttribute(
+      'title',
+      /Reload page \((Ctrl|Cmd)\+R\)/,
+    )
+
+    // Ctrl/Cmd+W in the page closes the active page; its parent is shown.
+    const c = await pageWindow(app, '/c')
+    await c.keyboard.press('ControlOrMeta+w')
+    await expect.poll(titles).toEqual(['Page A', 'Page B'])
+    await expect.poll(() => shownUrl(app)).toBe(`${origin}/b`)
+
+    // The × of a page closes it with everything below it.
+    await tree.getByRole('treeitem').filter({ hasText: 'Page B' }).hover()
+    await window.getByRole('button', { name: 'Close Page B' }).click()
+    await expect.poll(titles).toEqual(['Page A'])
+    await expect.poll(() => shownUrl(app)).toBe(`${origin}/a`)
+
+    // Ctrl/Cmd+N opens a new stack at the home page.
+    await prompt.fill(`/home ${origin}/c2`)
+    await prompt.press('Enter')
+    await window.keyboard.press('ControlOrMeta+n')
+    await expect.poll(() => shownUrl(app)).toBe(`${origin}/c2`)
+    await expect.poll(titles).toEqual(['Page C2'])
+  } finally {
+    await app.close()
+  }
+})

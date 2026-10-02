@@ -9,6 +9,7 @@ import {
   newStack,
   outline,
   prune,
+  removeBranch,
   rows,
   setTitle,
   slug,
@@ -31,6 +32,23 @@ const shape = (stack: Stack) => rows(stack).map((row) => `${'.'.repeat(row.depth
 const idOf = (stack: Stack, url: string) => rows(stack).find((row) => row.url === url)!.id
 
 describe('stack tree', () => {
+  it('removes a branch; the parent becomes active when the active node goes', () => {
+    const stack = newStack('s', 0)
+    go(stack, A)
+    go(stack, B)
+    go(stack, C)
+    goTo(stack, idOf(stack, B), B)
+    go(stack, C2)
+    // A → B → (C, C2), C2 active
+    expect(removeBranch(stack, idOf(stack, C))).toBe(false)
+    expect(shape(stack)).toEqual([A, `.${B}`, `..${C2}`])
+    expect(removeBranch(stack, idOf(stack, B))).toBe(true)
+    expect(shape(stack)).toEqual([A])
+    expect(stack.activeId).toBe(stack.rootId)
+    expect(Object.keys(stack.nodes)).toHaveLength(1)
+    expect(() => removeBranch(stack, stack.rootId!)).toThrow(RangeError)
+  })
+
   it('builds A → B → C from links, C active', () => {
     const stack = newStack('s', 0)
     go(stack, A)

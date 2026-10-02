@@ -5,8 +5,16 @@ export const channels = {
   create: 'stacks:create',
   close: 'stacks:close',
   outline: 'stacks:outline',
+  closeNode: 'stacks:close-node',
+  home: 'stacks:home',
+  setHome: 'stacks:set-home',
   stateChanged: 'stacks:state-changed',
+  // A shortcut or File menu item (main → UI), not a state change; the UI runs it like its button.
+  command: 'stacks:command',
 } as const
+
+/** What Ctrl/Cmd+R, +N and +W (and their File menu items) ask the UI to do. */
+export type StackCommand = 'reload' | 'new' | 'close-page'
 
 /** One page in a stack's tree. */
 export interface StackNode {
@@ -63,11 +71,19 @@ export interface StacksApi {
   goToNode(nodeId: number): Promise<void>
   /** Makes a stack current (its tab is created if it isn't live). */
   switch(stackId: string): Promise<void>
-  /** Starts an empty stack in a new tab and makes it current. */
+  /** Starts a stack in a new tab at the home page (empty without one) and makes it current. */
   create(): Promise<void>
   close(stackId: string): Promise<void>
+  /** Removes a node of the current stack and its branch; the root closes the whole stack. */
+  closeNode(nodeId: number): Promise<void>
+  /** The URL new stacks open at, or null for an empty stack. */
+  home(): Promise<string | null>
+  /** Sets (an http(s) URL) or clears (null) the home page. */
+  setHome(url: string | null): Promise<void>
   /** The stack's outline as text for the model, or null if no stack has that name. */
   outline(name: string): Promise<string | null>
   /** Called whenever stacks or the current tree change. Returns an unsubscribe function. */
   onChanged(listener: (state: StacksState) => void): () => void
+  /** Called when a stack shortcut is pressed. Returns an unsubscribe function. */
+  onCommand(listener: (command: StackCommand) => void): () => void
 }

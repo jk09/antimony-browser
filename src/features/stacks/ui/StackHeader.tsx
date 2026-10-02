@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import type { AgentState } from '../../agent/ipc'
 import type { NavigationState } from '../../navigation/ipc'
-import type { StackRow, StacksState } from '../ipc'
+import type { StackCommand, StackRow, StacksState } from '../ipc'
+import { shortcutLabel } from '../shared/keys'
 import { collapse, type CollapsedItem } from '../shared/tree'
 
 export const MAX_ROWS = 8
@@ -42,6 +43,12 @@ function useWindowHeight() {
   return height
 }
 
+const platform = () => (/Mac/.test(navigator.userAgent) ? 'darwin' : 'other')
+/** `Ctrl+R` (`Cmd+R` on macOS) as a hint, and `Control+R` (`Meta+R`) for aria-keyshortcuts. */
+const hint = (command: StackCommand) => shortcutLabel(command, platform())
+const ariaShortcut = (command: StackCommand) =>
+  hint(command).replace(/^Cmd/, 'Meta').replace(/^Ctrl/, 'Control')
+
 /** Moves focus between the tree's rows and ellipsis buttons with ↑ ↓ Home End. */
 function moveFocus(event: KeyboardEvent<HTMLElement>) {
   const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('[data-tree-item]'))
@@ -62,11 +69,14 @@ function Row({
   active,
   loading,
   onPick,
+  onClose,
 }: {
   row: StackRow
   active: boolean
   loading: boolean
   onPick: (row: StackRow) => void
+  /** Undefined while closing is blocked (the assistant runs). */
+  onClose: ((row: StackRow) => void) | undefined
 }) {
   const label = row.title || row.url
   return (
@@ -82,9 +92,13 @@ function Row({
       data-tree-item=""
       onClick={() => onPick(row)}
       onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
           onPick(row)
+        } else if (event.key === 'Delete' && onClose) {
+          event.preventDefault()
+          onClose(row)
         }
       }}
     >
@@ -100,6 +114,21 @@ function Row({
         </span>
         {active && row.title && <span className="stack-row-url">{row.url}</span>}
       </span>
+      <button
+        type="button"
+        className="stack-row-close"
+        aria-label={`Close ${label}`}
+        title={active ? `Close page (${hint('close-page')})` : 'Close page'}
+        aria-keyshortcuts={active ? ariaShortcut('close-page') : undefined}
+        tabIndex={active ? 0 : -1}
+        disabled={!onClose}
+        onClick={(event) => {
+          event.stopPropagation()
+          onClose?.(row)
+        }}
+      >
+        ×
+      </button>
     </li>
   )
 }
@@ -112,6 +141,7 @@ function Tree({
   loading,
   items,
   onPick,
+  onClose,
   onMore,
 }: {
   label: string
@@ -120,6 +150,7 @@ function Tree({
   loading: boolean
   items: CollapsedItem[]
   onPick: (row: StackRow) => void
+  onClose: ((row: StackRow) => void) | undefined
   onMore?: (button: HTMLButtonElement) => void
 }) {
   return (
@@ -134,6 +165,7 @@ function Tree({
               active={row.id === activeId}
               loading={loading}
               onPick={onPick}
+              onClose={onClose}
             />
           )
         }
@@ -217,6 +249,40 @@ export function StackHeader() {
   const name = current?.name || (current && rows.length > 0 ? rows[0]!.title || 'Untitled' : '')
   const blocked = running ? 'Stop the assistant first to switch stacks' : undefined
 
+  const reload = () => {
+    if (activeId !== null) api.navigation.reload().catch(report)
+  }
+  const newStack = () => {
+    if (running) return
+    setListOpen(false)
+    api.stacks.create().catch(report)
+  }
+  const closeRow = running
+    ? undefined
+    : (row: StackRow) => {
+        setOverlayOpen(false)
+        api.stacks.closeNode(row.id).catch(report)
+      }
+  const closeActive = () => {
+    if (!running && activeId !== null) api.stacks.closeNode(activeId).catch(report)
+  }
+
+  // Ctrl/Cmd+R, +N and +W from main (caught in the page or the chrome UI) do what the buttons do.
+  const commands = useRef({ reload, newStack, closeActive })
+  useEffect(() => {
+    commands.current = { reload, newStack, closeActive }
+  })
+  useEffect(
+    () =>
+      api.stacks.onCommand((command) => {
+        const run = commands.current
+        if (command === 'reload') run.reload()
+        else if (command === 'new') run.newStack()
+        else run.closeActive()
+      }),
+    [api],
+  )
+
   return (
     <div className="stack-header">
       <div className="stack-switcher" ref={list}>
@@ -230,6 +296,32 @@ export function StackHeader() {
         >
           {name ? `@${name}` : 'New tab'} <span aria-hidden="true">▾</span>
         </button>
+        <span className="stack-actions">
+          <button
+            type="button"
+            className="stack-action"
+            aria-label="Reload page"
+            title={`Reload page (${hint('reload')})`}
+            aria-keyshortcuts={ariaShortcut('reload')}
+            disabled={activeId === null}
+            onClick={reload}
+          >
+            ↻
+          </button>
+          <button
+            type="button"
+            className="stack-action"
+            aria-label="New stack"
+            title={
+              running ? 'Stop the assistant first to open a stack' : `New stack (${hint('new')})`
+            }
+            aria-keyshortcuts={ariaShortcut('new')}
+            disabled={running}
+            onClick={newStack}
+          >
+            +
+          </button>
+        </span>
         {listOpen && (
           <div
             className="stack-list"
@@ -272,15 +364,7 @@ export function StackHeader() {
                 </li>
               ))}
             </ul>
-            <button
-              type="button"
-              className="stack-list-new"
-              disabled={running}
-              onClick={() => {
-                setListOpen(false)
-                api.stacks.create().catch(report)
-              }}
-            >
+            <button type="button" className="stack-list-new" disabled={running} onClick={newStack}>
               + New stack
             </button>
           </div>
@@ -294,6 +378,7 @@ export function StackHeader() {
           loading={loading}
           items={collapse(rows.length, activeIndex, maxRowsFor(height))}
           onPick={pick}
+          onClose={closeRow}
           onMore={(button) => {
             opener.current = button
             setOverlayOpen(true)
@@ -328,6 +413,7 @@ export function StackHeader() {
             loading={loading}
             items={rows.map((_, index) => ({ kind: 'row', index }))}
             onPick={pick}
+            onClose={closeRow}
           />
         </div>
       )}

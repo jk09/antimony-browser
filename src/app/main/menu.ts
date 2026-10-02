@@ -18,8 +18,8 @@ function viewMenu(zoom: (direction: ZoomDirection) => void): MenuItemConstructor
     click: () => zoom(direction),
     ...(!visible && { visible: false, acceleratorWorksWhenHidden: true }),
   })
+  // No `reload` role: Ctrl/Cmd+R reloads the page (stacks); Ctrl/Cmd+Shift+R reloads the chrome UI.
   return [
-    { role: 'reload' },
     { role: 'forceReload' },
     { role: 'toggleDevTools' },
     { type: 'separator' },
@@ -49,7 +49,15 @@ export function appMenuTemplate(
     fileItems.length > 0 ? [{ type: 'separator' }] : []
   return [
     ...(mac ? [{ role: 'appMenu' } as const] : []),
-    { label: 'File', submenu: [...fileItems, ...separator, { role: mac ? 'close' : 'quit' }] },
+    {
+      label: 'File',
+      submenu: [
+        ...fileItems,
+        ...separator,
+        // Cmd+W closes the page (stacks), so closing the window moves to Cmd+Shift+W.
+        mac ? { role: 'close', accelerator: 'Cmd+Shift+W' } : { role: 'quit' },
+      ],
+    },
     { role: 'editMenu' },
     { label: 'View', submenu: viewMenu(zoom) },
     { role: 'windowMenu' },

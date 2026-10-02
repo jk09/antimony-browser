@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { MenuItemConstructorOptions } from 'electron'
 import type { MainContext } from '../../app/main/features'
 import type { HistoryResolver, PageEvent, TabControls } from '../navigation/main'
 import type { StacksState } from './ipc'
@@ -11,7 +12,9 @@ const quitListeners: (() => void)[] = []
 vi.mock('electron', () => ({
   app: {
     getPath: () => userData,
-    on: (_: string, listener: () => void) => quitListeners.push(listener),
+    on: (event: string, listener: () => void) => {
+      if (event === 'will-quit') quitListeners.push(listener)
+    },
   },
 }))
 
@@ -82,9 +85,36 @@ function setup(dir = mkdtempSync(join(tmpdir(), 'antimony-stacks-'))) {
   quitListeners.length = 0
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
   const send = vi.fn()
+  const fileMenu: MenuItemConstructorOptions[] = []
+  let onInput: ((event: { preventDefault(): void }, input: object) => void) | null = null
   register({
+    window: {
+      webContents: {
+        focus: () => {},
+        on: (_: string, listener: typeof onInput) => (onInput = listener),
+      },
+    },
+    browsingSession: {},
+    fileMenu,
     ipc: { handle: (channel: string, fn: never) => handlers.set(channel, fn), send },
   } as unknown as MainContext)
+  /** Presses Ctrl+`key` in the chrome UI; returns whether the key was taken. */
+  const press = (key: string) => {
+    const preventDefault = vi.fn()
+    onInput!(
+      { preventDefault },
+      {
+        type: 'keyDown',
+        key,
+        control: process.platform !== 'darwin',
+        meta: process.platform === 'darwin',
+        alt: false,
+        shift: false,
+        isAutoRepeat: false,
+      },
+    )
+    return preventDefault.mock.calls.length > 0
+  }
   const call = (channel: string, ...args: unknown[]) => handlers.get(channel)!(...args)
   const state = () => call(channels.state) as StacksState
   const nav = (tabId: number, url: string, entry: 'new' | 'back' | 'replaced' = 'new') =>
@@ -102,7 +132,7 @@ function setup(dir = mkdtempSync(join(tmpdir(), 'antimony-stacks-'))) {
     nav(tabId, `https://site.example/${name}`)
     title(tabId, name)
   }
-  return { call, state, send, nav, title, visit, rowsOf, activeTitle, idOf, dir }
+  return { call, state, send, nav, title, visit, rowsOf, activeTitle, idOf, dir, fileMenu, press }
 }
 
 describe('stacks main', () => {
@@ -197,15 +227,98 @@ describe('stacks main', () => {
   })
 
   it('creates an empty stack, and the first tab without a stack adopts it', () => {
-    const { call, visit, state } = setup()
+    const { call, visit, state, send } = setup()
     call(channels.create)
     expect(tabs.calls).toEqual(['create 1 active'])
+    // An empty stack starts at the prompt.
+    expect(send).toHaveBeenCalledWith('prompt:open', null)
     call(channels.create)
     expect(tabs.calls).toEqual(['create 1 active'])
     expect(state().current).toMatchObject({ name: '', rows: [] })
     visit(1, 'First')
     expect(state().stacks).toHaveLength(1)
     expect(state().current!.name).toBe('first')
+  })
+
+  it('closes a page with its branch; the root closes the stack', () => {
+    const { call, visit, rowsOf, activeTitle, idOf, state, nav } = setup()
+    tabs.open.add(1)
+    tabs.activeId = 1
+    visit(1, 'A')
+    visit(1, 'B')
+    visit(1, 'C')
+    call(channels.goToNode, idOf('A'))
+    nav(1, 'https://site.example/A')
+    visit(1, 'D')
+    expect(rowsOf()).toEqual(['A', '.B', '..C', '.D'])
+
+    // Another branch: nothing loads.
+    const calls = tabs.calls.length
+    call(channels.closeNode, idOf('B'))
+    expect(rowsOf()).toEqual(['A', '.D'])
+    expect(tabs.calls).toHaveLength(calls)
+
+    // The active page: its parent loads.
+    call(channels.closeNode, idOf('D'))
+    expect(rowsOf()).toEqual(['A'])
+    expect(activeTitle()).toBe('A')
+    expect(tabs.calls.at(-1)).toBe('load 1 https://site.example/A')
+
+    expect(() => call(channels.closeNode, 999)).toThrow(TypeError)
+    expect(() => call(channels.closeNode, 'A')).toThrow(TypeError)
+
+    call(channels.closeNode, idOf('A'))
+    expect(tabs.calls.at(-1)).toBe('close 1')
+    expect(state().stacks).toHaveLength(0)
+  })
+
+  it('opens new stacks at the home page, which persists', () => {
+    const first = setup()
+    expect(first.call(channels.home)).toBeNull()
+    expect(() => first.call(channels.setHome, 'file:///etc/passwd')).toThrow(TypeError)
+    expect(() => first.call(channels.setHome, 'not a url')).toThrow(TypeError)
+    expect(() => first.call(channels.setHome, 42)).toThrow(TypeError)
+    first.call(channels.setHome, 'https://start.example')
+    expect(first.call(channels.home)).toBe('https://start.example/')
+
+    first.call(channels.create)
+    expect(tabs.calls).toEqual(['create 1 https://start.example/ active'])
+    first.visit(1, 'Start')
+    first.call(channels.create)
+    expect(tabs.calls.at(-1)).toBe('create 2 https://start.example/ active')
+    expect(first.state().stacks).toHaveLength(2)
+    quitListeners.forEach((listener) => listener())
+
+    const again = setup(first.dir)
+    expect(again.call(channels.home)).toBe('https://start.example/')
+    again.call(channels.setHome, null)
+    expect(again.call(channels.home)).toBeNull()
+  })
+
+  it('loads the home page in an empty current stack instead of opening another', () => {
+    const { call } = setup()
+    call(channels.create)
+    call(channels.setHome, 'https://start.example/')
+    call(channels.create)
+    expect(tabs.calls).toEqual(['create 1 active', 'load 1 https://start.example/'])
+  })
+
+  it('sends Ctrl/Cmd+R, +N and +W to the UI and lists them in the File menu', () => {
+    const { press, send, fileMenu } = setup()
+    expect(fileMenu.map((item) => [item.label, item.accelerator])).toEqual([
+      ['Reload Page', 'CmdOrCtrl+R'],
+      ['New Stack', 'CmdOrCtrl+N'],
+      ['Close Page', 'CmdOrCtrl+W'],
+    ])
+    expect(press('r')).toBe(true)
+    expect(press('n')).toBe(true)
+    expect(press('w')).toBe(true)
+    expect(press('b')).toBe(false)
+    expect(send.mock.calls.filter(([channel]) => channel === channels.command)).toEqual([
+      [channels.command, 'reload'],
+      [channels.command, 'new'],
+      [channels.command, 'close-page'],
+    ])
   })
 
   it('serves outlines by name and publishes changes once per burst', async () => {
