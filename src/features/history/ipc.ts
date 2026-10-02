@@ -9,8 +9,12 @@ export const channels = {
   settings: 'history:settings',
   updateSettings: 'history:update-settings',
   requestOpen: 'history:request-open',
+  recall: 'history:recall',
+  cancelRecall: 'history:cancel-recall',
+  requestRecall: 'history:request-recall',
   // Main → UI.
   open: 'history:open',
+  openRecall: 'history:open-recall',
   changed: 'history:pages-changed',
   settingsChanged: 'history:settings-changed',
 } as const
@@ -19,6 +23,8 @@ export const channels = {
 export const HIGH_DWELL_MS = 30_000
 export const MAX_NOTE = 4000
 export const MAX_QUERY = 500
+/** Longest sketch, as a `data:image/jpeg;base64,` URL. */
+export const MAX_SKETCH = 1_000_000
 
 export type SearchMode = 'text' | 'semantic'
 
@@ -74,6 +80,40 @@ export interface OpenRequest {
   note?: boolean
 }
 
+/** How Recall shows its result. */
+export type RecallView = 'words' | 'images'
+
+export interface RecallRequest {
+  /** What to recall, in the user's words; may be '' when there's a sketch. */
+  query: string
+  /** A drawing of a picture on the wanted pages, as a `data:image/jpeg;base64,` URL. */
+  sketch: string | null
+}
+
+/** A recalled page: how well it matches (0–1) and what it is about. */
+export interface RecalledPage extends HistoryPage {
+  score: number
+  keywords: string[]
+}
+
+/** A word of the keyword cloud: the summed score of the pages that carry it. */
+export interface RecallKeyword {
+  text: string
+  weight: number
+  pageIds: number[]
+}
+
+export interface RecallResult {
+  /** The view the model suggests for the request. */
+  view: RecallView
+  /** Best match first. */
+  pages: RecalledPage[]
+  /** Heaviest first. */
+  keywords: RecallKeyword[]
+  /** Why the result isn't what was asked for (fallback to text matches, an error). */
+  notice?: string
+}
+
 export interface HistoryApi {
   /** Visited pages whose URL (without scheme and www.) or domain starts with `text`. */
   suggest(text: string): Promise<VisitedSuggestion[]>
@@ -92,6 +132,13 @@ export interface HistoryApi {
   /** Opens the history view (from a /command); main answers with an `open` event. */
   requestOpen(request: OpenRequest): Promise<void>
   onOpen(listener: (request: OpenRequest) => void): () => void
+  /** Pages matching a request and/or a sketch, chosen by the selected model, for the cloud. */
+  recall(request: RecallRequest): Promise<RecallResult>
+  /** Stops a recall in flight (its answer is then empty). */
+  cancelRecall(): Promise<void>
+  /** Opens the Recall page with `query` (from /recall); main answers with an `openRecall` event. */
+  requestRecall(query: string): Promise<void>
+  onOpenRecall(listener: (query: string) => void): () => void
   /** History changed in a way an open view should show (note, delete, clear). */
   onChanged(listener: () => void): () => void
   onSettingsChanged(listener: (settings: HistorySettings) => void): () => void

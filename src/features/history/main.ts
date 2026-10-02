@@ -1,6 +1,6 @@
 import { renameSync } from 'node:fs'
 import { join } from 'node:path'
-import { app, powerMonitor } from 'electron'
+import { app, nativeImage, powerMonitor } from 'electron'
 import type { MainContext } from '../../app/main/features'
 import { createJsonStore } from '../../app/main/json-store'
 import { complete } from '../agent/main'
@@ -9,13 +9,29 @@ import {
   channels,
   MAX_NOTE,
   MAX_QUERY,
+  MAX_SKETCH,
   type HistorySettings,
   type OpenRequest,
+  type RecalledPage,
+  type RecallRequest,
+  type RecallResult,
   type SearchMode,
   type SearchRequest,
   type SearchResult,
 } from './ipc'
 import { HistoryDb } from './main/db'
+import {
+  aggregateKeywords,
+  MAX_SCREENSHOTS,
+  parseRecall,
+  RECALL_LIMIT,
+  RECALL_SYSTEM,
+  recallPrompt,
+  SCREENSHOT_SEND_WIDTH,
+  titleKeywords,
+  VISUAL_CANDIDATES,
+  type RecallPick,
+} from './main/recall'
 import { Recorder, type Visit } from './main/recorder'
 import {
   MATCH_CANDIDATES,
@@ -87,6 +103,33 @@ export function parseOpen(value: unknown): OpenRequest {
     request.note = value['note']
   }
   return request
+}
+
+const SKETCH_PREFIX = 'data:image/jpeg;base64,'
+
+export function parseRecallRequest(value: unknown): RecallRequest {
+  if (!isRecord(value)) throw new TypeError(`${channels.recall} expects { query, sketch }`)
+  for (const key of Object.keys(value)) {
+    if (key !== 'query' && key !== 'sketch') throw new TypeError(`unknown field ${key}`)
+  }
+  const { query, sketch } = value
+  if (typeof query !== 'string' || query.length > MAX_QUERY) {
+    throw new TypeError(`query must be a string of up to ${MAX_QUERY} characters`)
+  }
+  if (sketch !== null) {
+    if (
+      typeof sketch !== 'string' ||
+      sketch.length > MAX_SKETCH ||
+      !sketch.startsWith(SKETCH_PREFIX) ||
+      !/^[A-Za-z0-9+/]+={0,2}$/.test(sketch.slice(SKETCH_PREFIX.length))
+    ) {
+      throw new TypeError(
+        `sketch must be a JPEG data URL of up to ${MAX_SKETCH} characters, or null`,
+      )
+    }
+  }
+  if (!query.trim() && sketch === null) throw new TypeError('recall needs a query or a sketch')
+  return { query: query.trim(), sketch }
 }
 
 function parseSettingsUpdate(value: unknown): Partial<HistorySettings> {
@@ -344,6 +387,89 @@ export function register({ window, ipc, fileMenu }: MainContext): void {
     }
   }
 
+  /** A stored screenshot, scaled down to send to the model, base64; null if there's none. */
+  const smallScreenshot = (pageId: number): string | null => {
+    const jpeg = db.screenshot(pageId)
+    if (!jpeg) return null
+    const image = nativeImage.createFromBuffer(Buffer.from(jpeg))
+    if (image.isEmpty()) return null
+    const small =
+      image.getSize().width > SCREENSHOT_SEND_WIDTH
+        ? image.resize({ width: SCREENSHOT_SEND_WIDTH })
+        : image
+    return small.toJPEG(60).toString('base64')
+  }
+
+  const recalled = (picks: RecallPick[]): RecalledPage[] => {
+    const byId = new Map(picks.map((pick) => [pick.id, pick]))
+    return db.pages(picks.map((pick) => pick.id)).map((page) => {
+      const pick = byId.get(page.id)!
+      return { ...page, score: pick.score, keywords: pick.keywords }
+    })
+  }
+
+  let recalling: AbortController | null = null
+
+  const recall = async ({ query, sketch }: RecallRequest): Promise<RecallResult> => {
+    recalling?.abort()
+    const controller = new AbortController()
+    recalling = controller
+    const view = sketch ? 'images' : 'words'
+    const or = query ? ftsQuery(query, 'or') : null
+    const matched = or
+      ? db.search(or, { bookmarked: false, limit: MATCH_CANDIDATES }).map((p) => p.id)
+      : []
+    const visual = sketch ? db.recentWithScreenshot(VISUAL_CANDIDATES) : []
+    const ids = [...new Set([...matched, ...visual, ...db.recentDescribed(RECENT_CANDIDATES)])]
+    const candidates = db.candidates(ids)
+    if (candidates.length === 0) return { view, pages: [], keywords: [] }
+    try {
+      const images = sketch
+        ? [
+            { label: 'Sketch:', jpegBase64: sketch.slice(SKETCH_PREFIX.length) },
+            ...candidates
+              .filter((page) => page.hasScreenshot)
+              .flatMap((page) => {
+                const jpegBase64 = smallScreenshot(page.id)
+                return jpegBase64 ? [{ label: `Screenshot of page ${page.id}:`, jpegBase64 }] : []
+              })
+              .slice(0, MAX_SCREENSHOTS),
+          ]
+        : []
+      const answer = await complete({
+        system: RECALL_SYSTEM,
+        text: recallPrompt(query, candidates, sketch !== null),
+        ...(images.length > 0 && { images }),
+        signal: AbortSignal.any([controller.signal, withTimeout()]),
+      })
+      const parsed = parseRecall(answer.text, new Set(candidates.map((page) => page.id)))
+      if (parsed === null) throw new Error('the model did not answer with a list of pages')
+      return {
+        view: parsed.view ?? view,
+        pages: recalled(parsed.pages),
+        keywords: aggregateKeywords(parsed.pages),
+      }
+    } catch (error) {
+      if (controller.signal.aborted) return { view, pages: [], keywords: [] }
+      const reason = error instanceof Error ? error.message : String(error)
+      if (!query) return { view, pages: [], keywords: [], notice: `Recall failed (${reason}).` }
+      const pages = textSearch(query, false).slice(0, RECALL_LIMIT)
+      const picks = pages.map((page, index) => ({
+        id: page.id,
+        score: 1 - index / Math.max(pages.length, 1),
+        keywords: titleKeywords(page.title),
+      }))
+      return {
+        view,
+        pages: recalled(picks),
+        keywords: aggregateKeywords(picks),
+        notice: `Recall by meaning failed (${reason}); showing text matches.`,
+      }
+    } finally {
+      if (recalling === controller) recalling = null
+    }
+  }
+
   ipc.handle(channels.suggest, (text) => {
     if (typeof text !== 'string' || text.length > MAX_QUERY) {
       throw new TypeError(`${channels.suggest} expects a short string`)
@@ -387,6 +513,16 @@ export function register({ window, ipc, fileMenu }: MainContext): void {
     return settings.get()
   })
   ipc.handle(channels.requestOpen, (value) => ipc.send(channels.open, parseOpen(value)))
+  ipc.handle(channels.recall, (value) => recall(parseRecallRequest(value)))
+  ipc.handle(channels.cancelRecall, () => {
+    recalling?.abort()
+  })
+  ipc.handle(channels.requestRecall, (query) => {
+    if (typeof query !== 'string' || query.length > MAX_QUERY) {
+      throw new TypeError(`${channels.requestRecall} expects a short string`)
+    }
+    ipc.send(channels.openRecall, query)
+  })
 
   fileMenu.push({
     id: 'note-page',
@@ -395,6 +531,15 @@ export function register({ window, ipc, fileMenu }: MainContext): void {
     click: () => {
       window.webContents.focus()
       ipc.send(channels.open, { note: true } satisfies OpenRequest)
+    },
+  })
+  fileMenu.push({
+    id: 'recall',
+    label: 'Recall from History…',
+    accelerator: 'CmdOrCtrl+Shift+Y',
+    click: () => {
+      window.webContents.focus()
+      ipc.send(channels.openRecall, '')
     },
   })
 }

@@ -153,6 +153,7 @@ export interface Candidate {
   summary: string | null
   visualDescription: string | null
   note: string | null
+  hasScreenshot: boolean
 }
 
 export class HistoryDb {
@@ -511,9 +512,21 @@ export class HistoryDb {
     return rows.map((row) => Number(row['id']))
   }
 
+  /** Recent pages that have a screenshot: what a sketch can be compared with. */
+  recentWithScreenshot(limit: number): number[] {
+    const rows = this.db
+      .prepare(
+        `SELECT id FROM pages WHERE screenshot_at IS NOT NULL
+         ORDER BY last_visit_at DESC LIMIT ?`,
+      )
+      .all(limit) as Row[]
+    return rows.map((row) => Number(row['id']))
+  }
+
   candidates(ids: number[]): Candidate[] {
     const statement = this.db.prepare(
-      `SELECT id, url, title, last_visit_at, description, summary, visual_description, note
+      `SELECT id, url, title, last_visit_at, description, summary, visual_description, note,
+         screenshot IS NOT NULL AS has_screenshot
        FROM pages WHERE id = ?`,
     )
     return ids.flatMap((id) => {
@@ -529,6 +542,7 @@ export class HistoryDb {
           summary: (row['summary'] as string | null) ?? null,
           visualDescription: (row['visual_description'] as string | null) ?? null,
           note: (row['note'] as string | null) ?? null,
+          hasScreenshot: Number(row['has_screenshot']) === 1,
         },
       ]
     })

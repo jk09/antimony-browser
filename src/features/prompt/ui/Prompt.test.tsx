@@ -215,6 +215,12 @@ describe('Prompt', () => {
       expect(api.history.requestOpen).toHaveBeenCalledWith({ query: 'sqlite wal' }),
     )
 
+    type(box, '/recall show all pages about lions')
+    press(box, 'Enter')
+    await waitFor(() =>
+      expect(api.history.requestRecall).toHaveBeenCalledWith('show all pages about lions'),
+    )
+
     api.history.current.mockResolvedValue({
       id: 7,
       url: 'https://example.com/',

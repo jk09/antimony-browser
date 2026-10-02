@@ -7,7 +7,12 @@ import {
   type DebugEvent,
   type ModelList,
 } from '../../features/agent/ipc'
-import type { HistorySettings, OpenRequest } from '../../features/history/ipc'
+import type {
+  HistorySettings,
+  OpenRequest,
+  RecallRequest,
+  RecallResult,
+} from '../../features/history/ipc'
 import type { MenuEntry, RunResult } from '../../features/menu/ipc'
 import type { NavigationState } from '../../features/navigation/ipc'
 import { toUrl } from '../../features/navigation/shared/to-url'
@@ -73,6 +78,7 @@ export function fakeApi(
   const historyOpen = channel<OpenRequest>()
   const historyChanged = channel<void>()
   const historySettings = channel<HistorySettings>()
+  const recallOpen = channel<string>()
   const stacks = channel<StacksState>()
   const stackCommand = channel<StackCommand>()
   let home: string | null = null
@@ -110,6 +116,14 @@ export function fakeApi(
       updateSettings: vi.fn(async (update) => ({ summaries: false, ...update })),
       requestOpen: vi.fn(async (request: OpenRequest) => historyOpen.emit(request)),
       onOpen: historyOpen.subscribe,
+      recall: vi.fn(async (_request: RecallRequest): Promise<RecallResult> => ({
+        view: 'words',
+        pages: [],
+        keywords: [],
+      })),
+      cancelRecall: vi.fn(async () => {}),
+      requestRecall: vi.fn(async (query: string) => recallOpen.emit(query)),
+      onOpenRecall: recallOpen.subscribe,
       onChanged: historyChanged.subscribe,
       onSettingsChanged: historySettings.subscribe,
     },
@@ -177,6 +191,7 @@ export function fakeApi(
       navigation: navigation.emit,
       historyOpen: historyOpen.emit,
       historyChanged: () => historyChanged.emit(),
+      recallOpen: recallOpen.emit,
       stacks: stacks.emit,
       stackCommand: stackCommand.emit,
     },

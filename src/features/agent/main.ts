@@ -51,6 +51,8 @@ export interface CompletionRequest {
   text: string
   /** A JPEG image sent before the text, base64. */
   imageJpegBase64?: string
+  /** More JPEG images, each after a text block with its label, before the text. */
+  images?: { label: string; jpegBase64: string }[]
   signal?: AbortSignal
 }
 
@@ -121,17 +123,16 @@ export function register({ ipc, fileMenu }: MainContext): void {
     if (!apiKey) throw new Error(noKey)
     return createMessage(request, { apiKey, baseUrl, ...(signal && { signal }) })
   }
-  completer = async ({ system, text, imageJpegBase64, signal }) => {
+  completer = async ({ system, text, imageJpegBase64, images = [], signal }) => {
     const { model } = settings.get()
+    const jpeg = (data: string) =>
+      ({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } }) as const
     const content: ContentBlock[] = [
-      ...(imageJpegBase64
-        ? [
-            {
-              type: 'image',
-              source: { type: 'base64', media_type: 'image/jpeg', data: imageJpegBase64 },
-            } as const,
-          ]
-        : []),
+      ...(imageJpegBase64 ? [jpeg(imageJpegBase64)] : []),
+      ...images.flatMap((image) => [
+        { type: 'text', text: image.label } as const,
+        jpeg(image.jpegBase64),
+      ]),
       { type: 'text', text },
     ]
     if (isCliModel(model)) {

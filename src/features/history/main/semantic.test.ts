@@ -11,6 +11,7 @@ const candidate = (id: number, overrides: Partial<Candidate> = {}): Candidate =>
   summary: null,
   visualDescription: null,
   note: null,
+  hasScreenshot: false,
   ...overrides,
 })
 

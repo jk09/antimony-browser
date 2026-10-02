@@ -60,6 +60,11 @@ export const promptCommands: CommandInfo[] = [
   { name: 'forget-history', usage: '', description: 'Clear the prompt history' },
   { name: 'history', usage: '<search>', description: 'Search the pages you visited' },
   {
+    name: 'recall',
+    usage: '<request>',
+    description: 'Show pages from history as a keyword or picture cloud (asks the selected model)',
+  },
+  {
     name: 'note',
     usage: '<text>',
     description: 'Note this page (makes it a bookmark); /note clear removes it',
