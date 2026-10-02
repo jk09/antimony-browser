@@ -1,8 +1,15 @@
 // Validation of stacks.json. Pure: no electron, Node or React imports.
 import { DEFAULT_HOME, type Stack, type StackNode } from '../ipc'
 
+/**
+ * The stacks.json format. Version 2 files store the home page the user chose, null included;
+ * older ones without a home page get the default.
+ */
+export const STACKS_FILE_VERSION = 2
+
 /** stacks.json: the stacks, which one is current and the home page new stacks open at. */
 export interface StoredStacks {
+  version: typeof STACKS_FILE_VERSION
   current: string | null
   stacks: Stack[]
   home: string | null
@@ -78,7 +85,14 @@ export function parseStoredStacks(raw: unknown): StoredStacks {
   const stacks = raw['stacks'].map(parseStack)
   const current = raw['current']
   if (current !== null && typeof current !== 'string') fail('current is not a stack id')
-  // Older files have no home page: the default. One that isn't a web URL is dropped.
-  const home = !('home' in raw) ? DEFAULT_HOME : isWebUrl(raw['home']) ? raw['home'] : null
-  return { current: stacks.some((stack) => stack.id === current) ? current : null, stacks, home }
+  // Before version 2 a missing home page was saved as null, which isn't a choice: the default.
+  // One that isn't a web URL is dropped.
+  const chosen = raw['version'] === STACKS_FILE_VERSION
+  const home = isWebUrl(raw['home']) ? raw['home'] : chosen ? null : DEFAULT_HOME
+  return {
+    version: STACKS_FILE_VERSION,
+    current: stacks.some((stack) => stack.id === current) ? current : null,
+    stacks,
+    home,
+  }
 }

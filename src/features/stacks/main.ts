@@ -8,7 +8,7 @@ import { getTabs, onPageEvent, setHistoryResolver, type PageEvent } from '../nav
 import { channels as promptChannels } from '../prompt/ipc'
 import { channels, DEFAULT_HOME, type Stack, type StackCommand, type StacksState } from './ipc'
 import { cycleKeyFor, stackCommandFor } from './shared/keys'
-import { parseStoredStacks, type StoredStacks } from './shared/stored'
+import { parseStoredStacks, STACKS_FILE_VERSION, type StoredStacks } from './shared/stored'
 import {
   backTarget,
   deriveName,
@@ -46,7 +46,12 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
 
   const store = createJsonStore(join(app.getPath('userData'), 'stacks.json'), {
     parse: parseStoredStacks,
-    fallback: (): StoredStacks => ({ current: null, stacks: [], home: DEFAULT_HOME }),
+    fallback: (): StoredStacks => ({
+      version: STACKS_FILE_VERSION,
+      current: null,
+      stacks: [],
+      home: DEFAULT_HOME,
+    }),
   })
   app.on('will-quit', () => store.flush())
 
@@ -86,7 +91,12 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
 
   let timer: ReturnType<typeof setTimeout> | null = null
   const changed = () => {
-    store.set({ current: currentId, stacks: [...stacks.values()], home })
+    store.set({
+      version: STACKS_FILE_VERSION,
+      current: currentId,
+      stacks: [...stacks.values()],
+      home,
+    })
     timer ??= setTimeout(() => {
       timer = null
       ipc.send(channels.stateChanged, state())

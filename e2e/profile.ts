@@ -8,6 +8,9 @@ import { join } from 'node:path'
  */
 export function newProfile(): string {
   const dir = mkdtempSync(join(tmpdir(), 'antimony-e2e-'))
-  writeFileSync(join(dir, 'stacks.json'), JSON.stringify({ current: null, stacks: [], home: null }))
+  writeFileSync(
+    join(dir, 'stacks.json'),
+    JSON.stringify({ version: 2, current: null, stacks: [], home: null }),
+  )
   return dir
 }

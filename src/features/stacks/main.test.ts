@@ -87,7 +87,10 @@ function setup(dir?: string, home: string | null = null) {
   if (dir === undefined) {
     dir = mkdtempSync(join(tmpdir(), 'antimony-stacks-'))
     if (home !== 'default') {
-      writeFileSync(join(dir, 'stacks.json'), JSON.stringify({ current: null, stacks: [], home }))
+      writeFileSync(
+        join(dir, 'stacks.json'),
+        JSON.stringify({ version: 2, current: null, stacks: [], home }),
+      )
     }
   }
   userData = dir
@@ -355,6 +358,22 @@ describe('stacks main', () => {
     for (const stack of state().stacks) call(channels.close, stack.id)
     expect(tabs.calls.at(-1)).toBe('create 3 https://www.bing.com/ active')
     expect(state().stacks).toHaveLength(1)
+  })
+
+  it('opens new stacks at the default home page in profiles that saved none before version 2', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'antimony-stacks-'))
+    writeFileSync(
+      join(dir, 'stacks.json'),
+      JSON.stringify({ current: null, stacks: [], home: null }),
+    )
+    const { call } = setup(dir)
+    expect(call(channels.home)).toBe('https://www.bing.com/')
+    expect(tabs.calls).toEqual(['create 1 https://www.bing.com/ active'])
+    call(channels.setHome, null)
+    quitListeners.forEach((listener) => listener())
+
+    // Cleared after the upgrade, it stays cleared.
+    expect(setup(dir).call(channels.home)).toBeNull()
   })
 
   it('opens nothing at start or after the last stack without a home page', () => {
