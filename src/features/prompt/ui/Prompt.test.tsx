@@ -100,6 +100,9 @@ describe('Prompt', () => {
         .getAllByRole('option')
         .map((option) => option.textContent),
     ).toEqual(['↳@rust-docsRust'])
+    // Ctrl+Tab switches stacks; it doesn't complete.
+    press(box, 'Tab', { ctrlKey: true })
+    expect(box.value).toBe('compare @ru')
     press(box, 'Tab')
     expect(box.value).toBe('compare @rust-docs ')
 

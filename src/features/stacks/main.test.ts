@@ -87,8 +87,10 @@ function setup(dir = mkdtempSync(join(tmpdir(), 'antimony-stacks-'))) {
   const send = vi.fn()
   const fileMenu: MenuItemConstructorOptions[] = []
   let onInput: ((event: { preventDefault(): void }, input: object) => void) | null = null
+  let onBlur: (() => void) | null = null
   register({
     window: {
+      on: (_: string, listener: () => void) => (onBlur = listener),
       webContents: {
         focus: () => {},
         on: (_: string, listener: typeof onInput) => (onInput = listener),
@@ -98,8 +100,8 @@ function setup(dir = mkdtempSync(join(tmpdir(), 'antimony-stacks-'))) {
     fileMenu,
     ipc: { handle: (channel: string, fn: never) => handlers.set(channel, fn), send },
   } as unknown as MainContext)
-  /** Presses Ctrl+`key` in the chrome UI; returns whether the key was taken. */
-  const press = (key: string) => {
+  /** Presses Ctrl/Cmd+`key` in the chrome UI; returns whether the key was taken. */
+  const press = (key: string, input: object = {}) => {
     const preventDefault = vi.fn()
     onInput!(
       { preventDefault },
@@ -111,10 +113,12 @@ function setup(dir = mkdtempSync(join(tmpdir(), 'antimony-stacks-'))) {
         alt: false,
         shift: false,
         isAutoRepeat: false,
+        ...input,
       },
     )
     return preventDefault.mock.calls.length > 0
   }
+  const blur = () => onBlur!()
   const call = (channel: string, ...args: unknown[]) => handlers.get(channel)!(...args)
   const state = () => call(channels.state) as StacksState
   const nav = (tabId: number, url: string, entry: 'new' | 'back' | 'replaced' = 'new') =>
@@ -132,7 +136,21 @@ function setup(dir = mkdtempSync(join(tmpdir(), 'antimony-stacks-'))) {
     nav(tabId, `https://site.example/${name}`)
     title(tabId, name)
   }
-  return { call, state, send, nav, title, visit, rowsOf, activeTitle, idOf, dir, fileMenu, press }
+  return {
+    call,
+    state,
+    send,
+    nav,
+    title,
+    visit,
+    rowsOf,
+    activeTitle,
+    idOf,
+    dir,
+    fileMenu,
+    press,
+    blur,
+  }
 }
 
 describe('stacks main', () => {
@@ -309,6 +327,8 @@ describe('stacks main', () => {
       ['Reload Page', 'CmdOrCtrl+R'],
       ['New Stack', 'CmdOrCtrl+N'],
       ['Close Page', 'CmdOrCtrl+W'],
+      ['Next Stack', 'Ctrl+Tab'],
+      ['Previous Stack', 'Ctrl+Shift+Tab'],
     ])
     expect(press('r')).toBe(true)
     expect(press('n')).toBe(true)
@@ -319,6 +339,42 @@ describe('stacks main', () => {
       [channels.command, 'new'],
       [channels.command, 'close-page'],
     ])
+  })
+
+  it('sends the Ctrl+Tab cycle to the UI: steps, then end on Ctrl up or cancel', () => {
+    const { press, send, blur, fileMenu } = setup()
+    const ctrl = { control: true, meta: false }
+    const commands = () =>
+      send.mock.calls.filter(([channel]) => channel === channels.command).map(([, name]) => name)
+    const release = () => press('Control', { type: 'keyUp', control: false, meta: false })
+
+    // Escape and Ctrl up before any cycle reach the page untouched.
+    expect(press('Escape', { control: false, meta: false })).toBe(false)
+    expect(release()).toBe(false)
+    expect(commands()).toEqual([])
+
+    // Ctrl+Tab passes on: consumed, Chromium would drop the key-up of Ctrl.
+    expect(press('Tab', ctrl)).toBe(false)
+    expect(press('Tab', { ...ctrl, isAutoRepeat: true })).toBe(false)
+    expect(press('Tab', { ...ctrl, shift: true })).toBe(false)
+    expect(release()).toBe(false)
+    expect(commands()).toEqual(['cycle-next', 'cycle-next', 'cycle-previous', 'cycle-end'])
+
+    send.mockClear()
+    press('Tab', ctrl)
+    expect(press('Escape', { control: true, meta: false })).toBe(true)
+    release()
+    press('Tab', ctrl)
+    blur()
+    blur()
+    expect(commands()).toEqual(['cycle-next', 'cycle-cancel', 'cycle-next', 'cycle-cancel'])
+
+    // The menu only shows the keys: registered, they'd also run the one-step menu click.
+    const cycleItems = fileMenu.filter((item) => item.accelerator?.includes('Tab'))
+    expect(cycleItems.map((item) => item.registerAccelerator)).toEqual([false, false])
+    send.mockClear()
+    ;(fileMenu.find((item) => item.label === 'Previous Stack')!.click as () => void)()
+    expect(commands()).toEqual(['cycle-previous', 'cycle-end'])
   })
 
   it('serves outlines by name and publishes changes once per burst', async () => {

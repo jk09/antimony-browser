@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { shortcutLabel, stackCommandFor, type KeyInput } from './keys'
+import { cycleKeyFor, shortcutLabel, stackCommandFor, type KeyInput } from './keys'
 
 const key = (k: string, extra: Partial<KeyInput> = {}): KeyInput => ({
   type: 'keyDown',
@@ -34,5 +34,17 @@ describe('stack shortcuts', () => {
     expect(shortcutLabel('reload', 'linux')).toBe('Ctrl+R')
     expect(shortcutLabel('new', 'darwin')).toBe('Cmd+N')
     expect(shortcutLabel('close-page', 'win32')).toBe('Ctrl+W')
+  })
+
+  it('maps the Ctrl+Tab cycle keys', () => {
+    expect(cycleKeyFor(key('Tab'))).toBe('next')
+    expect(cycleKeyFor(key('Tab', { isAutoRepeat: true }))).toBe('next')
+    expect(cycleKeyFor(key('Tab', { shift: true }))).toBe('previous')
+    expect(cycleKeyFor(key('Tab', { control: false }))).toBeNull()
+    expect(cycleKeyFor(key('Tab', { meta: true }))).toBeNull()
+    expect(cycleKeyFor(key('Control', { type: 'keyUp', control: false }))).toBe('release')
+    expect(cycleKeyFor(key('Tab', { type: 'keyUp' }))).toBeNull()
+    expect(cycleKeyFor(key('Escape', { control: false }))).toBe('escape')
+    expect(cycleKeyFor(key('r'))).toBeNull()
   })
 })

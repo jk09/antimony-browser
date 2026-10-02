@@ -235,6 +235,13 @@ textarea {
   background: var(--hover);
 }
 
+/* The stack Ctrl+Tab will switch to when Ctrl is released. */
+.stack-list li.target {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
 .stack-list-item {
   display: flex;
   flex: 1;

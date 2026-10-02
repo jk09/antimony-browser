@@ -7,7 +7,7 @@ import { onHistoryCleared } from '../history/main'
 import { getTabs, onPageEvent, setHistoryResolver, type PageEvent } from '../navigation/main'
 import { channels as promptChannels } from '../prompt/ipc'
 import { channels, type Stack, type StackCommand, type StacksState } from './ipc'
-import { stackCommandFor } from './shared/keys'
+import { cycleKeyFor, stackCommandFor } from './shared/keys'
 import { parseStoredStacks, type StoredStacks } from './shared/stored'
 import {
   backTarget,
@@ -355,9 +355,55 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
       accelerator: 'CmdOrCtrl+W',
       click: () => command('close-page'),
     },
+    // From the menu there's no Ctrl to release: one step, then switch. The keys are only shown
+    // here; before-input-event handles them (registered, they would also run this click).
+    {
+      id: 'stacks-next',
+      label: 'Next Stack',
+      accelerator: 'Ctrl+Tab',
+      registerAccelerator: false,
+      click: () => cycleStep('cycle-next', true),
+    },
+    {
+      id: 'stacks-previous',
+      label: 'Previous Stack',
+      accelerator: 'Ctrl+Shift+Tab',
+      registerAccelerator: false,
+      click: () => cycleStep('cycle-previous', true),
+    },
   )
+
+  // Ctrl+[Shift+]Tab: the UI keeps the stacks in most-recently-used order and the highlight; main
+  // only knows whether a cycle is open, to end it when Ctrl goes up and cancel it on Escape or
+  // when the window loses focus. Focus stays where it is (the switch moves it to the page).
+  let cycling = false
+  const cycleStep = (name: 'cycle-next' | 'cycle-previous', end: boolean) => {
+    cycling = !end
+    ipc.send(channels.command, name)
+    if (end) ipc.send(channels.command, 'cycle-end')
+  }
+  const finishCycle = (name: 'cycle-end' | 'cycle-cancel') => {
+    if (!cycling) return
+    cycling = false
+    ipc.send(channels.command, name)
+  }
+  window.on('blur', () => finishCycle('cycle-cancel'))
+
   const catchKeys = (contents: Electron.WebContents) =>
     contents.on('before-input-event', (event, input) => {
+      const cycle = cycleKeyFor(input)
+      // Ctrl+Tab isn't consumed: after a consumed key-down Chromium drops every key event up to
+      // the next key-down, so Ctrl going up would never arrive. Pages don't act on Ctrl+Tab.
+      if (cycle === 'next' || cycle === 'previous') {
+        cycleStep(cycle === 'next' ? 'cycle-next' : 'cycle-previous', false)
+        return
+      }
+      // The key-up of Ctrl isn't consumed: pages keep seeing their modifier state.
+      if (cycle === 'release') return finishCycle('cycle-end')
+      if (cycle === 'escape' && cycling) {
+        event.preventDefault()
+        return finishCycle('cycle-cancel')
+      }
       const name = stackCommandFor(input, process.platform)
       if (name === null) return
       event.preventDefault()
