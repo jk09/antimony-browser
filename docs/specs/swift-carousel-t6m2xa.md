@@ -6,7 +6,7 @@
 | --- | --- |
 | **Feature name** | Ctrl+Tab / Ctrl+Shift+Tab switch between stacks, most recently used first, while Ctrl is held |
 | **Spec ID** | swift-carousel-t6m2xa |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |

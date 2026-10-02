@@ -385,17 +385,36 @@ describe('Prompt', () => {
     )
   })
 
-  it('groups Claude and installed Ollama models in the picker', async () => {
+  it('sends queries to a Claude Code CLI model without an API key', async () => {
+    const { api, box } = await openPrompt({
+      settings: { model: 'cli:claude-sonnet-5-5', provider: 'claude-cli', hasKey: false },
+    })
+    type(box, 'hello there')
+    press(box, 'Enter')
+    await waitFor(() =>
+      expect(api.agent.run).toHaveBeenCalledWith({ text: 'hello there', attachments: [] }),
+    )
+  })
+
+  it('groups Claude (API key), Claude Code CLI and installed Ollama models in the picker', async () => {
     const { api } = await openPrompt()
     const picker = screen.getByRole('combobox', { name: 'Model' })
-    await waitFor(() => expect(within(picker).getAllByRole('group')).toHaveLength(2))
-    const [claude, ollama] = within(picker).getAllByRole('group')
-    expect(claude!.getAttribute('label')).toBe('Claude')
+    await waitFor(() => expect(within(picker).getAllByRole('group')).toHaveLength(3))
+    const [claude, cli, ollama] = within(picker).getAllByRole('group')
+    expect(claude!.getAttribute('label')).toBe('Claude (API key)')
     expect(
       within(claude!)
         .getAllByRole('option')
         .map((o) => o.textContent),
     ).toEqual(['Sonnet 5.5', 'Opus 5.5', 'Haiku 4.5'])
+    expect(cli!.getAttribute('label')).toBe('Claude Code CLI')
+    expect(
+      within(cli!)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['Sonnet 5.5 (Claude Code)'])
+    fireEvent.change(picker, { target: { value: 'cli:claude-sonnet-5-5' } })
+    expect(api.agent.updateSettings).toHaveBeenCalledWith({ model: 'cli:claude-sonnet-5-5' })
     expect(ollama!.getAttribute('label')).toBe('Ollama')
     expect(
       within(ollama!)
@@ -410,23 +429,60 @@ describe('Prompt', () => {
     expect(api.agent.models).toHaveBeenCalledTimes(calls + 1)
   })
 
-  it("shows Ollama's error and keeps an unlisted selected Ollama model", async () => {
+  it("shows the CLI's and Ollama's errors and keeps an unlisted selected Ollama model", async () => {
     await openPrompt({
       settings: { model: 'ollama:llama3.1:latest', provider: 'ollama' },
       models: {
         claude: [{ id: 'claude-sonnet-5-5', label: 'Sonnet 5.5' }],
+        cli: { error: 'Claude Code CLI not found. Install it, or set CLAUDE_CLI_PATH.' },
         ollama: { error: "Ollama isn't running at http://localhost:11434." },
       },
     })
     const picker = screen.getByRole('combobox', { name: 'Model' }) as HTMLSelectElement
     await waitFor(() => expect(picker.textContent).toContain("isn't running"))
     expect(picker.value).toBe('ollama:llama3.1:latest')
-    const ollama = within(picker).getAllByRole('group')[1]!
-    const options = within(ollama).getAllByRole('option') as HTMLOptionElement[]
+    const [, cli, ollama] = within(picker).getAllByRole('group') as HTMLElement[]
+    expect(
+      (within(cli!).getAllByRole('option') as HTMLOptionElement[]).map((o) => [
+        o.textContent,
+        o.disabled,
+      ]),
+    ).toEqual([['Claude Code CLI not found. Install it, or set CLAUDE_CLI_PATH.', true]])
+    const options = within(ollama!).getAllByRole('option') as HTMLOptionElement[]
     expect(options.map((o) => [o.textContent, o.disabled])).toEqual([
       ['llama3.1:latest (Ollama)', false],
       ["Ollama isn't running at http://localhost:11434.", true],
     ])
+  })
+
+  it('keeps a selected CLI model in the CLI group when the CLI is unavailable', async () => {
+    await openPrompt({
+      settings: { model: 'cli:claude-opus-5-5', provider: 'claude-cli' },
+      models: {
+        claude: [{ id: 'claude-sonnet-5-5', label: 'Sonnet 5.5' }],
+        cli: { error: "Claude Code isn't logged in. Run `claude` in a terminal and log in." },
+        ollama: { models: [] },
+      },
+    })
+    const picker = screen.getByRole('combobox', { name: 'Model' }) as HTMLSelectElement
+    await waitFor(() => expect(picker.textContent).toContain("isn't logged in"))
+    expect(picker.value).toBe('cli:claude-opus-5-5')
+    const cli = within(picker).getAllByRole('group')[1]!
+    expect(within(cli).getAllByRole('option')[0]!.textContent).toBe('Opus 5.5 (Claude Code)')
+  })
+
+  it('/model switches to Claude Code CLI models by id or label and suggests them', async () => {
+    const { api, box } = await openPrompt()
+    type(box, '/model cli')
+    const suggested = within(await screen.findByRole('listbox')).getAllByRole('option')
+    expect(suggested.map((o) => o.textContent).join(' ')).toContain('cli:claude-sonnet-5-5')
+
+    type(box, '/model cli:claude-sonnet-5-5')
+    press(box, 'Enter')
+    await waitFor(() =>
+      expect(api.agent.updateSettings).toHaveBeenCalledWith({ model: 'cli:claude-sonnet-5-5' }),
+    )
+    expect((await screen.findByRole('status')).textContent).toContain('Sonnet 5.5 (Claude Code)')
   })
 
   it('/model picks Ollama models by id or bare name and suggests them', async () => {
@@ -445,7 +501,7 @@ describe('Prompt', () => {
     type(box, '/model ollama:mistral')
     press(box, 'Enter')
     expect((await screen.findByRole('alert')).textContent).toContain(
-      'Choose one of: claude-sonnet-5-5, claude-opus-5-5, claude-haiku-4-5, ollama:qwen3:8b',
+      'Choose one of: claude-sonnet-5-5, claude-opus-5-5, claude-haiku-4-5, cli:claude-sonnet-5-5, ollama:qwen3:8b',
     )
     expect(api.agent.updateSettings).toHaveBeenCalledTimes(1)
   })

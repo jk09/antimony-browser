@@ -3,7 +3,15 @@ import { app, safeStorage } from 'electron'
 import type { MainContext } from '../../app/main/features'
 import { createJsonStore } from '../../app/main/json-store'
 import { getPage } from '../navigation/main'
-import { channels, claudeModels, isOllamaModel, providerOf, type ModelList } from './ipc'
+import {
+  channels,
+  claudeModels,
+  cliClaudeModel,
+  isCliModel,
+  isOllamaModel,
+  providerOf,
+  type ModelList,
+} from './ipc'
 import { Agent, type Step } from './main/agent'
 import {
   createMessage,
@@ -12,6 +20,14 @@ import {
   type ModelRequest,
 } from './main/anthropic'
 import { pageBrowser } from './main/browser'
+import {
+  cliCommand,
+  cliComplete,
+  cliEnv,
+  cliStatus,
+  runCliTurn,
+  type CliOptions,
+} from './main/claude-cli'
 import { listOllamaModels, ollamaUrl } from './main/ollama'
 import { toolNamed } from './main/tools'
 import {
@@ -45,8 +61,9 @@ export interface Completion {
 }
 
 /**
- * Asks the model selected in the prompt (Claude or Ollama) once. Rejects when no model is usable
- * (Claude without a key) or the request fails. Callers decide what content they may send.
+ * Asks the model selected in the prompt (Claude via API key or CLI, or Ollama) once. Rejects when
+ * no model is usable (Claude without a key, CLI missing or logged out) or the request fails.
+ * Callers decide what content they may send.
  */
 export function complete(request: CompletionRequest): Promise<Completion> {
   if (!completer) return Promise.reject(new Error('The assistant is not available.'))
@@ -86,9 +103,17 @@ export function register({ ipc, fileMenu }: MainContext): void {
   const settings = new SettingsService(store, safeStorageCrypto, process.env['ANTHROPIC_API_KEY'])
   const baseUrl = process.env['ANTHROPIC_BASE_URL'] || DEFAULT_BASE_URL
   const ollamaBaseUrl = ollamaUrl(process.env['OLLAMA_HOST'])
-  const noKey = 'No Anthropic API key is set. Use /key to add one, or pick an Ollama model.'
+  const noKey =
+    'No Anthropic API key is set. Use /key to add one, or pick a Claude Code CLI or Ollama model.'
+  // The user's Claude Code CLI, signed in with its own login (read at startup; the UI can't change it).
+  const cli: CliOptions = {
+    command: cliCommand(process.env, app.getPath('home')),
+    cwd: join(app.getPath('userData'), 'claude-cli'),
+    env: cliEnv(process.env),
+  }
 
   const callModel = (request: ModelRequest, signal?: AbortSignal) => {
+    if (isCliModel(request.model)) throw new Error('Claude Code CLI models run through the CLI')
     if (isOllamaModel(request.model)) {
       return createMessage(request, { baseUrl: ollamaBaseUrl, ...(signal && { signal }) })
     }
@@ -109,6 +134,15 @@ export function register({ ipc, fileMenu }: MainContext): void {
         : []),
       { type: 'text', text },
     ]
+    if (isCliModel(model)) {
+      const answer = await cliComplete(cli, {
+        model: cliClaudeModel(model),
+        system,
+        content,
+        ...(signal && { signal }),
+      })
+      return { text: answer, model }
+    }
     const response = await callModel(
       { model, system, messages: [{ role: 'user', content }], tools: [] },
       signal,
@@ -121,6 +155,7 @@ export function register({ ipc, fileMenu }: MainContext): void {
 
   const current = new Agent({
     callModel,
+    runCli: (turn) => runCliTurn(cli, turn),
     browser: () => {
       const page = getPage()
       return page ? pageBrowser(page) : null
@@ -157,10 +192,10 @@ export function register({ ipc, fileMenu }: MainContext): void {
     settings.setKey(parseKey(value))
     return publishSettings()
   })
-  ipc.handle(channels.models, async (): Promise<ModelList> => ({
-    claude: claudeModels.map(({ id, label }) => ({ id, label })),
-    ollama: await listOllamaModels(ollamaBaseUrl),
-  }))
+  ipc.handle(channels.models, async (): Promise<ModelList> => {
+    const [cliModels, ollama] = await Promise.all([cliStatus(cli), listOllamaModels(ollamaBaseUrl)])
+    return { claude: claudeModels.map(({ id, label }) => ({ id, label })), cli: cliModels, ollama }
+  })
   ipc.handle(channels.debugLog, () => current.debugLog())
   ipc.handle(channels.toggleDebug, () => ipc.send(channels.debugToggled, null))
 

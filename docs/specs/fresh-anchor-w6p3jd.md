@@ -6,7 +6,7 @@
 | --- | --- |
 | **Feature name** | New-stack page: an empty new stack opens a configurable page (default bing.com) as its root |
 | **Spec ID** | fresh-anchor-w6p3jd |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |

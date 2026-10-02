@@ -11,6 +11,8 @@ import {
 } from 'react'
 import {
   claudeModels,
+  cliClaudeModel,
+  isCliModel,
   limits,
   type AgentSettings,
   type AgentState,
@@ -127,12 +129,15 @@ export function Prompt({ focusRequest = 0 }: { focusRequest?: number }) {
           ? { ...command, options: saved }
           : command.name === 'menu'
             ? { ...command, tree: menuOptions(menu) }
-            : command.name === 'model' && modelList && 'models' in modelList.ollama
+            : command.name === 'model' && modelList
               ? {
                   ...command,
                   options: [
                     ...(command.options ?? []),
-                    ...modelList.ollama.models.map((m) => m.id),
+                    ...('models' in modelList.cli ? modelList.cli.models.map((m) => m.id) : []),
+                    ...('models' in modelList.ollama
+                      ? modelList.ollama.models.map((m) => m.id)
+                      : []),
                   ],
                 }
               : command,
@@ -260,10 +265,10 @@ export function Prompt({ focusRequest = 0 }: { focusRequest?: number }) {
             setMessage({ kind: 'error', text: 'Stop the current run first (Esc).' })
             return
           }
-          if (settings?.provider !== 'ollama' && !settings?.hasKey) {
+          if ((settings?.provider ?? 'anthropic') === 'anthropic' && !settings?.hasKey) {
             setMessage({
               kind: 'error',
-              text: 'No Anthropic API key yet. Type /key to add one, or pick an Ollama model.',
+              text: 'No Anthropic API key yet. Type /key to add one, or pick a Claude Code CLI or Ollama model.',
             })
             return
           }
@@ -590,7 +595,10 @@ export function Prompt({ focusRequest = 0 }: { focusRequest?: number }) {
   )
 }
 
-/** Claude and Ollama models in two groups; the selected model always shows, even if not listed. */
+/**
+ * Claude (API key), Claude Code CLI and Ollama models in three groups; the selected model always
+ * shows, even if not listed.
+ */
 function ModelPicker({
   value,
   list,
@@ -603,10 +611,17 @@ function ModelPicker({
   onChange: (model: AgentSettings['model']) => void
 }) {
   const claude: ModelInfo[] = list?.claude ?? claudeModels.map(({ id, label }) => ({ id, label }))
+  const cli: ModelInfo[] = list && 'models' in list.cli ? [...list.cli.models] : []
+  const cliError = list && 'error' in list.cli ? list.cli.error : null
   const ollama: ModelInfo[] = list && 'models' in list.ollama ? [...list.ollama.models] : []
   const ollamaError = list && 'error' in list.ollama ? list.ollama.error : null
-  if (![...claude, ...ollama].some((model) => model.id === value)) {
-    ollama.unshift({ id: value, label: `${value.replace(/^ollama:/, '')} (Ollama)` })
+  if (![...claude, ...cli, ...ollama].some((model) => model.id === value)) {
+    if (isCliModel(value)) {
+      const base = claudeModels.find((model) => model.id === cliClaudeModel(value))
+      cli.unshift({ id: value, label: `${base?.label ?? value} (Claude Code)` })
+    } else {
+      ollama.unshift({ id: value, label: `${value.replace(/^ollama:/, '')} (Ollama)` })
+    }
   }
   return (
     <select
@@ -616,13 +631,27 @@ function ModelPicker({
       onFocus={onFocus}
       onChange={(event) => onChange(event.target.value as AgentSettings['model'])}
     >
-      <optgroup label="Claude">
+      <optgroup label="Claude (API key)">
         {claude.map((model) => (
           <option key={model.id} value={model.id}>
             {model.label}
           </option>
         ))}
       </optgroup>
+      {(cli.length > 0 || cliError) && (
+        <optgroup label="Claude Code CLI">
+          {cli.map((model) => (
+            <option key={model.id} value={model.id}>
+              {model.label}
+            </option>
+          ))}
+          {cliError && (
+            <option disabled value="">
+              {cliError}
+            </option>
+          )}
+        </optgroup>
+      )}
       {(ollama.length > 0 || ollamaError) && (
         <optgroup label="Ollama">
           {ollama.map((model) => (

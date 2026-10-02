@@ -1,6 +1,6 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import type { MenuItemConstructorOptions } from 'electron'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { MainContext } from '../../app/main/features'
@@ -19,6 +19,18 @@ vi.mock('../navigation/main', () => ({ getPage: () => null }))
 
 process.env['OLLAMA_HOST'] = '127.0.0.1:11555'
 delete process.env['ANTHROPIC_API_KEY']
+// A fake Claude Code CLI (logged in unless FAKE_CLAUDE_LOGGED_IN=0); runs are logged here.
+const cliLog = join(userData, 'fake-claude.log')
+process.env['CLAUDE_CLI_PATH'] = resolve(
+  import.meta.dirname,
+  '../../../e2e/fixtures/fake-claude.mjs',
+)
+process.env['FAKE_CLAUDE_LOG'] = cliLog
+const cliRuns = () =>
+  readFileSync(cliLog, 'utf8')
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line) as { args: string[]; hasApiKey: boolean; cwd: string })
 const { register, complete } = await import('./main')
 const { channels } = await import('./ipc')
 
@@ -109,7 +121,7 @@ describe('agent main', () => {
     expect(fetch).toHaveBeenCalledTimes(1)
   })
 
-  it('lists Claude models and the models installed in Ollama', async () => {
+  it('lists Claude models, the Claude Code CLI models and the models installed in Ollama', async () => {
     const fetch = vi.fn(async (_url: string) =>
       json({ models: [{ name: 'qwen3:8b' }, { name: 'llama3.1:latest' }, { name: 42 }] }),
     )
@@ -122,6 +134,13 @@ describe('agent main', () => {
         { id: 'claude-opus-5-5', label: 'Opus 5.5' },
         { id: 'claude-haiku-4-5', label: 'Haiku 4.5' },
       ],
+      cli: {
+        models: [
+          { id: 'cli:claude-sonnet-5-5', label: 'Sonnet 5.5 (Claude Code)' },
+          { id: 'cli:claude-opus-5-5', label: 'Opus 5.5 (Claude Code)' },
+          { id: 'cli:claude-haiku-4-5', label: 'Haiku 4.5 (Claude Code)' },
+        ],
+      },
       ollama: {
         models: [
           { id: 'ollama:qwen3:8b', label: 'qwen3:8b (Ollama)' },
@@ -177,5 +196,72 @@ describe('agent main', () => {
     call(channels.updateSettings, { model: 'claude-sonnet-5-5' })
     await expect(complete({ system: 's', text: 't' })).rejects.toThrow(/key/)
     expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('runs Claude Code CLI models through the CLI, without the API key, and resumes its session', async () => {
+    process.env['ANTHROPIC_API_KEY'] = 'sk-ant-from-env'
+    const fetch = vi.fn()
+    vi.stubGlobal('fetch', fetch)
+    try {
+      const { call } = setup()
+      expect(call(channels.updateSettings, { model: 'cli:claude-haiku-4-5' })).toMatchObject({
+        provider: 'claude-cli',
+      })
+      const items = () => JSON.stringify(call(channels.state))
+      call(channels.run, { text: 'open example.com', attachments: [] })
+      // No page in this test: the tool call reaches the agent over MCP and comes back as an error.
+      await vi.waitFor(
+        () =>
+          expect(items()).toContain(
+            'Could not open example.com (The browser page is not available.)',
+          ),
+        { timeout: 10_000 },
+      )
+      await vi.waitFor(() => expect(call(channels.state)).toMatchObject({ status: 'idle' }))
+      call(channels.run, { text: 'and again', attachments: [] })
+      await vi.waitFor(() => expect(items()).toContain('CLI echo: and again'), { timeout: 10_000 })
+
+      const [first, second] = cliRuns().slice(-2)
+      expect(first!.hasApiKey).toBe(false)
+      expect(first!.cwd).toBe(join(userData, 'claude-cli'))
+      expect(first!.args).toEqual(expect.arrayContaining(['--model', 'claude-haiku-4-5']))
+      expect(first!.args).not.toContain('--resume')
+      expect(second!.args).toEqual(expect.arrayContaining(['--resume']))
+      expect(fetch).not.toHaveBeenCalled()
+    } finally {
+      delete process.env['ANTHROPIC_API_KEY']
+    }
+  })
+
+  it('answers single requests through the Claude Code CLI', async () => {
+    const { call } = setup()
+    call(channels.updateSettings, { model: 'cli:claude-sonnet-5-5' })
+    expect(await complete({ system: 'sys', text: 'hello', imageJpegBase64: 'AAAA' })).toEqual({
+      text: 'CLI echo: hello',
+      model: 'cli:claude-sonnet-5-5',
+    })
+    expect(cliRuns().at(-1)!.args).toContain('--no-session-persistence')
+  })
+
+  it('says when the Claude Code CLI is not logged in', async () => {
+    process.env['FAKE_CLAUDE_LOGGED_IN'] = '0'
+    try {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => Promise.reject(new TypeError('fetch failed'))),
+      )
+      const { call } = setup()
+      expect(await call(channels.models)).toMatchObject({
+        cli: { error: "Claude Code isn't logged in. Run `claude` in a terminal and log in." },
+      })
+      call(channels.updateSettings, { model: 'cli:claude-sonnet-5-5' })
+      call(channels.run, { text: 'hi', attachments: [] })
+      await vi.waitFor(
+        () => expect(JSON.stringify(call(channels.state))).toContain("isn't logged in"),
+        { timeout: 10_000 },
+      )
+    } finally {
+      delete process.env['FAKE_CLAUDE_LOGGED_IN']
+    }
   })
 })

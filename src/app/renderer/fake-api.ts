@@ -48,6 +48,7 @@ export const builtins: Skill[] = ['back', 'forward', 'reload', 'stop'].map((name
 
 export const defaultModels: ModelList = {
   claude: claudeModels.map(({ id, label }) => ({ id, label })),
+  cli: { models: [{ id: 'cli:claude-sonnet-5-5', label: 'Sonnet 5.5 (Claude Code)' }] },
   ollama: { models: [{ id: 'ollama:qwen3:8b', label: 'qwen3:8b (Ollama)' }] },
 }
 

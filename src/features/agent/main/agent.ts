@@ -1,16 +1,21 @@
-import type {
-  AgentState,
-  ConversationItem,
-  DebugEvent,
-  DebugEventType,
-  DebugRun,
-  Decision,
-  ModelId,
-  RunInput,
-  RunStatus,
+import {
+  cliClaudeModel,
+  isCliModel,
+  type AgentState,
+  type CliModelId,
+  type ConversationItem,
+  type DebugEvent,
+  type DebugEventType,
+  type DebugRun,
+  type Decision,
+  type ModelId,
+  type RunInput,
+  type RunStatus,
 } from '../ipc'
 import type { ApiMessage, ContentBlock, ModelRequest, ModelResponse } from './anthropic'
 import { describeError } from './anthropic'
+import type { CliEvent, CliOutcome, CliTurn } from './claude-cli'
+import { describeCliFailure } from './claude-cli'
 import {
   describeCall,
   executeTool,
@@ -43,6 +48,8 @@ export interface Step {
 
 export interface AgentDeps {
   callModel(request: ModelRequest, signal: AbortSignal): Promise<ModelResponse>
+  /** Runs one user turn through the Claude Code CLI, which calls the tools back (cli: models). */
+  runCli(turn: CliTurn): Promise<CliOutcome>
   browser(): BrowserPort | null
   settings(): { model: ModelId; pageAccess: boolean }
   /** Why a model run can't start (e.g. no API key for a Claude model), or null. */
@@ -67,6 +74,12 @@ export function siteOf(url: string): string {
     return ''
   }
 }
+
+/**
+ * Where the model's memory of the conversation lives: `messages` for the API and Ollama, the CLI's
+ * session for the Claude Code CLI. The two don't share it.
+ */
+type Context = 'messages' | 'cli'
 
 class Stopped extends Error {
   constructor() {
@@ -109,6 +122,10 @@ function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
 /** The browser agent: one conversation, one run at a time, append-only model history. */
 export class Agent {
   private messages: ApiMessage[] = []
+  /** The Claude Code CLI session of this conversation, once a CLI run started one. */
+  private cliSession: string | null = null
+  /** Which side ran the last turn (null before the first). */
+  private context: Context | null = null
   private items: ConversationItem[] = []
   private status: RunStatus = 'idle'
   private pending: {
@@ -143,6 +160,8 @@ export class Agent {
   newConversation(): void {
     if (this.status !== 'idle') throw new Error('Stop the current run first')
     this.messages = []
+    this.cliSession = null
+    this.context = null
     this.items = []
     this.lastSteps = []
     this.emit()
@@ -178,79 +197,10 @@ export class Agent {
     try {
       const missing = this.deps.missingSetup()
       if (missing) throw new ToolError(missing)
-      this.messages.push({ role: 'user', content: this.userContent(input) })
-
-      let step = 0
-      for (;;) {
-        if (step++ >= MAX_STEPS) {
-          this.addItem({ kind: 'error', message: `Stopped after ${MAX_STEPS} steps.` })
-          break
-        }
-        const { model, pageAccess } = this.deps.settings()
-        const request: ModelRequest = {
-          model,
-          system: SYSTEM_PROMPT,
-          messages: this.messages,
-          tools: toolsFor(pageAccess).map(({ name, description, input_schema }) => ({
-            name,
-            description,
-            input_schema,
-          })),
-        }
-        const sent = Date.now()
-        this.debug(run, 'request', `Request ${step} · ${model}`, {
-          model,
-          messageCount: request.messages.length,
-          tools: request.tools.map((tool) => tool.name),
-          system: request.system,
-          messages: request.messages,
-        })
-        const response = await abortable(this.deps.callModel(request, signal), signal)
-        this.debug(
-          run,
-          'response',
-          `Response ${step} · ${response.stop_reason ?? 'no stop reason'}`,
-          response,
-          Date.now() - sent,
-        )
-        if (response.content.length > 0) {
-          this.messages.push({ role: 'assistant', content: response.content })
-        }
-
-        const text = response.content
-          .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
-          .map((block) => block.text)
-          .join('\n')
-          .trim()
-        if (text) this.addItem({ kind: 'assistant', text })
-        if (response.stop_reason === 'refusal') {
-          this.addItem({ kind: 'notice', text: 'The model declined this request.' })
-        } else if (response.stop_reason === 'max_tokens') {
-          this.addItem({ kind: 'notice', text: 'The answer was cut off (too long).' })
-        }
-
-        const calls = response.content.filter(
-          (block): block is { type: 'tool_use'; id: string; name: string; input: unknown } =>
-            block.type === 'tool_use',
-        )
-        if (calls.length === 0) break
-        const results: ContentBlock[] = []
-        for (const call of calls) {
-          // Every tool_use needs a tool_result, even when the model stopped for another reason.
-          results.push(
-            response.stop_reason === 'tool_use'
-              ? await this.callTool(run, call, signal, flags, steps)
-              : {
-                  type: 'tool_result',
-                  tool_use_id: call.id,
-                  content: 'Not run: the response was cut off.',
-                  is_error: true,
-                },
-          )
-        }
-        this.messages.push({ role: 'user', content: results })
-        if (response.stop_reason !== 'tool_use') break
-      }
+      const { model } = this.deps.settings()
+      this.useContext(isCliModel(model) ? 'cli' : 'messages')
+      if (isCliModel(model)) await this.runCliTurn(run, input, model, signal, flags, steps)
+      else await this.runModelLoop(run, input, signal, flags, steps)
       this.debug(run, 'done', 'Done', { steps: steps.length })
     } catch (error) {
       this.fail(run, error)
@@ -259,6 +209,215 @@ export class Agent {
       this.lastSteps = steps
       this.end()
     }
+  }
+
+  /** The API / Ollama loop: model steps and their tool calls until the model is done. */
+  private async runModelLoop(
+    run: DebugRun,
+    input: RunInput,
+    signal: AbortSignal,
+    flags: RunFlags,
+    steps: Step[],
+  ) {
+    this.messages.push({ role: 'user', content: this.userContent(input) })
+
+    let step = 0
+    for (;;) {
+      if (step++ >= MAX_STEPS) {
+        this.addItem({ kind: 'error', message: `Stopped after ${MAX_STEPS} steps.` })
+        break
+      }
+      const { model, pageAccess } = this.deps.settings()
+      if (isCliModel(model)) {
+        throw new ToolError(
+          'The model was switched to the Claude Code CLI. Send the request again.',
+        )
+      }
+      const request: ModelRequest = {
+        model,
+        system: SYSTEM_PROMPT,
+        messages: this.messages,
+        tools: toolsFor(pageAccess).map(({ name, description, input_schema }) => ({
+          name,
+          description,
+          input_schema,
+        })),
+      }
+      const sent = Date.now()
+      this.debug(run, 'request', `Request ${step} · ${model}`, {
+        model,
+        messageCount: request.messages.length,
+        tools: request.tools.map((tool) => tool.name),
+        system: request.system,
+        messages: request.messages,
+      })
+      const response = await abortable(this.deps.callModel(request, signal), signal)
+      this.debug(
+        run,
+        'response',
+        `Response ${step} · ${response.stop_reason ?? 'no stop reason'}`,
+        response,
+        Date.now() - sent,
+      )
+      if (response.content.length > 0) {
+        this.messages.push({ role: 'assistant', content: response.content })
+      }
+
+      const text = response.content
+        .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
+        .map((block) => block.text)
+        .join('\n')
+        .trim()
+      if (text) this.addItem({ kind: 'assistant', text })
+      if (response.stop_reason === 'refusal') {
+        this.addItem({ kind: 'notice', text: 'The model declined this request.' })
+      } else if (response.stop_reason === 'max_tokens') {
+        this.addItem({ kind: 'notice', text: 'The answer was cut off (too long).' })
+      }
+
+      const calls = response.content.filter(
+        (block): block is { type: 'tool_use'; id: string; name: string; input: unknown } =>
+          block.type === 'tool_use',
+      )
+      if (calls.length === 0) break
+      const results: ContentBlock[] = []
+      for (const call of calls) {
+        // Every tool_use needs a tool_result, even when the model stopped for another reason.
+        results.push(
+          response.stop_reason === 'tool_use'
+            ? await this.callTool(run, call, signal, flags, steps)
+            : {
+                type: 'tool_result',
+                tool_use_id: call.id,
+                content: 'Not run: the response was cut off.',
+                is_error: true,
+              },
+        )
+      }
+      this.messages.push({ role: 'user', content: results })
+      if (response.stop_reason !== 'tool_use') break
+    }
+  }
+
+  /**
+   * One user turn through the Claude Code CLI: the CLI runs the model loop and calls the browser
+   * tools back over MCP, each through callTool (approvals, page access, refusals).
+   */
+  private async runCliTurn(
+    run: DebugRun,
+    input: RunInput,
+    model: CliModelId,
+    signal: AbortSignal,
+    flags: RunFlags,
+    steps: Step[],
+  ) {
+    const { pageAccess } = this.deps.settings()
+    const tools = toolsFor(pageAccess).map(({ name, description, input_schema }) => ({
+      name,
+      description,
+      input_schema,
+    }))
+    const content = this.userContent(input)
+    this.debug(run, 'request', `Claude Code CLI · ${cliClaudeModel(model)}`, {
+      model: cliClaudeModel(model),
+      resume: this.cliSession,
+      tools: tools.map((tool) => tool.name),
+      system: SYSTEM_PROMPT,
+      content,
+    })
+    const started = Date.now()
+    let calls = 0
+    let outcome: CliOutcome
+    try {
+      outcome = await this.deps.runCli({
+        model: cliClaudeModel(model),
+        system: SYSTEM_PROMPT,
+        content,
+        tools,
+        maxTurns: MAX_STEPS,
+        resume: this.cliSession,
+        signal,
+        callTool: (name, toolInput) =>
+          this.callTool(
+            run,
+            { id: `cli-${++calls}`, name, input: toolInput },
+            signal,
+            flags,
+            steps,
+          ),
+        onEvent: (event) => this.onCliEvent(run, event, started),
+      })
+    } catch (error) {
+      if (signal.aborted) throw new Stopped()
+      throw new ToolError(error instanceof Error ? error.message : String(error))
+    } finally {
+      // The CLI exited while asking: nobody will use the answer.
+      this.pending?.resolve('stopped')
+    }
+    if (signal.aborted) throw new Stopped()
+    if (outcome.sessionId) this.cliSession = outcome.sessionId
+    const { result } = outcome
+    if (result?.subtype === 'error_max_turns') {
+      this.addItem({ kind: 'error', message: `Stopped after ${MAX_STEPS} steps.` })
+      return
+    }
+    if (!result || result.is_error) throw new ToolError(describeCliFailure(outcome))
+    if (result.stop_reason === 'refusal') {
+      this.addItem({ kind: 'notice', text: 'The model declined this request.' })
+    }
+  }
+
+  /** Shows the CLI's assistant messages and logs its start and result in the debug panel. */
+  private onCliEvent(run: DebugRun, event: CliEvent, started: number) {
+    if (event.type === 'system' && event.subtype === 'init') {
+      this.debug(run, 'response', 'CLI started', {
+        session_id: event.session_id,
+        model: event['model'],
+        tools: event['tools'],
+        mcp_servers: event['mcp_servers'],
+      })
+    } else if (event.type === 'assistant' && !event.parent_tool_use_id) {
+      const blocks = event.message?.content ?? []
+      const text = blocks
+        .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
+        .map((block) => block.text)
+        .join('\n')
+        .trim()
+      if (text) this.addItem({ kind: 'assistant', text })
+      const kinds = blocks.map((block) => block.type).join(', ')
+      this.debug(
+        run,
+        'response',
+        `Assistant · ${kinds || 'empty'}`,
+        event.message,
+        Date.now() - started,
+      )
+    } else if (event.type === 'result') {
+      const { usage: _usage, modelUsage: _modelUsage, ...result } = event
+      this.debug(
+        run,
+        'response',
+        `Result · ${event.subtype ?? 'unknown'}`,
+        result,
+        Date.now() - started,
+      )
+    }
+  }
+
+  /**
+   * Switches the model's memory to `next`. The API/Ollama history and the CLI session don't see
+   * each other, so a switch starts the new side fresh and says so.
+   */
+  private useContext(next: Context) {
+    if (this.context !== null && this.context !== next) {
+      if (next === 'cli') this.cliSession = null
+      else this.messages = []
+      this.addItem({
+        kind: 'notice',
+        text: "The model doesn't see the earlier messages (provider changed).",
+      })
+    }
+    this.context = next
   }
 
   /**

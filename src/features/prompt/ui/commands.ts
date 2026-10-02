@@ -50,6 +50,7 @@ export async function runCommand(
       const list = await api.agent.models()
       const available: ModelInfo[] = [
         ...list.claude,
+        ...('models' in list.cli ? list.cli.models : []),
         ...('models' in list.ollama ? list.ollama.models : []),
       ]
       const wanted = args.toLowerCase()
@@ -60,8 +61,10 @@ export async function runCommand(
           (isOllamaModel(m.id) && m.id === ollamaId(args)),
       )
       if (!model) {
-        const ollamaError = 'error' in list.ollama ? ` ${list.ollama.error}` : ''
-        return error(`Choose one of: ${available.map((m) => m.id).join(', ')}.${ollamaError}`)
+        const unavailable = [list.cli, list.ollama]
+          .flatMap((group) => ('error' in group ? [` ${group.error}`] : []))
+          .join('')
+        return error(`Choose one of: ${available.map((m) => m.id).join(', ')}.${unavailable}`)
       }
       await api.agent.updateSettings({ model: model.id })
       return info(`Using ${model.label}.`)
