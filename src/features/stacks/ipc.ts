@@ -13,8 +13,12 @@ export const channels = {
   command: 'stacks:command',
 } as const
 
-/** What Ctrl/Cmd+R, +N and +W (and their File menu items) ask the UI to do. */
-export type StackCommand = 'reload' | 'new' | 'close-page'
+/**
+ * What Ctrl/Cmd+R, +N and +W (and their File menu items) ask the UI to do, and the steps of
+ * Ctrl+[Shift+]Tab: start or step a cycle through the stacks, then switch (end) or not (cancel).
+ */
+export type StackCommand =
+  'reload' | 'new' | 'close-page' | 'cycle-next' | 'cycle-previous' | 'cycle-end' | 'cycle-cancel'
 
 /** One page in a stack's tree. */
 export interface StackNode {
@@ -38,7 +42,12 @@ export interface Stack {
   activeId: number | null
   nextNodeId: number
   lastUsedAt: number
+  /** The root was opened as the home page: the stack is named after the root's first child. */
+  startRoot?: boolean
 }
+
+/** The home page until `/home` changes or clears it. */
+export const DEFAULT_HOME = 'https://www.bing.com/'
 
 /** A row of the tree as the header shows it, in depth-first order. */
 export interface StackRow {

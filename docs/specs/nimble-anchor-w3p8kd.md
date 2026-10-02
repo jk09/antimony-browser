@@ -11,7 +11,7 @@
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-01 20:30 +00:00 |
-| **Last updated** | 2026-10-02 09:00 +00:00 |
+| **Last updated** | 2026-10-02 08:00 +00:00 |
 | **Affected features** | stacks, prompt |
 | **Target release** | 0.1.0 |
 | **Related links** | [branching-trail-k4w9zp](./branching-trail-k4w9zp.md) (navigation stacks) |

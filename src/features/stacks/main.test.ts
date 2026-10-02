@@ -79,7 +79,17 @@ vi.mock('../history/main', () => ({
 const { register } = await import('./main')
 const { channels } = await import('./ipc')
 
-function setup(dir = mkdtempSync(join(tmpdir(), 'antimony-stacks-'))) {
+/**
+ * Registers stacks on `dir`. A fresh directory gets a stacks.json with `home` (none by default,
+ * so nothing opens at start); 'default' writes no file, as on a first run.
+ */
+function setup(dir?: string, home: string | null = null) {
+  if (dir === undefined) {
+    dir = mkdtempSync(join(tmpdir(), 'antimony-stacks-'))
+    if (home !== 'default') {
+      writeFileSync(join(dir, 'stacks.json'), JSON.stringify({ current: null, stacks: [], home }))
+    }
+  }
   userData = dir
   tabs = new FakeTabs()
   quitListeners.length = 0
@@ -87,8 +97,10 @@ function setup(dir = mkdtempSync(join(tmpdir(), 'antimony-stacks-'))) {
   const send = vi.fn()
   const fileMenu: MenuItemConstructorOptions[] = []
   let onInput: ((event: { preventDefault(): void }, input: object) => void) | null = null
+  let onBlur: (() => void) | null = null
   register({
     window: {
+      on: (_: string, listener: () => void) => (onBlur = listener),
       webContents: {
         focus: () => {},
         on: (_: string, listener: typeof onInput) => (onInput = listener),
@@ -98,8 +110,8 @@ function setup(dir = mkdtempSync(join(tmpdir(), 'antimony-stacks-'))) {
     fileMenu,
     ipc: { handle: (channel: string, fn: never) => handlers.set(channel, fn), send },
   } as unknown as MainContext)
-  /** Presses Ctrl+`key` in the chrome UI; returns whether the key was taken. */
-  const press = (key: string) => {
+  /** Presses Ctrl/Cmd+`key` in the chrome UI; returns whether the key was taken. */
+  const press = (key: string, input: object = {}) => {
     const preventDefault = vi.fn()
     onInput!(
       { preventDefault },
@@ -111,10 +123,12 @@ function setup(dir = mkdtempSync(join(tmpdir(), 'antimony-stacks-'))) {
         alt: false,
         shift: false,
         isAutoRepeat: false,
+        ...input,
       },
     )
     return preventDefault.mock.calls.length > 0
   }
+  const blur = () => onBlur!()
   const call = (channel: string, ...args: unknown[]) => handlers.get(channel)!(...args)
   const state = () => call(channels.state) as StacksState
   const nav = (tabId: number, url: string, entry: 'new' | 'back' | 'replaced' = 'new') =>
@@ -132,7 +146,21 @@ function setup(dir = mkdtempSync(join(tmpdir(), 'antimony-stacks-'))) {
     nav(tabId, `https://site.example/${name}`)
     title(tabId, name)
   }
-  return { call, state, send, nav, title, visit, rowsOf, activeTitle, idOf, dir, fileMenu, press }
+  return {
+    call,
+    state,
+    send,
+    nav,
+    title,
+    visit,
+    rowsOf,
+    activeTitle,
+    idOf,
+    dir,
+    fileMenu,
+    press,
+    blur,
+  }
 }
 
 describe('stacks main', () => {
@@ -303,12 +331,49 @@ describe('stacks main', () => {
     expect(tabs.calls).toEqual(['create 1 active', 'load 1 https://start.example/'])
   })
 
+  it('opens a new stack at the default home page at start and after the last one closes', () => {
+    const { call, nav, title, state, rowsOf } = setup(undefined, 'default')
+    expect(call(channels.home)).toBe('https://www.bing.com/')
+    expect(tabs.calls).toEqual(['create 1 https://www.bing.com/ active'])
+    nav(1, 'https://www.bing.com/')
+    title(1, 'Bing')
+    fire({ tabId: 1, type: 'loaded', url: 'https://www.bing.com/' })
+    expect(rowsOf()).toEqual(['Bing'])
+    // Named after the first page reached from the home page, not the home page.
+    expect(state().current!.name).toBe('')
+    nav(1, 'https://site.example/Rust')
+    title(1, 'Rust')
+    expect(rowsOf()).toEqual(['Bing', '.Rust'])
+    expect(state().current!.name).toBe('rust')
+    expect(state().stacks[0]!.rootTitle).toBe('Rust')
+
+    // A link-opened stack doesn't load the home page.
+    tabs.open.add(tabs.next++)
+    fire({ tabId: 2, type: 'opened', openerId: 1, active: false })
+    expect(tabs.calls).toHaveLength(1)
+
+    for (const stack of state().stacks) call(channels.close, stack.id)
+    expect(tabs.calls.at(-1)).toBe('create 3 https://www.bing.com/ active')
+    expect(state().stacks).toHaveLength(1)
+  })
+
+  it('opens nothing at start or after the last stack without a home page', () => {
+    const { call, state } = setup()
+    expect(tabs.calls).toEqual([])
+    call(channels.create)
+    call(channels.close, state().current!.id)
+    expect(state().stacks).toEqual([])
+    expect(tabs.calls).toEqual(['create 1 active', 'close 1'])
+  })
+
   it('sends Ctrl/Cmd+R, +N and +W to the UI and lists them in the File menu', () => {
     const { press, send, fileMenu } = setup()
     expect(fileMenu.map((item) => [item.label, item.accelerator])).toEqual([
       ['Reload Page', 'CmdOrCtrl+R'],
       ['New Stack', 'CmdOrCtrl+N'],
       ['Close Page', 'CmdOrCtrl+W'],
+      ['Next Stack', 'Ctrl+Tab'],
+      ['Previous Stack', 'Ctrl+Shift+Tab'],
     ])
     expect(press('r')).toBe(true)
     expect(press('n')).toBe(true)
@@ -319,6 +384,42 @@ describe('stacks main', () => {
       [channels.command, 'new'],
       [channels.command, 'close-page'],
     ])
+  })
+
+  it('sends the Ctrl+Tab cycle to the UI: steps, then end on Ctrl up or cancel', () => {
+    const { press, send, blur, fileMenu } = setup()
+    const ctrl = { control: true, meta: false }
+    const commands = () =>
+      send.mock.calls.filter(([channel]) => channel === channels.command).map(([, name]) => name)
+    const release = () => press('Control', { type: 'keyUp', control: false, meta: false })
+
+    // Escape and Ctrl up before any cycle reach the page untouched.
+    expect(press('Escape', { control: false, meta: false })).toBe(false)
+    expect(release()).toBe(false)
+    expect(commands()).toEqual([])
+
+    // Ctrl+Tab passes on: consumed, Chromium would drop the key-up of Ctrl.
+    expect(press('Tab', ctrl)).toBe(false)
+    expect(press('Tab', { ...ctrl, isAutoRepeat: true })).toBe(false)
+    expect(press('Tab', { ...ctrl, shift: true })).toBe(false)
+    expect(release()).toBe(false)
+    expect(commands()).toEqual(['cycle-next', 'cycle-next', 'cycle-previous', 'cycle-end'])
+
+    send.mockClear()
+    press('Tab', ctrl)
+    expect(press('Escape', { control: true, meta: false })).toBe(true)
+    release()
+    press('Tab', ctrl)
+    blur()
+    blur()
+    expect(commands()).toEqual(['cycle-next', 'cycle-cancel', 'cycle-next', 'cycle-cancel'])
+
+    // The menu only shows the keys: registered, they'd also run the one-step menu click.
+    const cycleItems = fileMenu.filter((item) => item.accelerator?.includes('Tab'))
+    expect(cycleItems.map((item) => item.registerAccelerator)).toEqual([false, false])
+    send.mockClear()
+    ;(fileMenu.find((item) => item.label === 'Previous Stack')!.click as () => void)()
+    expect(commands()).toEqual(['cycle-previous', 'cycle-end'])
   })
 
   it('serves outlines by name and publishes changes once per burst', async () => {
@@ -369,7 +470,9 @@ describe('stacks main', () => {
     writeFileSync(join(dir, 'stacks.json'), JSON.stringify({ stacks: [{ id: 'x' }] }))
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { state } = setup(dir)
-    expect(state()).toEqual({ current: null, stacks: [] })
+    // The fallback has no stacks and the default home page, so one opens there.
+    expect(tabs.calls).toEqual(['create 1 https://www.bing.com/ active'])
+    expect(state().stacks).toHaveLength(1)
   })
 
   it('clears stacks with all of the browsing history', () => {

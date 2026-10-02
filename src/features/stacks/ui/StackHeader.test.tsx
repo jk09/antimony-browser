@@ -156,6 +156,68 @@ describe('StackHeader', () => {
     expect(api.navigation.reload).toHaveBeenCalledTimes(1)
   })
 
+  it('cycles through stacks with Ctrl+Tab, most recent first, and switches on release', async () => {
+    const three: StacksState = {
+      ...state([row(1, 0)], 1),
+      stacks: [
+        { id: 's1', name: 'page-1', rootTitle: 'Page 1', pages: 1 },
+        { id: 's2', name: 'docs', rootTitle: 'Docs', pages: 1 },
+        { id: 's3', name: 'news', rootTitle: 'News', pages: 1 },
+      ],
+    }
+    const { api, emit } = await renderHeader(three)
+    const switcher = screen.getByRole('button', { name: /@page-1/ })
+    expect(switcher.title).toBe('Switch stack (Ctrl+Tab)')
+    const highlighted = () =>
+      within(screen.getByRole('dialog', { name: 'Stacks' }))
+        .getAllByRole('listitem')
+        .filter((item) => item.getAttribute('aria-selected') === 'true')
+        .map((item) => item.textContent)
+
+    // One Ctrl+Tab: the previous stack.
+    act(() => emit.stackCommand('cycle-next'))
+    expect(highlighted()).toEqual([expect.stringContaining('@docs')])
+    act(() => emit.stackCommand('cycle-end'))
+    expect(api.stacks.switch).toHaveBeenLastCalledWith('s2')
+    expect(screen.queryByRole('dialog', { name: 'Stacks' })).toBeNull()
+
+    // Tab, Tab wraps to the current one; Shift+Tab goes back to the oldest.
+    act(() => emit.stackCommand('cycle-next'))
+    act(() => emit.stackCommand('cycle-next'))
+    expect(highlighted()).toEqual([expect.stringContaining('@news')])
+    act(() => emit.stackCommand('cycle-next'))
+    expect(highlighted()).toEqual([expect.stringContaining('@page-1')])
+    act(() => emit.stackCommand('cycle-previous'))
+    expect(highlighted()).toEqual([expect.stringContaining('@news')])
+    act(() => emit.stackCommand('cycle-end'))
+    expect(api.stacks.switch).toHaveBeenLastCalledWith('s3')
+
+    // Ctrl+Shift+Tab starts at the oldest; Escape cancels.
+    act(() => emit.stackCommand('cycle-previous'))
+    expect(highlighted()).toEqual([expect.stringContaining('@news')])
+    act(() => emit.stackCommand('cycle-cancel'))
+    act(() => emit.stackCommand('cycle-end'))
+    expect(api.stacks.switch).toHaveBeenCalledTimes(2)
+    expect(screen.queryByRole('dialog', { name: 'Stacks' })).toBeNull()
+
+    // Not while the assistant runs.
+    act(() => emit.state({ ...idleState, status: 'running' }))
+    act(() => emit.stackCommand('cycle-next'))
+    act(() => emit.stackCommand('cycle-end'))
+    expect(api.stacks.switch).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not cycle with a single stack', async () => {
+    const { api, emit } = await renderHeader({
+      ...state([row(1, 0)], 1),
+      stacks: [{ id: 's1', name: 'page-1', rootTitle: 'Page 1', pages: 1 }],
+    })
+    act(() => emit.stackCommand('cycle-next'))
+    expect(screen.queryByRole('dialog', { name: 'Stacks' })).toBeNull()
+    act(() => emit.stackCommand('cycle-end'))
+    expect(api.stacks.switch).not.toHaveBeenCalled()
+  })
+
   it('shows "New tab" without a stack', async () => {
     await renderHeader({ current: null, stacks: [] })
     expect(screen.getByRole('button', { name: /New tab/ })).toBeTruthy()

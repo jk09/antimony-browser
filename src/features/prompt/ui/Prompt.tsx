@@ -320,7 +320,8 @@ export function Prompt({ focusRequest = 0 }: { focusRequest?: number }) {
         else void submit()
         return
       case 'Tab':
-        if (!listed) return
+        // Ctrl+Tab switches stacks.
+        if (!listed || event.ctrlKey) return
         event.preventDefault()
         accept(suggestions[Math.max(selected, 0)]!, false)
         return

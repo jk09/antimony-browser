@@ -49,8 +49,9 @@ export const promptCommands: CommandInfo[] = [
   {
     name: 'home',
     usage: '<url>',
-    description: 'Set the page new stacks open at (Ctrl/Cmd+N); /home clear removes it',
-    options: ['clear'],
+    description:
+      'Set the page new stacks open at (Ctrl/Cmd+N); /home clear removes it, /home reset restores bing.com',
+    options: ['clear', 'reset'],
   },
   { name: 'menu', usage: '<menu> <item>', description: 'Run an item from the application menu' },
   { name: 'save', usage: '<name>', description: 'Save the last run as a skill' },

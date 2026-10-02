@@ -1,8 +1,6 @@
-import { mkdtempSync } from 'node:fs'
 import { createServer, type IncomingMessage, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import {
   _electron as electron,
   expect,
@@ -10,6 +8,7 @@ import {
   type ElectronApplication,
   type Page,
 } from '@playwright/test'
+import { newProfile } from './profile'
 
 // Chromium refuses to run as root with its sandbox on (e.g. in containers); CI runs as a normal user.
 const args = ['.', ...(process.getuid?.() === 0 ? ['--no-sandbox'] : [])]
@@ -102,7 +101,7 @@ test.afterAll(async () => {
 // A fresh profile per launch: settings, history and skills don't leak between tests.
 const launch = (env: Record<string, string> = {}) =>
   electron.launch({
-    args: [...args, `--user-data-dir=${mkdtempSync(join(tmpdir(), 'antimony-e2e-'))}`],
+    args: [...args, `--user-data-dir=${newProfile()}`],
     env: {
       ...process.env,
       ANTHROPIC_API_KEY: 'sk-ant-e2e-test',
