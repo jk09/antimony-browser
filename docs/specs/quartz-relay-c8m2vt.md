@@ -6,12 +6,12 @@
 | --- | --- |
 | **Feature name** | Claude Code CLI provider: run the assistant through the user's installed `claude` CLI (their own Claude Code login), next to the Claude API key and Ollama providers, switchable in the model picker and with `/model` |
 | **Spec ID** | quartz-relay-c8m2vt |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-02 18:50 +00:00 |
-| **Last updated** | 2026-10-02 19:40 +00:00 |
+| **Last updated** | 2026-10-02 21:25 +00:00 |
 | **Affected features** | agent, prompt |
 | **Target release** | 0.1.0 |
 | **Related links** | [violet-harbinger-p7w3kd](./violet-harbinger-p7w3kd.md) (assistant), [copper-lantern-o7l4ma](./copper-lantern-o7l4ma.md) (Ollama), ADR 0004, ADR 0005 |
