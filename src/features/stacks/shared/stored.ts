@@ -1,5 +1,5 @@
 // Validation of stacks.json. Pure: no electron, Node or React imports.
-import type { Stack, StackNode } from '../ipc'
+import type { Stack, StackNode, StacksSettings } from '../ipc'
 
 /** stacks.json: the stacks and which one is current. */
 export interface StoredStacks {
@@ -34,7 +34,7 @@ function parseNode(key: string, raw: unknown): StackNode {
 
 function parseStack(raw: unknown): Stack {
   if (!isRecord(raw)) fail('a stack is not an object')
-  const { id, name, nodes, rootId, activeId, nextNodeId, lastUsedAt } = raw
+  const { id, name, nodes, rootId, activeId, nextNodeId, lastUsedAt, startRoot } = raw
   if (typeof id !== 'string' || !id) fail('a stack has no id')
   if (name !== null && typeof name !== 'string') fail(`stack ${id} has a wrong name`)
   if (!isRecord(nodes)) fail(`stack ${id} has no nodes`)
@@ -58,6 +58,8 @@ function parseStack(raw: unknown): Stack {
     fail(`stack ${id} has a wrong next node id`)
   }
   if (typeof lastUsedAt !== 'number') fail(`stack ${id} has no last use time`)
+  if (startRoot !== undefined && typeof startRoot !== 'boolean')
+    fail(`stack ${id} has a wrong startRoot`)
   return {
     id,
     name,
@@ -66,6 +68,7 @@ function parseStack(raw: unknown): Stack {
     activeId: activeId as number | null,
     nextNodeId,
     lastUsedAt,
+    ...(startRoot === true && { startRoot }),
   }
 }
 
@@ -75,4 +78,23 @@ export function parseStoredStacks(raw: unknown): StoredStacks {
   const current = raw['current']
   if (current !== null && typeof current !== 'string') fail('current is not a stack id')
   return { current: stacks.some((stack) => stack.id === current) ? current : null, stacks }
+}
+
+const parses = (url: string) => {
+  try {
+    new URL(url)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Validates `stacks-settings.json` and `stacks:update-settings`: an http(s) URL or null. */
+export function parseStacksSettings(raw: unknown): StacksSettings {
+  if (!isRecord(raw)) throw new TypeError('stacks settings: expected { newStackPage }')
+  const page = raw['newStackPage']
+  if (page !== null && !(isWebUrl(page) && parses(page))) {
+    throw new TypeError('stacks settings: newStackPage must be an http(s) URL or null')
+  }
+  return { newStackPage: page }
 }

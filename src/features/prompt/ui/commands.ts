@@ -1,5 +1,6 @@
 import { isOllamaModel, ollamaId, type AgentSettings, type ModelInfo } from '../../agent/ipc'
 import type { Skill } from '../../skills/ipc'
+import { DEFAULT_NEW_STACK_PAGE } from '../../stacks/ipc'
 import { promptCommands } from '../ipc'
 
 export interface CommandResult {
@@ -149,6 +150,25 @@ export async function runCommand(
           ? 'Pages you spend 30 s or more on will be summarised by the selected model (their text and a screenshot are sent to it).'
           : 'Page summaries off.',
       )
+    }
+    case 'new-stack-page': {
+      if (!args) {
+        const { newStackPage } = await api.stacks.settings()
+        return info(
+          newStackPage === null
+            ? 'New stacks open empty. Use /new-stack-page <url> to choose a page.'
+            : `New stacks open ${newStackPage}. Use /new-stack-page <url>, off or reset.`,
+        )
+      }
+      let page: string | null = null
+      if (args !== 'off') {
+        page = args === 'reset' ? DEFAULT_NEW_STACK_PAGE : api.navigation.toUrl(args)
+        if (page === null) {
+          return error(`${args} isn't a web address. Use /new-stack-page <url>, off or reset.`)
+        }
+      }
+      await api.stacks.updateSettings({ newStackPage: page })
+      return info(page === null ? 'New stacks open empty.' : `New stacks open ${page}.`)
     }
   }
 

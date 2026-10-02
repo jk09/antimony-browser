@@ -5,13 +5,20 @@ import type { MainContext } from '../../app/main/features'
 import { createJsonStore } from '../../app/main/json-store'
 import { onHistoryCleared } from '../history/main'
 import { getTabs, onPageEvent, setHistoryResolver, type PageEvent } from '../navigation/main'
-import { channels, type Stack, type StacksState } from './ipc'
-import { parseStoredStacks, type StoredStacks } from './shared/stored'
+import {
+  channels,
+  DEFAULT_NEW_STACK_PAGE,
+  type Stack,
+  type StacksSettings,
+  type StacksState,
+} from './ipc'
+import { parseStacksSettings, parseStoredStacks, type StoredStacks } from './shared/stored'
 import {
   backTarget,
   deriveName,
   forwardTarget,
   MAX_STACKS,
+  namingNode,
   navigated,
   newStack,
   nodeCount,
@@ -32,7 +39,14 @@ export function register({ ipc }: MainContext): void {
     parse: parseStoredStacks,
     fallback: (): StoredStacks => ({ current: null, stacks: [] }),
   })
-  app.on('will-quit', () => store.flush())
+  const settings = createJsonStore(join(app.getPath('userData'), 'stacks-settings.json'), {
+    parse: parseStacksSettings,
+    fallback: (): StacksSettings => ({ newStackPage: DEFAULT_NEW_STACK_PAGE }),
+  })
+  app.on('will-quit', () => {
+    store.flush()
+    settings.flush()
+  })
 
   const stacks = new Map<string, Stack>(store.get().stacks.map((stack) => [stack.id, stack]))
   let currentId: string | null = store.get().current
@@ -43,6 +57,11 @@ export function register({ ipc }: MainContext): void {
 
   const byRecentUse = () => [...stacks.values()].sort((a, b) => b.lastUsedAt - a.lastUsedAt)
   const current = () => (currentId === null ? null : (stacks.get(currentId) ?? null))
+
+  const rootTitle = (stack: Stack) => {
+    const node = namingNode(stack) ?? (stack.rootId === null ? null : stack.nodes[stack.rootId]!)
+    return node ? node.title || node.url : ''
+  }
 
   const state = (): StacksState => {
     const stack = current()
@@ -56,7 +75,7 @@ export function register({ ipc }: MainContext): void {
       stacks: byRecentUse().map((s) => ({
         id: s.id,
         name: s.name ?? '',
-        rootTitle: s.rootId === null ? '' : s.nodes[s.rootId]!.title || s.nodes[s.rootId]!.url,
+        rootTitle: rootTitle(s),
         pages: nodeCount(s),
       })),
     }
@@ -144,6 +163,20 @@ export function register({ ipc }: MainContext): void {
     }
     if (best >= 0) tabs.goToIndex(tabId, best)
     else tabs.load(tabId, node.url, 'back_forward')
+  }
+
+  /**
+   * Makes an empty stack current in a new tab (the empty current stack if it has no tab yet),
+   * loading the new-stack page as its root if one is set.
+   */
+  const openNewStack = () => {
+    const cur = current()
+    const stack = cur && cur.rootId === null && !tabOfStack.has(cur.id) ? cur : addStack()
+    makeCurrent(stack)
+    const url = settings.get().newStackPage
+    if (url !== null) stack.startRoot = true
+    bind(stack, tabs.create({ activate: true, ...(url !== null && { url, transition: 'typed' }) }))
+    changed()
   }
 
   const switchTo = (stack: Stack) => {
@@ -262,12 +295,9 @@ export function register({ ipc }: MainContext): void {
   ipc.handle(channels.switch, (value) => switchTo(parseStackId(channels.switch, value)))
   ipc.handle(channels.create, () => {
     const cur = current()
-    // An empty current stack already is a new one.
-    if (cur && cur.rootId === null) return
-    const stack = addStack()
-    makeCurrent(stack)
-    bind(stack, tabs.create({ activate: true }))
-    changed()
+    // An empty current stack in a tab already is a new one.
+    if (cur && cur.rootId === null && tabOfStack.has(cur.id)) return
+    openNewStack()
   })
   ipc.handle(channels.close, (value) => {
     const stack = parseStackId(channels.close, value)
@@ -275,6 +305,7 @@ export function register({ ipc }: MainContext): void {
     closeStack(stack)
     const next = byRecentUse()[0]
     if (wasCurrent && next) switchTo(next)
+    else if (wasCurrent && settings.get().newStackPage !== null) openNewStack()
     changed()
   })
   ipc.handle(channels.outline, (value) => {
@@ -283,8 +314,15 @@ export function register({ ipc }: MainContext): void {
     const stack = [...stacks.values()].find((s) => s.name === name)
     return stack ? outline(stack) : null
   })
+  ipc.handle(channels.settings, () => settings.get())
+  ipc.handle(channels.updateSettings, (value) => {
+    settings.set(parseStacksSettings(value))
+    return settings.get()
+  })
 
-  // Restore: only the current stack gets a tab now, at its active page.
+  // Restore: only the current stack gets a tab now, at its active page. Without one, a new
+  // stack opens on the new-stack page.
   const restored = current()
   if (restored && restored.activeId !== null) switchTo(restored)
+  else if (settings.get().newStackPage !== null) openNewStack()
 }

@@ -134,6 +134,27 @@ describe('stack tree', () => {
     expect(titled.name).toBe('hacker-news')
   })
 
+  it('names a stack opened on the new-stack page after the first page reached from it', () => {
+    const stack = newStack('s', 0)
+    stack.startRoot = true
+    go(stack, 'https://www.bing.com/')
+    setTitle(stack, 'Bing')
+    expect(deriveName(stack, new Set(), true)).toBe(false)
+    expect(stack.name).toBeNull()
+    go(stack, B)
+    expect(deriveName(stack, new Set(), false)).toBe(false)
+    setTitle(stack, 'Rust Docs')
+    goTo(stack, stack.rootId!, 'https://www.bing.com/')
+    go(stack, C)
+    setTitle(stack, 'Second')
+    expect(deriveName(stack, new Set(), false)).toBe(true)
+    expect(stack.name).toBe('rust-docs')
+
+    // Trimmed to its active page, the stack is an ordinary one.
+    trimToActive(stack)
+    expect(stack.startRoot).toBeUndefined()
+  })
+
   it('collapses long trees around the active row', () => {
     const show = (items: CollapsedItem[]) =>
       items.map((item) => (item.kind === 'row' ? item.index : `…${item.from}-${item.to}`))

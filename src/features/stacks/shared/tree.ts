@@ -154,12 +154,25 @@ const hostOf = (url: string) => {
 }
 
 /**
- * Names the stack once its root has a title (or, with `useHost`, from the root's host); a named
+ * The page a stack is named after: its root, or the root's first child when the root is the
+ * new-stack page (null until there is one).
+ */
+export function namingNode(stack: Stack): StackNode | null {
+  const root = stack.rootId === null ? undefined : stack.nodes[stack.rootId]
+  if (!root) return null
+  if (!stack.startRoot) return root
+  const first = root.children[0]
+  return first === undefined ? null : (stack.nodes[first] ?? null)
+}
+
+/**
+ * Names the stack once its naming node has a title (or, with `useHost`, from its host); a named
  * stack keeps its name. Returns whether the name was set.
  */
 export function deriveName(stack: Stack, taken: Set<string>, useHost: boolean): boolean {
-  if (stack.name !== null || stack.rootId === null) return false
-  const root = stack.nodes[stack.rootId]!
+  if (stack.name !== null) return false
+  const root = namingNode(stack)
+  if (!root) return false
   const base = slug(root.title) || (useHost ? slug(hostOf(root.url)) : '')
   if (!base) return false
   stack.name = uniqueName(base, taken)
@@ -271,8 +284,10 @@ export function trimToActive(stack: Stack): void {
   if (!node) {
     stack.nodes = {}
     stack.rootId = null
+    delete stack.startRoot
     return
   }
   stack.nodes = { [node.id]: { ...node, parentId: null, children: [] } }
   stack.rootId = node.id
+  delete stack.startRoot
 }

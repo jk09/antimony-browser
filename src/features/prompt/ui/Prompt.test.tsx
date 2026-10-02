@@ -234,6 +234,33 @@ describe('Prompt', () => {
       expect(api.history.updateSettings).toHaveBeenCalledWith({ summaries: true }),
     )
 
+    type(box, '/new-stack-page')
+    press(box, 'Enter')
+    expect(await screen.findByText(/New stacks open https:\/\/www\.bing\.com\//)).toBeTruthy()
+    type(box, '/new-stack-page example.com')
+    press(box, 'Enter')
+    await waitFor(() =>
+      expect(api.stacks.updateSettings).toHaveBeenLastCalledWith({
+        newStackPage: 'https://example.com/',
+      }),
+    )
+    type(box, '/new-stack-page off')
+    press(box, 'Enter')
+    await waitFor(() =>
+      expect(api.stacks.updateSettings).toHaveBeenLastCalledWith({ newStackPage: null }),
+    )
+    type(box, '/new-stack-page reset')
+    press(box, 'Enter')
+    await waitFor(() =>
+      expect(api.stacks.updateSettings).toHaveBeenLastCalledWith({
+        newStackPage: 'https://www.bing.com/',
+      }),
+    )
+    type(box, '/new-stack-page javascript:alert(1)')
+    press(box, 'Enter')
+    expect(await screen.findByText(/isn't a web address/)).toBeTruthy()
+    expect(api.stacks.updateSettings).toHaveBeenCalledTimes(3)
+
     type(box, '/history-clear everything')
     press(box, 'Enter')
     expect(await screen.findByRole('alert')).toBeTruthy()

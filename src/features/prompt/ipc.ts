@@ -70,6 +70,12 @@ export const promptCommands: CommandInfo[] = [
     description: 'Summarise pages you spend time on with the selected model',
     options: ['on', 'off'],
   },
+  {
+    name: 'new-stack-page',
+    usage: '<url>|off|reset',
+    description: 'Choose the page a new stack opens (default bing.com)',
+    options: ['off', 'reset'],
+  },
 ]
 
 export interface PromptApi {

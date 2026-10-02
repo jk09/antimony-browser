@@ -6,12 +6,12 @@
 | --- | --- |
 | **Feature name** | New-stack page: an empty new stack opens a configurable page (default bing.com) as its root |
 | **Spec ID** | fresh-anchor-w6p3jd |
-| **Status** | Draft <!-- one of: Draft, Active, Done --> |
+| **Status** | Active <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-02 09:00 +00:00 |
-| **Last updated** | 2026-10-02 09:00 +00:00 |
+| **Last updated** | 2026-10-02 10:30 +00:00 |
 | **Affected features** | stacks, prompt |
 | **Target release** | 0.1.0 |
 | **Related links** | [branching-trail-k4w9zp](./branching-trail-k4w9zp.md) (navigation stacks) |
@@ -90,14 +90,14 @@
 
 ## 11. Acceptance Criteria
 
-- [ ] "New stack" with the default setting creates a stack whose tab loads `https://www.bing.com/` and whose root node is that page – `stacks/main.test.ts`
-- [ ] With the setting `off`, "New stack" creates an empty stack and no load – `stacks/main.test.ts`
-- [ ] At start with no stack, a new stack with the page is opened; after closing the last stack too – `stacks/main.test.ts`
-- [ ] Link-opened stacks don't load the page – `stacks/main.test.ts`
-- [ ] A start-page stack is named after the root's first child – `shared/tree.test.ts`
-- [ ] `stacks:update-settings` rejects non-http(s) and malformed values; the setting persists – `stacks/main.test.ts`, `shared/stored.test.ts` or equivalent
-- [ ] `/new-stack-page` shows, sets (`toUrl`), turns off and resets the setting – `prompt/ui` tests
-- [ ] Old `stacks.json` without `startRoot` still loads – stored parsing test
+- [x] "New stack" with the default setting creates a stack whose tab loads `https://www.bing.com/` and whose root node is that page – `stacks/main.test.ts`
+- [x] With the setting `off`, "New stack" creates an empty stack and no load – `stacks/main.test.ts`
+- [x] At start with no stack, a new stack with the page is opened; after closing the last stack too – `stacks/main.test.ts`
+- [x] Link-opened stacks don't load the page – `stacks/main.test.ts`
+- [x] A start-page stack is named after the root's first child – `shared/tree.test.ts`
+- [x] `stacks:update-settings` rejects non-http(s) and malformed values; the setting persists – `stacks/main.test.ts`, `shared/stored.test.ts` or equivalent
+- [x] `/new-stack-page` shows, sets (`toUrl`), turns off and resets the setting – `prompt/ui` tests
+- [x] Old `stacks.json` without `startRoot` still loads – stored parsing test
 
 ## 12. Testing / Verification
 
@@ -112,3 +112,6 @@
 
 ## 14. Changes during implementation
 
+- 2c applies only when the current stack is closed and none is left (closing a background stack never opens one).
+- End-to-end profiles write `stacks-settings.json` with `newStackPage: null` (`e2e/profile.ts`), so e2e never reaches bing.com.
+- The switcher's and `@name` suggestions' page title for a start-page stack is the first child's, matching its name.

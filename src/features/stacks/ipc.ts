@@ -5,6 +5,8 @@ export const channels = {
   create: 'stacks:create',
   close: 'stacks:close',
   outline: 'stacks:outline',
+  settings: 'stacks:settings',
+  updateSettings: 'stacks:update-settings',
   stateChanged: 'stacks:state-changed',
 } as const
 
@@ -30,7 +32,17 @@ export interface Stack {
   activeId: number | null
   nextNodeId: number
   lastUsedAt: number
+  /** The root was opened as the new-stack page: the stack is named after the root's first child. */
+  startRoot?: boolean
 }
+
+/** `userData/stacks-settings.json`. */
+export interface StacksSettings {
+  /** The http(s) page an empty new stack opens as its root; null: new stacks stay empty. */
+  newStackPage: string | null
+}
+
+export const DEFAULT_NEW_STACK_PAGE = 'https://www.bing.com/'
 
 /** A row of the tree as the header shows it, in depth-first order. */
 export interface StackRow {
@@ -68,6 +80,9 @@ export interface StacksApi {
   close(stackId: string): Promise<void>
   /** The stack's outline as text for the model, or null if no stack has that name. */
   outline(name: string): Promise<string | null>
+  settings(): Promise<StacksSettings>
+  /** Main rejects a page that isn't an http(s) URL. Returns the saved settings. */
+  updateSettings(settings: StacksSettings): Promise<StacksSettings>
   /** Called whenever stacks or the current tree change. Returns an unsubscribe function. */
   onChanged(listener: (state: StacksState) => void): () => void
 }

@@ -76,8 +76,15 @@ vi.mock('../history/main', () => ({
 const { register } = await import('./main')
 const { channels } = await import('./ipc')
 
-function setup(dir = mkdtempSync(join(tmpdir(), 'antimony-stacks-'))) {
+/** `newStackPage`: the stored setting; 'default' writes no settings file (bing.com). */
+function setup(
+  dir = mkdtempSync(join(tmpdir(), 'antimony-stacks-')),
+  newStackPage: string | null = null,
+) {
   userData = dir
+  if (newStackPage !== 'default') {
+    writeFileSync(join(dir, 'stacks-settings.json'), JSON.stringify({ newStackPage }))
+  }
   tabs = new FakeTabs()
   quitListeners.length = 0
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
@@ -206,6 +213,56 @@ describe('stacks main', () => {
     visit(1, 'First')
     expect(state().stacks).toHaveLength(1)
     expect(state().current!.name).toBe('first')
+  })
+
+  it('opens the new-stack page in empty new stacks, named after the first page reached', () => {
+    const { call, nav, title, state, rowsOf, dir } = setup(undefined, 'default')
+    // No stack at start: one opens on the default page.
+    expect(tabs.calls).toEqual(['create 1 https://www.bing.com/ active'])
+    nav(1, 'https://www.bing.com/')
+    title(1, 'Bing')
+    fire({ tabId: 1, type: 'loaded', url: 'https://www.bing.com/' })
+    expect(rowsOf()).toEqual(['Bing'])
+    expect(state().current!.name).toBe('')
+    nav(1, 'https://site.example/Rust')
+    title(1, 'Rust')
+    expect(rowsOf()).toEqual(['Bing', '.Rust'])
+    expect(state().current!.name).toBe('rust')
+    expect(state().stacks[0]!.rootTitle).toBe('Rust')
+
+    // New stack; a link-opened stack doesn't load the page.
+    call(channels.create)
+    expect(tabs.calls.at(-1)).toBe('create 2 https://www.bing.com/ active')
+    tabs.open.add(tabs.next++)
+    fire({ tabId: 3, type: 'opened', openerId: 1, active: false })
+    expect(tabs.calls).toHaveLength(2)
+
+    expect(call(channels.settings)).toEqual({ newStackPage: 'https://www.bing.com/' })
+    expect(call(channels.updateSettings, { newStackPage: 'https://example.com/' })).toEqual({
+      newStackPage: 'https://example.com/',
+    })
+    expect(() => call(channels.updateSettings, { newStackPage: 'file:///etc' })).toThrow(TypeError)
+    expect(() => call(channels.updateSettings, 'https://example.com/')).toThrow(TypeError)
+
+    // Closing the last stacks opens a new one on the page.
+    for (const stack of state().stacks) call(channels.close, stack.id)
+    expect(tabs.calls.at(-1)).toBe('create 4 https://example.com/ active')
+    expect(state().stacks).toHaveLength(1)
+
+    quitListeners.forEach((listener) => listener())
+    expect(JSON.parse(readFileSync(join(dir, 'stacks-settings.json'), 'utf8'))).toEqual({
+      newStackPage: 'https://example.com/',
+    })
+  })
+
+  it('keeps new stacks empty with the new-stack page off', () => {
+    const { call, state } = setup()
+    expect(tabs.calls).toEqual([])
+    call(channels.create)
+    expect(tabs.calls).toEqual(['create 1 active'])
+    call(channels.close, state().current!.id)
+    expect(state().stacks).toEqual([])
+    expect(tabs.calls).toEqual(['create 1 active', 'close 1'])
   })
 
   it('serves outlines by name and publishes changes once per burst', async () => {

@@ -1,17 +1,19 @@
 # stacks
 
-Shows each tab's navigation in the assistant panel header as a vertical, branching tree of breadcrumbs: click any page to go back (or forward) to it without changing the tree, and follow another link to start a branch. Links that open a new tab start a new stack in its own live tab; stacks are named after their first page, switched in the header or with `@name` in the prompt (`@name` inside a question attaches the stack's outline for the model) and come back after a restart.
+Shows each tab's navigation in the assistant panel header as a vertical, branching tree of breadcrumbs: click any page to go back (or forward) to it without changing the tree, and follow another link to start a branch. Links that open a new tab start a new stack in its own live tab; stacks are named after their first page, switched in the header or with `@name` in the prompt (`@name` inside a question attaches the stack's outline for the model) and come back after a restart. An empty new stack opens the new-stack page (default bing.com, `/new-stack-page` changes it or turns it off) as its root and is named after the first page reached from it.
 
 ## Entry points
 - UI: `ui/StackHeader.tsx` – the panel's `header` slot (`App.tsx`): switcher (`@name ▾`: list, switch, close, New stack; disabled while the assistant runs), the tree (at most 8 lines and 35 % of the window; longer trees collapse to root, `⋯ N more`, the rows around the active one) and the full-stack overlay
-- IPC: `stacks:state|go-to-node|switch|create|close|outline` (UI → main), `stacks:state-changed` (main → UI, batched per 16 ms) – `ipc.ts`
-- Main: `register` in `main.ts` – one stack per navigation tab; applies `onPageEvent` navigations to the tree, starts navigations from nodes (nearest session-history entry via `goToIndex`, else a load), is navigation's history resolver (back = parent, forward = last visited child), restores the current stack's tab at start
-- Shared: `shared/tree.ts` (tree updates, names, collapse layout, outline, pruning), `shared/stored.ts` (`stacks.json` validation)
+- IPC: `stacks:state|go-to-node|switch|create|close|outline|settings|update-settings` (UI → main), `stacks:state-changed` (main → UI, batched per 16 ms) – `ipc.ts`
+- Main: `register` in `main.ts` – one stack per navigation tab; applies `onPageEvent` navigations to the tree, starts navigations from nodes (nearest session-history entry via `goToIndex`, else a load), is navigation's history resolver (back = parent, forward = last visited child), restores the current stack's tab at start, else opens a new stack on the new-stack page (also on New stack and after closing the last stack)
+- Shared: `shared/tree.ts` (tree updates, names, collapse layout, outline, pruning), `shared/stored.ts` (`stacks.json` and `stacks-settings.json` validation)
 
 ## Invariants
 - Following links builds A → B → C; going to a node only moves the active one; a link from B after going back adds a sibling branch – `shared/tree.test.ts`, `e2e/stacks.spec.ts`
 - Same page (ignoring the fragment) or a known child is reused, never duplicated; reload and replaceState update the active node – `shared/tree.test.ts`
-- Names are slugs of the root title (else host), ≤ 32 chars, unique with `-2`…, set once – `shared/tree.test.ts › names stacks…`
+- Names are slugs of the root title (else host), ≤ 32 chars, unique with `-2`…, set once; a stack opened on the new-stack page uses the root's first child instead – `shared/tree.test.ts › names stacks…`, `› names a stack opened on the new-stack page…`
+- Only empty new stacks (New stack, start or closing the last stack without one) load the new-stack page, never link-opened ones; `null` keeps them empty – `main.test.ts › opens the new-stack page…`, `› keeps new stacks empty…`
+- The new-stack page is an http(s) URL or null, checked in main – `shared/stored.test.ts`
 - The collapsed tree never hides the active row – `shared/tree.test.ts › collapses…`, `ui/StackHeader.test.tsx`
 - Only the current stack gets a tab at start; others when switched to – `main.test.ts › persists stacks…`
 - IPC arguments must name an open stack or a node of the current one – `main.test.ts › starts a new stack…`
@@ -20,10 +22,10 @@ Shows each tab's navigation in the assistant panel header as a vertical, branchi
 ## Dependencies
 - Features: navigation (`getTabs`, `onPageEvent`, `setHistoryResolver` from `main.ts`), history (`onHistoryCleared` from `main.ts`), agent (`AgentState` type: switching is disabled while it runs); prompt hosts the header and calls this bridge for `@name`
 - App: `createJsonStore`
-- Stored data: `userData/stacks.json` (names, URLs and titles of open stacks' pages; closing a stack deletes it)
+- Stored data: `userData/stacks.json` (names, URLs and titles of open stacks' pages; closing a stack deletes it), `userData/stacks-settings.json` (the new-stack page)
 
 ## Security surface
-- IPC: the chrome UI reads stacks and their outlines, loads a stack node's URL (only http(s), checked by navigation), switches, creates and closes stacks.
+- IPC: the chrome UI reads stacks and their outlines, loads a stack node's URL (only http(s), checked by navigation), switches, creates and closes stacks, and sets the new-stack page (only http(s)), which new stacks then load like a typed URL – by default each new stack contacts bing.com.
 - Web content: – (new-tab handling is navigation's)
 
 ## Feature flags
@@ -31,4 +33,4 @@ Shows each tab's navigation in the assistant panel header as a vertical, branchi
 |---|---|---|---|
 | – | | | |
 
-Spec: branching-trail-k4w9zp · ADRs: 0008
+Specs: branching-trail-k4w9zp, fresh-anchor-w6p3jd · ADRs: 0008

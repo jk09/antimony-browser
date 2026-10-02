@@ -149,6 +149,8 @@ export function fakeApi(
       create: vi.fn(async () => {}),
       close: vi.fn(async (_stackId: string) => {}),
       outline: vi.fn(async (name: string) => `Navigation stack @${name}`),
+      settings: vi.fn(async () => ({ newStackPage: 'https://www.bing.com/' as string | null })),
+      updateSettings: vi.fn(async (settings: { newStackPage: string | null }) => settings),
       onChanged: stacks.subscribe,
     },
   } satisfies AntimonyApi

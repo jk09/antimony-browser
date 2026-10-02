@@ -1,7 +1,6 @@
-import { existsSync, mkdtempSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   _electron as electron,
@@ -10,6 +9,7 @@ import {
   type ElectronApplication,
   type Page,
 } from '@playwright/test'
+import { newProfile } from './profile'
 
 // Chromium refuses to run as root with its sandbox on (e.g. in containers); CI runs as a normal user.
 const args = ['.', ...(process.getuid?.() === 0 ? ['--no-sandbox'] : [])]
@@ -54,7 +54,7 @@ const pageView = (app: ElectronApplication, url: string) =>
   expect.poll(() => app.windows().find((candidate) => candidate.url() === url))
 
 test('records visited pages, finds them by text, notes them as bookmarks', async () => {
-  const userData = mkdtempSync(join(tmpdir(), 'antimony-e2e-'))
+  const userData = newProfile()
   const app = await electron.launch({ args: [...args, `--user-data-dir=${userData}`], env })
   try {
     const window = await app.firstWindow()

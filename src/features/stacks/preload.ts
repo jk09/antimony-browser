@@ -8,6 +8,8 @@ export const stacksBridge: StacksApi = {
   create: () => ipcRenderer.invoke(channels.create),
   close: (stackId) => ipcRenderer.invoke(channels.close, stackId),
   outline: (name) => ipcRenderer.invoke(channels.outline, name),
+  settings: () => ipcRenderer.invoke(channels.settings),
+  updateSettings: (settings) => ipcRenderer.invoke(channels.updateSettings, settings),
   onChanged: (listener) => {
     const wrapped = (_: unknown, state: StacksState) => listener(state)
     ipcRenderer.on(channels.stateChanged, wrapped)
