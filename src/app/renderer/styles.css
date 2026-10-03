@@ -1592,7 +1592,7 @@ textarea {
 
 .fov-dim {
   background: rgba(0, 0, 0, 0.35);
-  transition: opacity 0.38s ease;
+  transition: opacity 0.16s ease;
 }
 
 .fov.flying .fov-dim {
@@ -1603,7 +1603,7 @@ textarea {
   position: relative;
   width: min(640px, calc(100% - 32px));
   max-height: 60vh;
-  transition: transform 0.38s cubic-bezier(0.5, 0, 0.2, 1);
+  transition: transform 0.16s cubic-bezier(0.5, 0, 0.2, 1);
   animation: fov-in 0.14s ease-out;
 }
 

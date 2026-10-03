@@ -108,4 +108,5 @@
 
 - The field of view is rendered inside `AssistantPanel` (which owns the handoff to its `Prompt`), not mounted separately in `App.tsx`.
 - Opening the sidebar prompt (Ctrl/Cmd+L, Ctrl/Cmd+Alt+I) while the field of view is open closes it.
+- The flight takes 160 ms (not ≤ 400 ms); on landing the entry is copied into the sidebar prompt, which runs it 140 ms later, so the copy is seen.
 - Prior spec drifting-nimbus-r8c3kw was set to Done (its PR is merged) so only this spec is Active.

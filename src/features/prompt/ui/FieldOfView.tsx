@@ -4,7 +4,7 @@ import { Prompt, type Compose } from './Prompt'
 type Entry = Parameters<Compose['onSend']>[0]
 
 /** How long the card takes to fly into the sidebar; the stylesheet's transition matches. */
-export const FLIGHT_MS = 380
+export const FLIGHT_MS = 160
 
 const reducedMotion = () =>
   typeof window.matchMedia === 'function' &&
@@ -58,7 +58,7 @@ export function FieldOfView({
     const dx = to.left + to.width / 2 - (from.left + from.width / 2)
     const dy = to.top + to.height / 2 - (from.top + from.height / 2)
     setTarget({ transform: `translate(${dx}px, ${dy}px) scale(${to.width / from.width})` })
-    const timer = setTimeout(() => onSend(flying), FLIGHT_MS + 40)
+    const timer = setTimeout(() => onSend(flying), FLIGHT_MS + 20)
     return () => clearTimeout(timer)
   }, [flying, onSend])
 
