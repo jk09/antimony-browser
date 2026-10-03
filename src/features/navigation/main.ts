@@ -17,6 +17,11 @@ export interface PageControls {
   state(): NavigationState
   /** Resolves when the page stops loading, or after `timeoutMs`. */
   waitForLoad(timeoutMs: number): Promise<void>
+  /**
+   * Hides or shows the active tab's page view without changing its size, so another feature can
+   * draw over the page area (prompt's field of view). Stays in force across tab switches.
+   */
+  setHidden(hidden: boolean): void
   /** The active tab's WebContents, or null without a tab, before its first load, or after it's gone. */
   contents(): WebContents | null
 }
@@ -170,6 +175,8 @@ export function register({ window, browsingSession, ipc }: MainContext): void {
   let active: Tab | null = null
   /** The tab whose view is in the window. */
   let attached: Tab | null = null
+  /** The page view is in the window but not drawn (`setHidden`). */
+  let hidden = false
 
   // The chrome UI reports the page area's insets when it mounts, before a page can be loaded.
   // They're in its CSS pixels: times its zoom factor, they're window pixels.
@@ -198,6 +205,7 @@ export function register({ window, browsingSession, ipc }: MainContext): void {
     attached = wanted
     if (attached) {
       window.contentView.addChildView(attached.view)
+      attached.view.setVisible(!hidden)
       layout()
     }
   }
@@ -402,6 +410,10 @@ export function register({ window, browsingSession, ipc }: MainContext): void {
         const timer = setTimeout(done, timeoutMs)
         contents.on('did-stop-loading', done)
       })
+    },
+    setHidden(value) {
+      hidden = value
+      attached?.view.setVisible(!hidden)
     },
     contents: () => (live(active) ? active.contents : null),
   }

@@ -48,6 +48,7 @@ class FakeView {
   }
   webContents = new FakeWebContents()
   setBounds = vi.fn()
+  setVisible = vi.fn()
   constructor(public options: unknown) {
     FakeView.all.push(this)
   }
@@ -152,6 +153,21 @@ describe('navigation main', () => {
       width: 800,
       height: 500,
     })
+  })
+
+  it('hides and shows the page view without resizing it, and keeps it hidden across tab switches', () => {
+    const { go, page, tab } = setup()
+    go('example.com')
+    page.setBounds.mockClear()
+    getPage()!.setHidden(true)
+    expect(page.setVisible).toHaveBeenLastCalledWith(false)
+    expect(page.setBounds).not.toHaveBeenCalled()
+    const other = getTabs()!.create({ url: 'https://example.org/', activate: true })
+    expect(other).not.toBe(getTabs()!.ids()[0])
+    expect(FakeView.last.setVisible).toHaveBeenLastCalledWith(false)
+    getPage()!.setHidden(false)
+    expect(FakeView.last.setVisible).toHaveBeenLastCalledWith(true)
+    expect(tab()).toBe(page)
   })
 
   it('blocks page navigations to non-web URLs', () => {

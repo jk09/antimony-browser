@@ -23,7 +23,7 @@ export interface Skill {
   /** Parameter names, in order of first use in the steps. */
   params: string[]
   steps: SkillStep[]
-  /** Shipped with the app (/back, /reload…); can't be changed or deleted. */
+  /** Shipped with the app (/reload, /stop); can't be changed or deleted. */
   builtin: boolean
 }
 

@@ -43,7 +43,7 @@ export const defaultSettings: AgentSettings = {
   hasKey: true,
   keyPersisted: true,
 }
-export const builtins: Skill[] = ['back', 'forward', 'reload', 'stop'].map((name) => ({
+export const builtins: Skill[] = ['reload', 'stop'].map((name) => ({
   name,
   description: `Built-in ${name}`,
   params: [],
@@ -68,6 +68,7 @@ export function fakeApi(
 ) {
   const open = channel<void>()
   const toggle = channel<void>()
+  const fieldOfView = channel<void>()
   const state = channel<AgentState>()
   const settings = channel<AgentSettings>()
   const skills = channel<Skill[]>()
@@ -147,7 +148,10 @@ export function fakeApi(
       clearHistory: vi.fn(async () => {}),
       onOpen: open.subscribe,
       onToggle: toggle.subscribe,
+      onFieldOfView: fieldOfView.subscribe,
       focusPage: vi.fn(async () => {}),
+      coverPage: vi.fn(async (): Promise<string | null> => null),
+      uncoverPage: vi.fn(async () => {}),
     },
     skills: {
       list: vi.fn(async () => options.skills ?? builtins),
@@ -182,6 +186,7 @@ export function fakeApi(
     emit: {
       open: () => open.emit(),
       toggle: () => toggle.emit(),
+      fieldOfView: () => fieldOfView.emit(),
       state: state.emit,
       settings: settings.emit,
       skills: skills.emit,

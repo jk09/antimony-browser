@@ -1,6 +1,6 @@
 # skills
 
-Turns an assistant run into a `/command` that replays the same browser tool calls without the model, optionally with `{{parameters}}` typed after the command; `/back`, `/forward`, `/reload` and `/stop` ship as built-in skills.
+Turns an assistant run into a `/command` that replays the same browser tool calls without the model, optionally with `{{parameters}}` typed after the command; `/reload` and `/stop` ship as built-in skills.
 
 ## Entry points
 - UI: `ui/SaveSkill.tsx` – mounted in the assistant panel above the prompt (`App.tsx`), opened by `/save` or "Save as skill"
@@ -27,4 +27,4 @@ Turns an assistant run into a `/command` that replays the same browser tool call
 |---|---|---|---|
 | – | | | |
 
-Spec: violet-harbinger-p7w3kd, still-meridian-r4v8nc · ADRs: 0004
+Spec: violet-harbinger-p7w3kd, still-meridian-r4v8nc, glass-meridian-f5y2nq · ADRs: 0004

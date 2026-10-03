@@ -6,7 +6,7 @@
 | --- | --- |
 | **Feature name** | Recall: pages from history by a prompt or a sketch, shown as a keyword or image cloud |
 | **Spec ID** | drifting-nimbus-r8c3kw |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |

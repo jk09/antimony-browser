@@ -23,16 +23,47 @@ function parseHistory(raw: unknown): HistoryEntry[] {
     .slice(0, HISTORY_LIMIT)
 }
 
+const SNAPSHOT_WIDTH = 1280
+
+const hasCommand = (input: Electron.Input, platform: string) =>
+  platform === 'darwin' ? input.meta && !input.control : input.control && !input.meta
+
 /** Ctrl/Cmd+B pressed or held (key repeat): the assistant panel's shortcut. */
 export function isToggleKey(input: Electron.Input, platform: string = process.platform): boolean {
-  const command =
-    platform === 'darwin' ? input.meta && !input.control : input.control && !input.meta
   return (
     input.type === 'keyDown' &&
-    command &&
+    hasCommand(input, platform) &&
     !input.alt &&
     !input.shift &&
     input.key.toLowerCase() === 'b'
+  )
+}
+
+/** Ctrl/Cmd+I: the field-of-view prompt's shortcut. */
+export function isFieldOfViewKey(
+  input: Electron.Input,
+  platform: string = process.platform,
+): boolean {
+  return (
+    input.type === 'keyDown' &&
+    hasCommand(input, platform) &&
+    !input.alt &&
+    !input.shift &&
+    input.key.toLowerCase() === 'i'
+  )
+}
+
+/** Ctrl/Cmd+Alt+I: the sidebar prompt's shortcut (matched by key code: Option+I types ˆ on macOS). */
+export function isSidebarPromptKey(
+  input: Electron.Input,
+  platform: string = process.platform,
+): boolean {
+  return (
+    input.type === 'keyDown' &&
+    hasCommand(input, platform) &&
+    input.alt &&
+    !input.shift &&
+    (input.code === 'KeyI' || input.key.toLowerCase() === 'i')
   )
 }
 
@@ -61,16 +92,53 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
   })
   ipc.handle(channels.clearHistory, () => store.set([]))
   ipc.handle(channels.focusPage, () => getPage()?.contents()?.focus())
+  // The page view sits above the chrome UI, so the field of view can only draw over the page
+  // while the view is hidden; the chrome UI shows this snapshot in its place.
+  ipc.handle(channels.coverPage, async () => {
+    const page = getPage()
+    const contents = page?.contents()
+    let snapshot: string | null = null
+    if (contents) {
+      try {
+        const image = await contents.capturePage()
+        const { width } = image.getSize()
+        const scaled = width > SNAPSHOT_WIDTH ? image.resize({ width: SNAPSHOT_WIDTH }) : image
+        if (width > 0) snapshot = `data:image/jpeg;base64,${scaled.toJPEG(70).toString('base64')}`
+      } catch (error) {
+        console.warn('Could not capture the page', error)
+      }
+    }
+    page?.setHidden(true)
+    return snapshot
+  })
+  ipc.handle(channels.uncoverPage, () => getPage()?.setHidden(false))
 
+  const openSidebarPrompt = () => {
+    // The page view may have focus; the prompt lives in the chrome UI.
+    window.webContents.focus()
+    ipc.send(channels.open, null)
+  }
   fileMenu.push({
     id: 'prompt',
     label: 'Prompt…',
     accelerator: 'CmdOrCtrl+L',
-    click: () => {
-      // The page view may have focus; the prompt lives in the chrome UI.
-      window.webContents.focus()
-      ipc.send(channels.open, null)
-    },
+    click: openSidebarPrompt,
+  })
+  fileMenu.push({
+    id: 'prompt-sidebar',
+    label: 'Assistant Prompt',
+    accelerator: 'CmdOrCtrl+Alt+I',
+    click: openSidebarPrompt,
+  })
+  const openFieldOfView = () => {
+    window.webContents.focus()
+    ipc.send(channels.fieldOfView, null)
+  }
+  fileMenu.push({
+    id: 'prompt-field-of-view',
+    label: 'Field of View Prompt…',
+    accelerator: 'CmdOrCtrl+I',
+    click: openFieldOfView,
   })
   const toggle = () => {
     // Showing focuses the prompt; hiding hands focus back to the page (`focusPage`).
@@ -84,18 +152,25 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
     click: toggle,
   })
 
-  // Ctrl/Cmd+B is caught before the page or the menu sees it: a page view doesn't always pass it
-  // on to the menu accelerator (Windows), and a page may handle it itself. preventDefault keeps
-  // the menu accelerator from toggling a second time. A held key toggles once: its repeats are
-  // swallowed too, or each would reach the menu accelerator and toggle again.
-  const catchToggle = (contents: Electron.WebContents) =>
+  // Ctrl/Cmd+B, I and Alt+I are caught before the page or the menu sees them: a page view doesn't
+  // always pass them on to the menu accelerator (Windows), and a page may handle them itself.
+  // preventDefault keeps the menu accelerator from acting a second time. A held key acts once:
+  // its repeats are swallowed too, or each would reach the menu accelerator and act again.
+  const catchShortcuts = (contents: Electron.WebContents) =>
     contents.on('before-input-event', (event, input) => {
-      if (!isToggleKey(input)) return
+      const action = isToggleKey(input)
+        ? toggle
+        : isFieldOfViewKey(input)
+          ? openFieldOfView
+          : isSidebarPromptKey(input)
+            ? openSidebarPrompt
+            : null
+      if (!action) return
       event.preventDefault()
-      if (!input.isAutoRepeat) toggle()
+      if (!input.isAutoRepeat) action()
     })
-  catchToggle(window.webContents)
+  catchShortcuts(window.webContents)
   app.on('web-contents-created', (_event, contents) => {
-    if (contents.session === browsingSession) catchToggle(contents)
+    if (contents.session === browsingSession) catchShortcuts(contents)
   })
 }
