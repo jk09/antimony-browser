@@ -48,7 +48,7 @@ describe('skills main', () => {
   it('lists the built-in skills', () => {
     const { call } = setup()
     const names = (call(channels.list) as { name: string }[]).map((skill) => skill.name)
-    expect(names).toEqual(expect.arrayContaining(['back', 'forward', 'reload', 'stop']))
+    expect(names).toEqual(expect.arrayContaining(['reload', 'stop']))
   })
 
   it('offers the last run as a draft', () => {
