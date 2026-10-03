@@ -6,7 +6,7 @@
 | --- | --- |
 | **Feature name** | Ctrl+E focuses the navigation tree; arrow keys and type-ahead move through it |
 | **Spec ID** | silent-orchid-x2m7pd |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
