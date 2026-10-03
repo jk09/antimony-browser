@@ -6,7 +6,7 @@
 | --- | --- |
 | **Feature name** | A "field of view" prompt that opens over the middle of the page on Ctrl/Cmd+I and hands what is entered to the sidebar prompt; the sidebar prompt moves to Ctrl/Cmd+Alt+I; the `/back` and `/forward` built-in skills are removed |
 | **Spec ID** | glass-meridian-f5y2nq |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
