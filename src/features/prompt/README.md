@@ -16,6 +16,7 @@ The assistant panel docked on the right of the window, with a location bar shape
 - Nested arguments are suggested level by level; a node with children fills in with a trailing space instead of running – `shared/suggest.test.ts › suggests nested arguments…`, `ui/Prompt.test.tsx › /menu suggests…`
 - History is capped at 500, de-duplicated, never holds attachments or a key typed after `/key` – `shared/history.test.ts`, `main.test.ts`
 - `@name` of a known stack: alone it switches without the model; in a question it adds a text attachment with the outline; unknown `@words` stay text – `shared/suggest.test.ts › suggestStacks`, `ui/Prompt.test.tsx › suggests stacks after @…`
+- Command and skill suggestions show no icon of their own: the label already starts with `/` � `ui/SuggestionList.tsx`
 - Tab completes a suggestion, Ctrl+Tab doesn't (it switches stacks) – `ui/Prompt.test.tsx › suggests stacks after @…`
 - Escape closes suggestions, then stops a running assistant; it never hides the panel – `ui/Prompt.test.tsx`
 - The panel shows itself for an approval or a skill save, and Ctrl/Cmd+B can't hide it while an approval is pending – `ui/AssistantPanel.test.tsx › shows itself…`, `› stays shown on Ctrl/Cmd+B…`

@@ -11,7 +11,7 @@
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-02 20:10 +00:00 |
-| **Last updated** | 2026-10-02 20:40 +00:00 |
+| **Last updated** | 2026-10-03 00:00 +00:00 |
 | **Affected features** | history, prompt, agent |
 | **Target release** | 0.1.0 |
 | **Related links** | ember-ledger-h3x8vq (history), ADR 0006, ADR 0010 |
@@ -118,4 +118,5 @@ Note any deviations from the original spec during implementation.
 - Opening Recall uses its own channels instead of extending `history:open`: `history:request-recall` (UI → main, from `/recall`) and `history:open-recall` (main → UI, also from the menu item), so the history panel doesn't react to it. `history:cancel-recall` aborts a recall in flight when Recall closes.
 - With a sketch, screenshots go to the model (decided at approval: "also send screenshots"); recorded in ADR 0010. `agent.complete` gained `images: { label, jpegBase64 }[]`.
 - The page view is hidden by collapsing the acting frame / page area to zero width with CSS (`.workspace:has(> .recall-view)`), so navigation needs no change.
+- Unrelated polish while in the prompt feature: command suggestions no longer show a second `/` icon before the `/name` label.
 - End-to-end tests were not run in the cloud session (no Electron binary); CI runs them.

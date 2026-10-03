@@ -3,7 +3,7 @@ import type { Suggestion } from '../shared/suggest'
 const icons: Record<Suggestion['kind'], string> = {
   url: '🌐',
   query: '💬',
-  command: '/',
+  command: '',
   value: '↳',
 }
 
@@ -36,9 +36,11 @@ export function SuggestionList({
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => onPick(suggestion)}
         >
-          <span className="prompt-suggestion-icon" aria-hidden="true">
-            {icons[suggestion.kind]}
-          </span>
+          {icons[suggestion.kind] && (
+            <span className="prompt-suggestion-icon" aria-hidden="true">
+              {icons[suggestion.kind]}
+            </span>
+          )}
           <span className="prompt-suggestion-label">{suggestion.label}</span>
           {suggestion.detail && (
             <span className="prompt-suggestion-detail">{suggestion.detail}</span>
