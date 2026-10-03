@@ -17,6 +17,7 @@ describe('stack shortcuts', () => {
     expect(stackCommandFor(key('r'), 'linux')).toBe('reload')
     expect(stackCommandFor(key('N'), 'win32')).toBe('new')
     expect(stackCommandFor(key('w'), 'linux')).toBe('close-page')
+    expect(stackCommandFor(key('E'), 'linux')).toBe('focus-tree')
     expect(stackCommandFor(key('w'), 'darwin')).toBeNull()
     expect(stackCommandFor(key('w', { control: false, meta: true }), 'darwin')).toBe('close-page')
   })
@@ -34,6 +35,7 @@ describe('stack shortcuts', () => {
     expect(shortcutLabel('reload', 'linux')).toBe('Ctrl+R')
     expect(shortcutLabel('new', 'darwin')).toBe('Cmd+N')
     expect(shortcutLabel('close-page', 'win32')).toBe('Ctrl+W')
+    expect(shortcutLabel('focus-tree', 'darwin')).toBe('Cmd+E')
   })
 
   it('maps the Ctrl+Tab cycle keys', () => {

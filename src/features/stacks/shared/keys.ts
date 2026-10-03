@@ -12,12 +12,17 @@ export interface KeyInput {
   isAutoRepeat: boolean
 }
 
-const KEYS: Record<string, StackCommand> = { r: 'reload', n: 'new', w: 'close-page' }
+const KEYS: Record<string, StackCommand> = {
+  r: 'reload',
+  n: 'new',
+  w: 'close-page',
+  e: 'focus-tree',
+}
 
 /** A key of the Ctrl+Tab stack cycle. */
 export type CycleKey = 'next' | 'previous' | 'release' | 'escape'
 
-/** Ctrl/Cmd+R, +N or +W pressed (not held) → its command, else null. */
+/** Ctrl/Cmd+R, +N, +W or +E pressed (not held) → its command, else null. */
 export function stackCommandFor(input: KeyInput, platform: string): StackCommand | null {
   const command =
     platform === 'darwin' ? input.meta && !input.control : input.control && !input.meta

@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fakeApi, idleState } from '../../../app/renderer/fake-api'
 import type { StackRow, StacksState } from '../ipc'
-import { maxRowsFor, StackHeader } from './StackHeader'
+import { maxRowsFor, StackHeader, TYPE_AHEAD_MS } from './StackHeader'
 
 afterEach(cleanup)
 
@@ -222,5 +222,90 @@ describe('StackHeader', () => {
     await renderHeader({ current: null, stacks: [] })
     expect(screen.getByRole('button', { name: /New tab/ })).toBeTruthy()
     expect(screen.queryByRole('tree')).toBeNull()
+  })
+
+  describe('Ctrl+E and type-ahead', () => {
+    const named = (id: number, depth: number, title: string, last = true): StackRow => ({
+      ...row(id, depth, last),
+      title,
+    })
+    const tree = () => screen.getByRole('tree', { name: 'Navigation stack' })
+    const focused = () => document.activeElement?.getAttribute('data-row-id')
+    const type = (key: string) => fireEvent.keyDown(document.activeElement!, { key })
+    const rowsOf = [
+      named(1, 0, 'Home'),
+      named(2, 1, 'Hotel deals', false),
+      named(3, 1, 'News', false),
+      named(4, 1, 'Hockey'),
+    ]
+
+    it('focuses the active row on Ctrl+E and returns to the page from the tree', async () => {
+      const { api, emit } = await renderHeader(state(rowsOf, 3))
+      act(() => emit.stackCommand('focus-tree'))
+      expect(focused()).toBe('3')
+      act(() => emit.stackCommand('focus-tree'))
+      expect(api.prompt.focusPage).toHaveBeenCalledOnce()
+    })
+
+    it('jumps to rows by typed letters and shows what was typed', async () => {
+      await renderHeader(state(rowsOf, 3))
+      screen.getByText('News').closest('li')!.focus()
+      type('h')
+      expect(focused()).toBe('4')
+      expect(screen.getByRole('status').textContent).toContain('h')
+      type('o')
+      expect(focused()).toBe('4')
+      type('t')
+      expect(focused()).toBe('2')
+      expect(tree().querySelector('mark')!.textContent).toBe('Hot')
+      type('Backspace')
+      expect(screen.getByRole('status').textContent).toContain('ho')
+      type('Escape')
+      expect(screen.queryByRole('status')).toBeNull()
+      expect(tree().querySelector('mark')).toBeNull()
+    })
+
+    it('marks a prefix without a match and drops it after a pause or on leaving the tree', async () => {
+      vi.useFakeTimers()
+      try {
+        await renderHeader(state(rowsOf, 3))
+        screen.getByText('News').closest('li')!.focus()
+        type('z')
+        expect(screen.getByRole('status').className).toContain('miss')
+        expect(focused()).toBe('3')
+        act(() => void vi.advanceTimersByTime(TYPE_AHEAD_MS))
+        expect(screen.queryByRole('status')).toBeNull()
+        type('h')
+        act(() => document.body.focus())
+        fireEvent.blur(tree().querySelector('li:focus') ?? tree().querySelector('li')!)
+        expect(screen.queryByRole('status')).toBeNull()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('keeps Space opening a row until something is typed, and Escape leaves the tree', async () => {
+      const { api } = await renderHeader(state(rowsOf, 3))
+      screen.getByText('Home').closest('li')!.focus()
+      type(' ')
+      expect(api.stacks.goToNode).toHaveBeenCalledWith(1)
+      type('Escape')
+      expect(api.prompt.focusPage).toHaveBeenCalledOnce()
+      type('h')
+      type(' ')
+      expect(api.stacks.goToNode).toHaveBeenCalledTimes(1)
+    })
+
+    it('opens the full stack on a match the collapsed tree hides', async () => {
+      const many = Array.from({ length: 12 }, (_, i) =>
+        named(i + 1, i === 0 ? 0 : 1, `Page ${i + 1}`),
+      )
+      many[2] = named(3, 1, 'Zebra')
+      await renderHeader(state(many, 1))
+      screen.getByText('Page 1').closest('li')!.focus()
+      type('z')
+      const overlay = screen.getByRole('dialog', { name: 'Full stack' })
+      expect(document.activeElement).toBe(overlay.querySelector('[data-row-id="3"]'))
+    })
   })
 })

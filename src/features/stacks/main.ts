@@ -353,7 +353,7 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
     changed()
   })
 
-  // Ctrl/Cmd+R, +N and +W go to the UI, which runs them like its buttons (and knows whether the
+  // Ctrl/Cmd+R, +N, +W and +E go to the UI, which runs them like its buttons (and knows whether the
   // assistant runs). They're caught before the page or the menu sees them, like Ctrl/Cmd+B:
   // a page view doesn't always pass them on to the menu, and Chromium's own Ctrl+R mustn't run.
   const command = (name: StackCommand) => {
@@ -378,6 +378,12 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
       label: 'Close Page',
       accelerator: 'CmdOrCtrl+W',
       click: () => command('close-page'),
+    },
+    {
+      id: 'stacks-focus-tree',
+      label: 'Focus Stack',
+      accelerator: 'CmdOrCtrl+E',
+      click: () => command('focus-tree'),
     },
     // From the menu there's no Ctrl to release: one step, then switch. The keys are only shown
     // here; before-input-event handles them (registered, they would also run this click).
