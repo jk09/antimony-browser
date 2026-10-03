@@ -7,6 +7,11 @@ export const channels = {
   // Ctrl/Cmd+B: show the panel if hidden, hide it if shown (main → UI, no payload).
   toggle: 'prompt:toggle',
   focusPage: 'prompt:focus-page',
+  // Ctrl/Cmd+I: open the field-of-view prompt over the page, or close it (main → UI, no payload).
+  fieldOfView: 'prompt:field-of-view',
+  // The field of view hides the page view and gets a snapshot of it; uncover shows it again.
+  coverPage: 'prompt:cover-page',
+  uncoverPage: 'prompt:uncover-page',
 } as const
 
 export type HistoryKind = 'url' | 'query' | 'command'
@@ -93,6 +98,12 @@ export interface PromptApi {
   onOpen(listener: () => void): () => void
   /** Called when the user presses Ctrl/Cmd+B. Returns an unsubscribe function. */
   onToggle(listener: () => void): () => void
+  /** Called when the user presses Ctrl/Cmd+I. Returns an unsubscribe function. */
+  onFieldOfView(listener: () => void): () => void
   /** Gives keyboard focus to the page view, if there is one. */
   focusPage(): Promise<void>
+  /** Hides the page view and returns a snapshot of it (a JPEG data URL), or null without a page. */
+  coverPage(): Promise<string | null>
+  /** Shows the page view again. */
+  uncoverPage(): Promise<void>
 }

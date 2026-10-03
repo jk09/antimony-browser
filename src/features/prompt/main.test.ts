@@ -18,11 +18,19 @@ vi.mock('electron', () => ({
   },
 }))
 
-const page = { focus: vi.fn() }
+const image = {
+  getSize: () => ({ width: 2000, height: 1000 }),
+  resize: vi.fn(() => image),
+  toJPEG: () => Buffer.from('jpeg'),
+}
+const page = { focus: vi.fn(), capturePage: vi.fn(async () => image) }
 let pageContents: typeof page | null = page
-vi.mock('../navigation/main', () => ({ getPage: () => ({ contents: () => pageContents }) }))
+const setHidden = vi.fn()
+vi.mock('../navigation/main', () => ({
+  getPage: () => ({ contents: () => pageContents, setHidden }),
+}))
 
-const { isToggleKey, register } = await import('./main')
+const { isFieldOfViewKey, isSidebarPromptKey, isToggleKey, register } = await import('./main')
 
 type InputListener = (event: { preventDefault: () => void }, input: Electron.Input) => void
 /** A webContents that records its before-input-event listener. */
@@ -154,6 +162,77 @@ describe('prompt main', () => {
     page.input!(typed, key({ key: 'a' }))
     expect(typed.preventDefault).not.toHaveBeenCalled()
     expect(ctx.ipc.send).not.toHaveBeenCalled()
+  })
+
+  it('adds File → Field of View Prompt… (Ctrl/Cmd+I) and Assistant Prompt (Ctrl/Cmd+Alt+I)', () => {
+    const { ctx } = setup()
+    const fov = ctx.fileMenu.find((entry) => entry.id === 'prompt-field-of-view')
+    expect(fov).toMatchObject({ accelerator: 'CmdOrCtrl+I' })
+    ;(fov!.click as () => void)()
+    expect(ctx.window.webContents.focus).toHaveBeenCalled()
+    expect(ctx.ipc.send).toHaveBeenCalledWith(channels.fieldOfView, null)
+    ctx.ipc.send.mockClear()
+    const sidebar = ctx.fileMenu.find((entry) => entry.id === 'prompt-sidebar')
+    expect(sidebar).toMatchObject({ accelerator: 'CmdOrCtrl+Alt+I' })
+    ;(sidebar!.click as () => void)()
+    expect(ctx.ipc.send).toHaveBeenCalledWith(channels.open, null)
+  })
+
+  it('matches Ctrl/Cmd+I and Ctrl/Cmd+Alt+I (by key code) and nothing else', () => {
+    const i = { key: 'i' }
+    expect(isFieldOfViewKey(key(i), 'win32')).toBe(true)
+    expect(isFieldOfViewKey(key({ ...i, control: false, meta: true }), 'darwin')).toBe(true)
+    expect(isFieldOfViewKey(key({ ...i, alt: true }), 'win32')).toBe(false)
+    expect(isFieldOfViewKey(key({ ...i, shift: true }), 'win32')).toBe(false)
+    expect(isFieldOfViewKey(key({ key: 'b' }), 'win32')).toBe(false)
+    expect(isSidebarPromptKey(key({ ...i, alt: true }), 'linux')).toBe(true)
+    expect(
+      isSidebarPromptKey(
+        key({ key: 'ˆ', code: 'KeyI', alt: true, control: false, meta: true } as never),
+        'darwin',
+      ),
+    ).toBe(true)
+    expect(isSidebarPromptKey(key(i), 'linux')).toBe(false)
+    expect(isSidebarPromptKey(key({ ...i, alt: true, type: 'keyUp' }), 'linux')).toBe(false)
+  })
+
+  it('opens the field of view and the sidebar prompt from keys, once, in pages too', () => {
+    const { ctx } = setup()
+    const contents = fakeContents(ctx.browsingSession)
+    created!({}, contents)
+    const command = process.platform === 'darwin' ? { control: false, meta: true } : {}
+    const press = (extra: Partial<Electron.Input>) => {
+      const event = { preventDefault: vi.fn() }
+      contents.input!(event, key({ ...command, ...extra }))
+      return event.preventDefault
+    }
+    expect(press({ key: 'i' })).toHaveBeenCalledOnce()
+    expect(ctx.ipc.send).toHaveBeenLastCalledWith(channels.fieldOfView, null)
+    expect(press({ key: 'i', alt: true })).toHaveBeenCalledOnce()
+    expect(ctx.ipc.send).toHaveBeenLastCalledWith(channels.open, null)
+    ctx.ipc.send.mockClear()
+    expect(press({ key: 'i', isAutoRepeat: true })).toHaveBeenCalledOnce()
+    expect(ctx.ipc.send).not.toHaveBeenCalled()
+  })
+
+  it('covers the page with a snapshot of it, and uncovers it', async () => {
+    const { call } = setup()
+    const snapshot = await call(channels.coverPage)
+    expect(snapshot).toBe(`data:image/jpeg;base64,${Buffer.from('jpeg').toString('base64')}`)
+    expect(image.resize).toHaveBeenCalledWith({ width: 1280 })
+    expect(setHidden).toHaveBeenLastCalledWith(true)
+    call(channels.uncoverPage)
+    expect(setHidden).toHaveBeenLastCalledWith(false)
+  })
+
+  it('still hides the page when the snapshot fails, and has none without a page', async () => {
+    const { call } = setup()
+    page.capturePage.mockRejectedValueOnce(new Error('gone'))
+    expect(await call(channels.coverPage)).toBeNull()
+    expect(setHidden).toHaveBeenLastCalledWith(true)
+    pageContents = null
+    expect(await call(channels.coverPage)).toBeNull()
+    pageContents = page
   })
 
   it('focuses the page on request, and does nothing without one', () => {

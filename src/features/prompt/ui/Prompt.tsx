@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -56,12 +57,36 @@ const menuOptions = (entries: MenuEntry[]): OptionNode[] =>
     ...(entry.children && { children: menuOptions(entry.children) }),
   }))
 
+/** What the field of view hands to the sidebar prompt. */
+export interface Handoff {
+  /** Distinguishes one handoff from the next, so the same text can be sent twice. */
+  id: number
+  text: string
+  attachments: Attachment[]
+}
+
+/** Makes a prompt a composer: Enter sends the entry on instead of running it. */
+export interface Compose {
+  onSend: (entry: { text: string; attachments: Attachment[] }) => void
+  /** Escape with no suggestions open. */
+  onEscape: () => void
+}
+
 /**
  * The prompt: a Claude-style card at the bottom of the assistant panel. URLs and /commands are
  * handled without the model; everything else goes to the assistant. `focusRequest` changes on
- * every Ctrl/Cmd+L, which focuses the input and selects its text.
+ * every Ctrl/Cmd+L, which focuses the input and selects its text. As a composer (the field of
+ * view) it only collects the entry; a new `handoff` makes it run an entry composed elsewhere.
  */
-export function Prompt({ focusRequest = 0 }: { focusRequest?: number }) {
+export function Prompt({
+  focusRequest = 0,
+  compose,
+  handoff,
+}: {
+  focusRequest?: number
+  compose?: Compose
+  handoff?: Handoff | null
+}) {
   const api = window.antimony
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])
@@ -224,7 +249,12 @@ export function Prompt({ focusRequest = 0 }: { focusRequest?: number }) {
     })
   }
 
-  const submit = async (value = text) => {
+  const submit = async (value = text, entered = attachments) => {
+    if (compose) {
+      if (value.trim() === '' && entered.length === 0) return
+      compose.onSend({ text: value, attachments: entered })
+      return
+    }
     // `@name` alone switches to that stack, without the model.
     const alone = /^@([a-z0-9-]+)$/.exec(value.trim())
     const stack = alone && stacks.find((candidate) => candidate.name === alone[1])
@@ -247,7 +277,7 @@ export function Prompt({ focusRequest = 0 }: { focusRequest?: number }) {
       return
     }
     const parsed = classify(value, {
-      hasAttachments: attachments.length > 0,
+      hasAttachments: entered.length > 0,
       toUrl: api.navigation.toUrl,
     })
     try {
@@ -273,12 +303,12 @@ export function Prompt({ focusRequest = 0 }: { focusRequest?: number }) {
             return
           }
           const referenced = await stackAttachments(parsed.text)
-          if (attachments.length + referenced.length > limits.attachments) {
+          if (entered.length + referenced.length > limits.attachments) {
             setMessage({ kind: 'error', text: `At most ${limits.attachments} attachments.` })
             return
           }
           if (parsed.text) record('query', parsed.text)
-          await api.agent.run({ text: parsed.text, attachments: [...attachments, ...referenced] })
+          await api.agent.run({ text: parsed.text, attachments: [...entered, ...referenced] })
           setText('')
           setAttachments([])
           setPreview(null)
@@ -298,6 +328,19 @@ export function Prompt({ focusRequest = 0 }: { focusRequest?: number }) {
       setMessage({ kind: 'error', text: reason instanceof Error ? reason.message : String(reason) })
     }
   }
+
+  // An entry composed in the field of view runs here, as if typed.
+  const handled = useRef<number | null>(null)
+  const latestSubmit = useRef(submit)
+  useLayoutEffect(() => {
+    latestSubmit.current = submit
+  })
+  useEffect(() => {
+    if (!handoff || handled.current === handoff.id) return
+    handled.current = handoff.id
+    setAttachments(handoff.attachments)
+    void latestSubmit.current(handoff.text, handoff.attachments)
+  }, [handoff])
 
   const accept = (suggestion: Suggestion, andSubmit: boolean) => {
     setText(suggestion.text)
@@ -357,6 +400,7 @@ export function Prompt({ focusRequest = 0 }: { focusRequest?: number }) {
       case 'Escape':
         event.preventDefault()
         if (listed) setListHidden(true)
+        else if (compose) compose.onEscape()
         else if (running) void api.agent.stop()
         return
     }

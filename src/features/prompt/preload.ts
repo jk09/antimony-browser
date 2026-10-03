@@ -15,5 +15,12 @@ export const promptBridge: PromptApi = {
     ipcRenderer.on(channels.toggle, wrapped)
     return () => ipcRenderer.off(channels.toggle, wrapped)
   },
+  onFieldOfView: (listener) => {
+    const wrapped = () => listener()
+    ipcRenderer.on(channels.fieldOfView, wrapped)
+    return () => ipcRenderer.off(channels.fieldOfView, wrapped)
+  },
+  coverPage: () => ipcRenderer.invoke(channels.coverPage),
+  uncoverPage: () => ipcRenderer.invoke(channels.uncoverPage),
   focusPage: () => ipcRenderer.invoke(channels.focusPage),
 }
