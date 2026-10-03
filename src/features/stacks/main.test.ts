@@ -391,17 +391,20 @@ describe('stacks main', () => {
       ['Reload Page', 'CmdOrCtrl+R'],
       ['New Stack', 'CmdOrCtrl+N'],
       ['Close Page', 'CmdOrCtrl+W'],
+      ['Focus Stack', 'CmdOrCtrl+E'],
       ['Next Stack', 'Ctrl+Tab'],
       ['Previous Stack', 'Ctrl+Shift+Tab'],
     ])
     expect(press('r')).toBe(true)
     expect(press('n')).toBe(true)
     expect(press('w')).toBe(true)
+    expect(press('e')).toBe(true)
     expect(press('b')).toBe(false)
     expect(send.mock.calls.filter(([channel]) => channel === channels.command)).toEqual([
       [channels.command, 'reload'],
       [channels.command, 'new'],
       [channels.command, 'close-page'],
+      [channels.command, 'focus-tree'],
     ])
   })
 

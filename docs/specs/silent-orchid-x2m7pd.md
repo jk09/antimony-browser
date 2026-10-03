@@ -6,12 +6,12 @@
 | --- | --- |
 | **Feature name** | Ctrl+E focuses the navigation tree; arrow keys and type-ahead move through it |
 | **Spec ID** | silent-orchid-x2m7pd |
-| **Status** | Draft <!-- one of: Draft, Active, Done --> |
+| **Status** | Active <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-03 00:00 +00:00 |
-| **Last updated** | 2026-10-03 00:00 +00:00 |
+| **Last updated** | 2026-10-03 15:10 +00:00 |
 | **Affected features** | stacks |
 | **Target release** | 0.1.0 |
 | **Related links** | branching-trail-k4w9zp, swift-carousel-t6m2xa, fresh-anchor-w6p3jd |
@@ -87,14 +87,14 @@
 
 ## 11. Acceptance Criteria
 
-- [ ] Ctrl/Cmd+E from the page or chrome UI focuses the active row and the page does not receive the key.
-- [ ] Ctrl/Cmd+E in the tree returns focus to the page.
-- [ ] Typing letters focuses the first matching row after the current one, wrapping, case-insensitive.
-- [ ] A badge shows the typed prefix; no match marks it as an error; Backspace, Escape and the 1 s timeout behave as in 7.5.
-- [ ] Matched text is highlighted in the row.
-- [ ] Works in the overlay; a hidden match opens it.
-- [ ] Menu item shows the accelerator.
-- [ ] `npm run check` passes.
+- [x] Ctrl/Cmd+E from the page or chrome UI focuses the active row and the page does not receive the key.
+- [x] Ctrl/Cmd+E in the tree returns focus to the page.
+- [x] Typing letters focuses the first matching row after the current one, wrapping, case-insensitive.
+- [x] A badge shows the typed prefix; no match marks it as an error; Backspace, Escape and the 1 s timeout behave as in 7.5.
+- [x] Matched text is highlighted in the row.
+- [x] Works in the overlay; a hidden match opens it.
+- [x] Menu item shows the accelerator.
+- [x] `npm run check` passes.
 
 ## 12. Testing / Verification
 
@@ -109,4 +109,7 @@
 
 ## 14. Changes during implementation
 
-None yet.
+- The collapsed tree never hides the active row, so requirement 2 reduces to: no rows → nothing happens.
+- The menu entry is under File ("Focus Stack"), next to the other stack commands, not View.
+- No Playwright e2e test was added: the Electron binary isn't installed in the cloud session, so it could not be run here. Behaviour is covered by unit and jsdom tests; CI e2e runs the existing stacks specs.
+- Escape in the full-stack overlay still closes it; Escape with nothing typed in the main tree returns focus to the page.

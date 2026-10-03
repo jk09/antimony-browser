@@ -315,6 +315,67 @@ textarea {
   opacity: 0.5;
 }
 
+.stack-tree-wrap {
+  position: relative;
+}
+
+.stack-typing {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  z-index: 1;
+  padding: 1px 8px;
+  border: 1px solid var(--focus);
+  border-radius: 10px;
+  background: var(--field-bg);
+  color: var(--focus);
+  font:
+    12px/18px ui-monospace,
+    monospace;
+  pointer-events: none;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.stack-typing-label {
+  opacity: 0.7;
+}
+
+.stack-typing.miss {
+  border-color: var(--error);
+  color: var(--error);
+  animation: stack-shake 0.25s;
+}
+
+.stack-match {
+  background: color-mix(in srgb, var(--focus) 30%, transparent);
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+@keyframes stack-shake {
+  25% {
+    transform: translateX(-3px);
+  }
+  75% {
+    transform: translateX(3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stack-typing.miss {
+    animation: none;
+  }
+}
+
 .stack-tree {
   margin: 2px 0 0;
   padding: 0;
