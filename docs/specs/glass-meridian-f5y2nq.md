@@ -6,12 +6,12 @@
 | --- | --- |
 | **Feature name** | A "field of view" prompt that opens over the middle of the page on Ctrl/Cmd+I and hands what is entered to the sidebar prompt; the sidebar prompt moves to Ctrl/Cmd+Alt+I; the `/back` and `/forward` built-in skills are removed |
 | **Spec ID** | glass-meridian-f5y2nq |
-| **Status** | Done <!-- one of: Draft, Active, Done --> |
+| **Status** | Active <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-03 12:00 +00:00 |
-| **Last updated** | 2026-10-03 15:10 +00:00 |
+| **Last updated** | 2026-10-03 15:30 +00:00 |
 | **Affected features** | prompt, navigation, skills |
 | **Target release** | 0.1.0 |
 | **Related links** | spec amber-switch-b6t1qx (Ctrl/Cmd+B), ADR 0003 |
@@ -109,4 +109,5 @@
 - The field of view is rendered inside `AssistantPanel` (which owns the handoff to its `Prompt`), not mounted separately in `App.tsx`.
 - Opening the sidebar prompt (Ctrl/Cmd+L, Ctrl/Cmd+Alt+I) while the field of view is open closes it.
 - The flight takes 160 ms (not ≤ 400 ms); on landing the entry is copied into the sidebar prompt, which runs it 140 ms later, so the copy is seen.
+- Reopened (Active) for this follow-up; set Done again once its PR merges.
 - Prior spec drifting-nimbus-r8c3kw was set to Done (its PR is merged) so only this spec is Active.
