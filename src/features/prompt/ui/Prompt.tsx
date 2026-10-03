@@ -57,6 +57,9 @@ const menuOptions = (entries: MenuEntry[]): OptionNode[] =>
     ...(entry.children && { children: menuOptions(entry.children) }),
   }))
 
+/** How long a handed-over entry stays visible in the prompt before it runs: just long enough to see. */
+export const HANDOFF_MS = 140
+
 /** What the field of view hands to the sidebar prompt. */
 export interface Handoff {
   /** Distinguishes one handoff from the next, so the same text can be sent twice. */
@@ -338,8 +341,10 @@ export function Prompt({
   useEffect(() => {
     if (!handoff || handled.current === handoff.id) return
     handled.current = handoff.id
+    // The entry lands in the input first, then runs; a refused run leaves it there to edit.
+    setText(handoff.text)
     setAttachments(handoff.attachments)
-    void latestSubmit.current(handoff.text, handoff.attachments)
+    setTimeout(() => void latestSubmit.current(handoff.text, handoff.attachments), HANDOFF_MS)
   }, [handoff])
 
   const accept = (suggestion: Suggestion, andSubmit: boolean) => {

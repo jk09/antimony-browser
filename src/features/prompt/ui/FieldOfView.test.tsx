@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeApi } from '../../../app/renderer/fake-api'
 import { AssistantPanel } from './AssistantPanel'
 import { FLIGHT_MS } from './FieldOfView'
+import { HANDOFF_MS } from './Prompt'
 
 afterEach(() => {
   cleanup()
@@ -85,11 +86,18 @@ describe('FieldOfView', () => {
     expect(overlay()!.querySelector<HTMLElement>('.fov-card')!.style.transform).toBe(
       'translate(650px, 400px) scale(0.5)',
     )
+    // Landed: the entry is copied into the sidebar prompt, which has not run it yet.
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(FLIGHT_MS + 100)
+      await vi.advanceTimersByTimeAsync(FLIGHT_MS + 30)
     })
     expect(overlay()).toBeNull()
     expect(api.prompt.uncoverPage).toHaveBeenCalledOnce()
+    expect(boxes()).toHaveLength(1)
+    expect(boxes()[0]!.value).toBe('what is this page?')
+    expect(api.agent.run).not.toHaveBeenCalled()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(HANDOFF_MS + 50)
+    })
     expect(api.agent.run).toHaveBeenCalledExactlyOnceWith({
       text: 'what is this page?',
       attachments: [],
@@ -106,7 +114,7 @@ describe('FieldOfView', () => {
     fireEvent.keyDown(boxes()[0]!, { key: 'Enter' })
     expect(screen.getByRole('complementary', { name: 'Assistant' })).toBeTruthy()
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(FLIGHT_MS + 100)
+      await vi.advanceTimersByTimeAsync(FLIGHT_MS + HANDOFF_MS + 100)
     })
     expect(api.navigation.go).toHaveBeenCalledWith('https://example.com/')
   })
@@ -115,7 +123,7 @@ describe('FieldOfView', () => {
     const { api } = await open()
     fireEvent.keyDown(boxes()[1]!, { key: 'Enter' })
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(FLIGHT_MS + 100)
+      await vi.advanceTimersByTimeAsync(FLIGHT_MS + HANDOFF_MS + 100)
     })
     expect(overlay()).toBeTruthy()
     expect(api.agent.run).not.toHaveBeenCalled()
