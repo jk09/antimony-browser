@@ -13,7 +13,7 @@ import {
 
 describe('toolsFor', () => {
   it('offers only navigation tools and history search without page access', () => {
-    const names = toolsFor(false).map((tool) => tool.name)
+    const names = toolsFor({ pageAccess: false, historyAccess: true }).map((tool) => tool.name)
     expect(names).toEqual([
       'navigate',
       'go_back',
@@ -26,7 +26,7 @@ describe('toolsFor', () => {
   })
 
   it('adds page reading and actions with page access', () => {
-    const names = toolsFor(true).map((tool) => tool.name)
+    const names = toolsFor({ pageAccess: true, historyAccess: true }).map((tool) => tool.name)
     expect(names).toEqual(
       expect.arrayContaining([
         'read_page',
@@ -38,6 +38,12 @@ describe('toolsFor', () => {
         'scroll',
       ]),
     )
+  })
+
+  it('leaves out history search without history access', () => {
+    expect(
+      toolsFor({ pageAccess: true, historyAccess: false }).map((tool) => tool.name),
+    ).not.toContain('search_history')
   })
 })
 

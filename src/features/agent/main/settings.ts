@@ -10,6 +10,7 @@ import {
 export interface StoredSettings {
   model: ModelId
   pageAccess: boolean
+  historyAccess: boolean
   /** The API key encrypted with safeStorage, base64. */
   encryptedKey?: string
 }
@@ -17,6 +18,7 @@ export interface StoredSettings {
 export const defaultSettings = (): StoredSettings => ({
   model: 'claude-sonnet-5-5',
   pageAccess: false,
+  historyAccess: true,
 })
 
 export function parseSettings(raw: unknown): StoredSettings {
@@ -25,6 +27,8 @@ export function parseSettings(raw: unknown): StoredSettings {
   return {
     model: isModelId(record['model']) ? record['model'] : defaultSettings().model,
     pageAccess: record['pageAccess'] === true,
+    // Settings saved before the option existed keep history search on.
+    historyAccess: record['historyAccess'] !== false,
     ...(typeof record['encryptedKey'] === 'string' && { encryptedKey: record['encryptedKey'] }),
   }
 }
@@ -35,7 +39,8 @@ export function parseUpdate(value: unknown): SettingsUpdate {
   const record = value as Record<string, unknown>
   const update: SettingsUpdate = {}
   for (const key of Object.keys(record)) {
-    if (key !== 'model' && key !== 'pageAccess') throw new TypeError(`unknown setting ${key}`)
+    if (key !== 'model' && key !== 'pageAccess' && key !== 'historyAccess')
+      throw new TypeError(`unknown setting ${key}`)
   }
   if ('model' in record) {
     if (!isModelId(record['model'])) throw new TypeError('unknown model')
@@ -45,6 +50,12 @@ export function parseUpdate(value: unknown): SettingsUpdate {
     if (typeof record['pageAccess'] !== 'boolean')
       throw new TypeError('pageAccess must be a boolean')
     update.pageAccess = record['pageAccess']
+  }
+  if ('historyAccess' in record) {
+    if (typeof record['historyAccess'] !== 'boolean') {
+      throw new TypeError('historyAccess must be a boolean')
+    }
+    update.historyAccess = record['historyAccess']
   }
   return update
 }
@@ -76,11 +87,12 @@ export class SettingsService {
   ) {}
 
   get(): AgentSettings {
-    const { model, pageAccess, encryptedKey } = this.store.get()
+    const { model, pageAccess, historyAccess, encryptedKey } = this.store.get()
     return {
       model,
       provider: providerOf(model),
       pageAccess,
+      historyAccess,
       hasKey: this.apiKey() !== null,
       keyPersisted: encryptedKey !== undefined || this.sessionKey === null,
     }

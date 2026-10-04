@@ -29,15 +29,17 @@ function setup(
     model?: ModelId
     cli?: (turn: CliTurn) => Promise<CliOutcome>
     history?: HistoryPort | null
+    historyAccess?: boolean
   } = {},
 ) {
   const { browser, state } = fakeBrowser(options.elements)
   const requests: ModelRequest[] = []
   const states: AgentState[] = []
   const events: DebugEvent[] = []
-  const settings: { model: ModelId; pageAccess: boolean } = {
+  const settings: { model: ModelId; pageAccess: boolean; historyAccess: boolean } = {
     model: options.model ?? 'claude-sonnet-5-5',
     pageAccess: options.pageAccess ?? false,
+    historyAccess: options.historyAccess ?? true,
   }
   const turns: CliTurn[] = []
   const deps: AgentDeps = {
@@ -388,6 +390,25 @@ describe('cross-site navigation after reading a page', () => {
     expect(agent.state().approval!.description).toBe('Open https://evil.example/')
     agent.approve('deny')
     await running
+  })
+
+  it('history search is neither offered nor run while history access is off', async () => {
+    const history: HistoryPort = { search: vi.fn(async () => ({ pages: [] })) }
+    const { agent, requests } = setup(
+      [
+        async () => response([toolUse('t1', 'search_history', { query: 'LLM' })], 'tool_use'),
+        async () => response([{ type: 'text', text: 'History access is off.' }]),
+      ],
+      { history, historyAccess: false },
+    )
+    await agent.run(input('search history for LLM'))
+    expect(requests[0]!.tools.map((tool) => tool.name)).not.toContain('search_history')
+    expect(JSON.stringify(requests[0]!.messages[0])).toContain('History access: off')
+    expect(history.search).not.toHaveBeenCalled()
+    expect(requests[1]!.messages.at(-1)!.content[0]).toMatchObject({
+      is_error: true,
+      content: expect.stringContaining('History access is off'),
+    })
   })
 
   it('compares hosts without www', () => {

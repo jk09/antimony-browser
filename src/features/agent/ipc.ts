@@ -143,12 +143,14 @@ export interface AgentSettings {
   provider: Provider
   /** Edge-style opt-in: the model may read the page and act on it (with approval). */
   pageAccess: boolean
+  /** The model may search browsing history (search_history); on by default. */
+  historyAccess: boolean
   hasKey: boolean
   /** False when the key can't be encrypted on this system and lives in memory only. */
   keyPersisted: boolean
 }
 
-export type SettingsUpdate = Partial<Pick<AgentSettings, 'model' | 'pageAccess'>>
+export type SettingsUpdate = Partial<Pick<AgentSettings, 'model' | 'pageAccess' | 'historyAccess'>>
 
 export type DebugEventType =
   'request' | 'response' | 'tool-call' | 'approval' | 'tool-result' | 'error' | 'stopped' | 'done'

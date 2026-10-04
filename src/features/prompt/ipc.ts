@@ -52,6 +52,12 @@ export const promptCommands: CommandInfo[] = [
     options: ['on', 'off'],
   },
   {
+    name: 'history-access',
+    usage: 'on|off',
+    description: 'Let the assistant search your browsing history',
+    options: ['on', 'off'],
+  },
+  {
     name: 'home',
     usage: '<url>',
     description:
