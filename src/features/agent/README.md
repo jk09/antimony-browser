@@ -10,6 +10,7 @@ Lets Claude (through an Anthropic API key or the user's own Claude Code CLI logi
 
 ## Invariants
 - Without page access only navigation tools and `search_history` are offered and page tools are refused – `main/agent.test.ts › offers no page tools…`, `main/tools.test.ts › toolsFor`
+- With history access off (`/history-access off`) `search_history` is neither offered nor run – `main/agent.test.ts › history search is neither offered…`, `main/tools.test.ts › leaves out history search…`
 - History search results are untrusted and, like reading a page, make leaving the site later in the run need approval – `main/tools.test.ts › search_history`, `main/agent.test.ts › also after a history search…`
 - Every click, key press and typing, and any navigation to another site after page content was read, waits for Allow / Allow for this run; Deny reaches the model as a denied result – `main/agent.test.ts › waits for approval…`, `› tells the model when the user denies…`, `› cross-site navigation after reading a page`, `e2e/prompt.spec.ts › with page access…`
 - Never types into password or payment card fields – `main/agent.test.ts › refuses typing into sensitive fields…`, `shared/page-scripts.test.ts › flags password…`
@@ -29,12 +30,12 @@ Lets Claude (through an Anthropic API key or the user's own Claude Code CLI logi
 - Electron: `safeStorage`, `webContents.executeJavaScriptInIsolatedWorld`, `sendInputEvent`, `insertText`, `capturePage`
 - Network: `POST https://api.anthropic.com/v1/messages` (`ANTHROPIC_BASE_URL` overrides); for Ollama models `POST {OLLAMA_HOST}/v1/messages` and `GET {OLLAMA_HOST}/api/tags` (default `http://localhost:11434`, Ollama ≥ 0.14); e2e uses a local fake for both
 - Processes: the Claude Code CLI (`CLAUDE_CLI_PATH`, else `claude` on PATH or in its install folders; `auth status --json` for the picker) with cwd `userData/claude-cli/`; it talks to Anthropic under the user's Claude Code account. e2e and `main.test.ts` use `e2e/fixtures/fake-claude.mjs`
-- Stored data: `userData/agent-settings.json` (model, page access, safeStorage-encrypted key); debug log in memory only (last 20 runs); CLI conversations are saved by the CLI in its own sessions folder (for `--resume`); the MCP config (URL + token) is a 0600 temp file deleted after each run
+- Stored data: `userData/agent-settings.json` (model, page access, history access, safeStorage-encrypted key); debug log in memory only (last 20 runs); CLI conversations are saved by the CLI in its own sessions folder (for `--resume`); the MCP config (URL + token) is a 0600 temp file deleted after each run
 
 ## Security surface
-- IPC: the chrome UI can start runs, answer approvals, change model and page access, set the key (write-only) and list models (ids and labels only; it can't change the Ollama address, the CLI path or any CLI argument).
+- IPC: the chrome UI can start runs, answer approvals, change model, page access and history access, set the key (write-only) and list models (ids and labels only; it can't change the Ollama address, the CLI path or any CLI argument).
 - Main: `complete` lets other features' main code send text and JPEGs to the selected model; they decide what may be sent (history: ADR 0006, 0010).
-- History: in any run, also with page access off, the model can search browsing history and sees up to 20 matching pages' titles, URLs, notes and summaries (ADR 0012).
+- History: unless history access is off (default on), in any run, also with page access off, the model can search browsing history and sees up to 20 matching pages' titles, URLs, notes and summaries (ADR 0012).
 - Web content: with page access on, the model reads page text, element lists and screenshots (sent to Anthropic – through the CLI for `cli:` models – or to Ollama for `ollama:` models) and, after approval, clicks and types via trusted input events. Navigation needs no approval until the run has read a page; then leaving the site needs approval too (ADR 0004).
 
 ## Feature flags
@@ -42,4 +43,4 @@ Lets Claude (through an Anthropic API key or the user's own Claude Code CLI logi
 |---|---|---|---|
 | – | | | |
 
-Spec: violet-harbinger-p7w3kd, copper-lantern-o7l4ma, still-meridian-r4v8nc, ember-ledger-h3x8vq, quartz-relay-c8m2vt, drifting-nimbus-r8c3kw, patient-archive-h6q2wn · ADRs: 0004, 0005, 0006, 0009, 0010, 0012
+Spec: violet-harbinger-p7w3kd, copper-lantern-o7l4ma, still-meridian-r4v8nc, ember-ledger-h3x8vq, quartz-relay-c8m2vt, drifting-nimbus-r8c3kw, patient-archive-h6q2wn, quiet-ledger-t9m4rx · ADRs: 0004, 0005, 0006, 0009, 0010, 0012

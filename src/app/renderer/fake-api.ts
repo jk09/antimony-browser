@@ -40,6 +40,7 @@ export const defaultSettings: AgentSettings = {
   model: 'claude-sonnet-5-5',
   provider: 'anthropic',
   pageAccess: false,
+  historyAccess: true,
   hasKey: true,
   keyPersisted: true,
 }

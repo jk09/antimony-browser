@@ -230,9 +230,19 @@ export function toolNamed(name: string): ToolDefinition | undefined {
   return byName.get(name)
 }
 
-/** The tools offered to the model: without page access, no page tools (Edge-style opt-in). */
-export function toolsFor(pageAccess: boolean): ToolDefinition[] {
-  return toolDefinitions.filter((tool) => pageAccess || !needsPageAccess(tool))
+/**
+ * The tools offered to the model: without page access no page tools (Edge-style opt-in), without
+ * history access no history search.
+ */
+export function toolsFor(access: {
+  pageAccess: boolean
+  historyAccess: boolean
+}): ToolDefinition[] {
+  return toolDefinitions.filter(
+    (tool) =>
+      (access.pageAccess || !needsPageAccess(tool)) &&
+      (access.historyAccess || tool.kind !== 'history'),
+  )
 }
 
 export class ToolError extends Error {}

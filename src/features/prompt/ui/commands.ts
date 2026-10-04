@@ -81,6 +81,18 @@ export async function runCommand(
           ? 'Page access on: the assistant can read this page and, with your approval, act on it.'
           : 'Page access off: the assistant only sees the page address and title.',
       )
+    case 'history-access':
+      if (args !== 'on' && args !== 'off') {
+        return info(
+          `History access is ${settings?.historyAccess === false ? 'off' : 'on'}. Use /history-access on or off.`,
+        )
+      }
+      await api.agent.updateSettings({ historyAccess: args === 'on' })
+      return info(
+        args === 'on'
+          ? 'History access on: the assistant can search the pages you visited.'
+          : "History access off: the assistant can't search your browsing history.",
+      )
     case 'home': {
       if (!args) {
         const home = await api.stacks.home()

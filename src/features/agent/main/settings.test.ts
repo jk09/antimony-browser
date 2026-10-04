@@ -31,12 +31,13 @@ const crypto = (available: boolean): KeyCrypto => ({
 })
 
 describe('SettingsService', () => {
-  it('starts with Sonnet 5.5 and page access off', () => {
+  it('starts with Sonnet 5.5, page access off and history access on', () => {
     const settings = new SettingsService(memoryStore(), crypto(true), undefined)
     expect(settings.get()).toEqual({
       model: 'claude-sonnet-5-5',
       provider: 'anthropic',
       pageAccess: false,
+      historyAccess: true,
       hasKey: false,
       keyPersisted: true,
     })
@@ -79,6 +80,8 @@ describe('parsing', () => {
     })
     expect(() => parseUpdate({ model: 'gpt-4' })).toThrow()
     expect(() => parseUpdate({ pageAccess: 'yes' })).toThrow()
+    expect(parseUpdate({ historyAccess: false })).toEqual({ historyAccess: false })
+    expect(() => parseUpdate({ historyAccess: 'off' })).toThrow()
     expect(() => parseUpdate({ encryptedKey: 'x' })).toThrow()
     expect(() => parseUpdate(null)).toThrow()
   })
@@ -104,7 +107,7 @@ describe('parsing', () => {
   })
 
   it('derives the provider from the model', () => {
-    const store = memoryStore({ model: 'ollama:qwen3:8b', pageAccess: false })
+    const store = memoryStore({ model: 'ollama:qwen3:8b', pageAccess: false, historyAccess: true })
     const settings = new SettingsService(store, crypto(true), undefined)
     expect(settings.get()).toMatchObject({ model: 'ollama:qwen3:8b', provider: 'ollama' })
     expect(parseSettings({ model: 'ollama:qwen3:8b' }).model).toBe('ollama:qwen3:8b')
@@ -122,6 +125,9 @@ describe('parsing', () => {
 
   it('repairs stored settings', () => {
     expect(parseSettings({ model: 'nope', pageAccess: 'yes' })).toEqual(defaultSettings())
+    // Settings saved before history access existed keep it on; only an explicit false turns it off.
+    expect(parseSettings({ historyAccess: 'no' }).historyAccess).toBe(true)
+    expect(parseSettings({ historyAccess: false }).historyAccess).toBe(false)
     expect(() => parseSettings('x')).toThrow()
   })
 })

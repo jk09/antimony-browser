@@ -523,6 +523,16 @@ describe('Prompt', () => {
     expect((await screen.findByRole('status')).textContent).toContain('Page access on')
   })
 
+  it('/history-access turns history search off and on', async () => {
+    const { api, box } = await openPrompt()
+    type(box, '/history-access off')
+    press(box, 'Enter')
+    await waitFor(() =>
+      expect(api.agent.updateSettings).toHaveBeenCalledWith({ historyAccess: false }),
+    )
+    expect((await screen.findByRole('status')).textContent).toContain('History access off')
+  })
+
   it('/home sets, shows, clears and resets the page new stacks open at', async () => {
     const { api, box } = await openPrompt()
     type(box, '/home example.com')
