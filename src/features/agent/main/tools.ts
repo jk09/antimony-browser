@@ -47,11 +47,43 @@ export const pageKeys = [
 ] as const
 export type PageKey = (typeof pageKeys)[number]
 
+/** One page of the user's browsing history, as the history feature hands it to the agent. */
+export interface HistoryHit {
+  title: string
+  url: string
+  /** Epoch milliseconds. */
+  lastVisitAt: number
+  visitCount: number
+  note: string | null
+  description: string | null
+  summary: string | null
+  /** Text around a full-text match. */
+  snippet: string | null
+}
+
+export type HistorySearchMode = 'meaning' | 'text'
+
+/** History's search, provided by the history feature (provideHistorySearch in main.ts). */
+export interface HistoryPort {
+  search(
+    query: string,
+    mode: HistorySearchMode,
+    bookmarked: boolean,
+  ): Promise<{ pages: HistoryHit[]; notice?: string }>
+}
+
 /**
  * navigation: like the address bar, never needs approval.
+ * history: reads the browsing history; no page access or approval, but like reading a page it
+ * makes a later cross-site navigation in the run ask first.
  * read: needs page access. action: needs page access and the user's approval.
  */
-export type ToolKind = 'navigation' | 'read' | 'action'
+export type ToolKind = 'navigation' | 'history' | 'read' | 'action'
+
+/** Read and action tools work on the page and need page access. */
+export function needsPageAccess(tool: ToolDefinition): boolean {
+  return tool.kind === 'read' || tool.kind === 'action'
+}
 
 export interface ToolDefinition {
   name: string
@@ -119,6 +151,21 @@ export const toolDefinitions: ToolDefinition[] = [
     input_schema: schema(),
   },
   {
+    name: 'search_history',
+    kind: 'history',
+    replayable: false,
+    description:
+      "Search the user's browsing history (pages they visited before, with their notes). mode 'meaning' (default) finds pages about a topic even without the exact words; 'text' matches exact words in the pages' titles, addresses and text. bookmarked: only pages the user noted. Returns up to 20 pages, best match first. Use it for anything the user read or visited earlier; open a result with navigate.",
+    input_schema: schema(
+      {
+        query: { type: 'string', description: 'What to look for, in a few words.' },
+        mode: { type: 'string', enum: ['meaning', 'text'] },
+        bookmarked: { type: 'boolean' },
+      },
+      ['query'],
+    ),
+  },
+  {
     name: 'read_page',
     kind: 'read',
     replayable: false,
@@ -183,9 +230,9 @@ export function toolNamed(name: string): ToolDefinition | undefined {
   return byName.get(name)
 }
 
-/** The tools offered to the model: without page access, navigation only (Edge-style opt-in). */
+/** The tools offered to the model: without page access, no page tools (Edge-style opt-in). */
 export function toolsFor(pageAccess: boolean): ToolDefinition[] {
-  return toolDefinitions.filter((tool) => pageAccess || tool.kind === 'navigation')
+  return toolDefinitions.filter((tool) => pageAccess || !needsPageAccess(tool))
 }
 
 export class ToolError extends Error {}
@@ -238,6 +285,8 @@ export function describeCall(name: string, input: Input, element?: ElementInfo):
       return 'Stop loading'
     case 'get_page_state':
       return 'Check the page state'
+    case 'search_history':
+      return `Search history for "${String(input['query'])}"${input['mode'] === 'text' ? ' by text' : ''}${input['bookmarked'] ? ' in bookmarks' : ''}`
     case 'read_page':
       return 'Read the page'
     case 'find_in_page':
@@ -313,15 +362,62 @@ export async function inspect(browser: BrowserPort, selector: string, focus = fa
   return info
 }
 
+export const MAX_HISTORY_QUERY = 500
+const MAX_HISTORY_RESULTS = 20
+
+const clip = (value: string, max: number) =>
+  value.length > max ? `${value.slice(0, max)}…` : value
+const oneLine = (value: string) => value.replace(/\s+/g, ' ').trim()
+
+/** History results for the model: one page per line, page data marked untrusted. */
+export function formatHistory(pages: HistoryHit[], notice?: string): string {
+  const lines = pages.slice(0, MAX_HISTORY_RESULTS).map((page, index) => {
+    const visits = `${page.visitCount} visit${page.visitCount === 1 ? '' : 's'}`
+    const date = new Date(page.lastVisitAt).toISOString().slice(0, 10)
+    const about = page.summary ?? page.description
+    return [
+      `${index + 1}. ${oneLine(clip(page.title, 200)) || '(untitled)'} – ${clip(page.url, 300)}`,
+      `last visited ${date}, ${visits}`,
+      ...(page.note ? [`note: ${oneLine(clip(page.note, 500))}`] : []),
+      ...(about ? [`about: ${oneLine(clip(about, 400))}`] : []),
+      ...(page.snippet ? [`match: ${oneLine(clip(page.snippet, 300))}`] : []),
+    ].join(' · ')
+  })
+  const head =
+    lines.length === 0
+      ? 'No pages in history match.'
+      : `${lines.length} page(s) from the browsing history, best match first.`
+  return [
+    ...(notice ? [notice] : []),
+    head,
+    ...(lines.length > 0 ? [untrusted(lines.join('\n'))] : []),
+  ].join('\n')
+}
+
+async function searchHistory(history: HistoryPort | null, input: Input): Promise<ToolOutput> {
+  if (!history) throw new ToolError('Browsing history is not available.')
+  const query = String(input['query']).trim()
+  if (!query) throw new ToolError('search_history: query is empty')
+  if (query.length > MAX_HISTORY_QUERY) {
+    throw new ToolError(`search_history: query is longer than ${MAX_HISTORY_QUERY} characters`)
+  }
+  const mode = input['mode'] === 'text' ? 'text' : 'meaning'
+  const { pages, notice } = await history.search(query, mode, input['bookmarked'] === true)
+  return { text: formatHistory(pages, notice) }
+}
+
 /**
  * Runs one tool. Permission checks (page access, approval) happen in the caller; this only does
  * the work and the per-tool safety rules (no typing into sensitive fields).
  */
 export async function executeTool(
-  browser: BrowserPort,
+  browser: BrowserPort | null,
   name: string,
   input: Input,
+  history: HistoryPort | null = null,
 ): Promise<ToolOutput> {
+  if (name === 'search_history') return searchHistory(history, input)
+  if (!browser) throw new ToolError('The browser page is not available.')
   const needsPage = !['navigate', 'get_page_state'].includes(name)
   if (needsPage && !browser.hasPage()) throw new ToolError('No page is loaded. Use navigate first.')
 

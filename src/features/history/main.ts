@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { app, nativeImage, powerMonitor } from 'electron'
 import type { MainContext } from '../../app/main/features'
 import { createJsonStore } from '../../app/main/json-store'
-import { complete } from '../agent/main'
+import { complete, provideHistorySearch, type HistoryHit } from '../agent/main'
 import { getPage, getTabs, onPageEvent } from '../navigation/main'
 import {
   channels,
@@ -18,6 +18,9 @@ import {
   type SearchMode,
   type SearchRequest,
   type SearchResult,
+  SNIPPET_END,
+  SNIPPET_START,
+  type HistoryPage,
 } from './ipc'
 import { HistoryDb } from './main/db'
 import {
@@ -38,6 +41,7 @@ import {
   parseRanking,
   rankingPrompt,
   RECENT_CANDIDATES,
+  SEMANTIC_LIMIT,
   SEMANTIC_SYSTEM,
 } from './main/semantic'
 import { needsSummary, parseSummary, SUMMARY_SYSTEM, summaryPrompt } from './main/summarize'
@@ -163,6 +167,22 @@ function openDb(file: string): HistoryDb {
       }
     }
     return new HistoryDb(file)
+  }
+}
+
+/** A page as the assistant's search_history tool gets it: no ids, snippet marks as «». */
+export function historyHit(page: HistoryPage): HistoryHit {
+  return {
+    title: page.title,
+    url: page.url,
+    lastVisitAt: page.lastVisitAt,
+    visitCount: page.visitCount,
+    note: page.note,
+    description: page.description,
+    summary: page.summary,
+    snippet: page.snippet
+      ? page.snippet.replaceAll(SNIPPET_START, '«').replaceAll(SNIPPET_END, '»')
+      : null,
   }
 }
 
@@ -387,6 +407,30 @@ export function register({ window, ipc, fileMenu }: MainContext): void {
     }
   }
 
+  const search = (
+    query: string,
+    mode: SearchMode,
+    bookmarked: boolean,
+  ): SearchResult | Promise<SearchResult> => {
+    if (mode === 'semantic' && query.trim()) return semanticSearch(query.trim(), bookmarked)
+    return { pages: textSearch(query, bookmarked) }
+  }
+
+  // The assistant's search_history tool runs the same searches as the history panel.
+  provideHistorySearch({
+    search: async (query, mode, bookmarked) => {
+      const { pages, notice } = await search(
+        query,
+        mode === 'meaning' ? 'semantic' : 'text',
+        bookmarked,
+      )
+      return {
+        pages: pages.slice(0, SEMANTIC_LIMIT).map(historyHit),
+        ...(notice && { notice }),
+      }
+    },
+  })
+
   /** A stored screenshot, scaled down to send to the model, base64; null if there's none. */
   const smallScreenshot = (pageId: number): string | null => {
     const jpeg = db.screenshot(pageId)
@@ -478,8 +522,7 @@ export function register({ window, ipc, fileMenu }: MainContext): void {
   })
   ipc.handle(channels.search, (value): SearchResult | Promise<SearchResult> => {
     const { query, mode, bookmarked } = parseSearch(value)
-    if (mode === 'semantic' && query.trim()) return semanticSearch(query.trim(), bookmarked)
-    return { pages: textSearch(query, bookmarked) }
+    return search(query, mode, bookmarked)
   })
   ipc.handle(channels.screenshot, (id) => {
     const jpeg = db.screenshot(parseId(id))

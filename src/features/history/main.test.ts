@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import type { MenuItemConstructorOptions } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MainContext } from '../../app/main/features'
+import type { HistoryPort } from '../agent/main'
 import type { PageEvent } from '../navigation/main'
 import type { PageMeta } from './shared/page-meta'
 
@@ -29,7 +30,13 @@ vi.mock('electron', () => ({
 }))
 
 const complete = vi.fn()
-vi.mock('../agent/main', () => ({ complete: (...args: unknown[]) => complete(...args) }))
+let historySearch: HistoryPort | null = null
+vi.mock('../agent/main', () => ({
+  complete: (...args: unknown[]) => complete(...args),
+  provideHistorySearch: (port: HistoryPort) => {
+    historySearch = port
+  },
+}))
 
 let pageListener: ((event: PageEvent) => void) | null = null
 let pageMeta: PageMeta
@@ -305,6 +312,42 @@ describe('history main', () => {
       bookmarked: false,
     })) as { pages: { id: number }[]; notice?: string }
     expect(fallback.pages.map((p) => p.id)).toEqual([a.id])
+    expect(fallback.notice).toMatch(/No Anthropic API key/)
+  })
+
+  it("gives the assistant's search_history the same text and meaning search", async () => {
+    const { call, page } = setup()
+    page({ type: 'navigated', url: 'https://example.com/a', status: 200, transition: 'link' })
+    page({ type: 'loaded', url: 'https://example.com/a' })
+    await vi.advanceTimersByTimeAsync(1500)
+    const a = call(channels.current) as { id: number }
+    call(channels.setNote, a.id, 'vector database pricing')
+    page({ type: 'navigated', url: 'https://example.com/b', status: 200, transition: 'link' })
+    const b = call(channels.current) as { id: number }
+
+    const text = await historySearch!.search('readers', 'text', false)
+    expect(text.pages).toEqual([
+      {
+        title: 'Write-ahead logging',
+        url: 'https://example.com/a',
+        lastVisitAt: expect.any(Number),
+        visitCount: 1,
+        note: 'vector database pricing',
+        description: 'How WAL works',
+        summary: null,
+        snippet: expect.stringContaining('«Readers»'),
+      },
+    ])
+    expect(complete).not.toHaveBeenCalled()
+
+    complete.mockResolvedValue({ text: `[${b.id}, ${a.id}]`, model: 'm' })
+    const meaning = await historySearch!.search('databases', 'meaning', true)
+    expect(meaning.pages.map((p) => p.url)).toEqual(['https://example.com/a'])
+    expect((complete.mock.calls[0]![0] as { text: string }).text).toContain('Request: databases')
+
+    complete.mockRejectedValue(new Error('No Anthropic API key is set.'))
+    const fallback = await historySearch!.search('vector', 'meaning', false)
+    expect(fallback.pages.map((p) => p.url)).toEqual(['https://example.com/a'])
     expect(fallback.notice).toMatch(/No Anthropic API key/)
   })
 
