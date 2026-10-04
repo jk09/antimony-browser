@@ -263,6 +263,8 @@ describe('stacks main', () => {
     const home = state().stacks.find((s) => s.name === 'home')!
     call(channels.switch, home.id)
     expect(tabs.activeId).toBe(1)
+    // The shown page takes focus, so keys (Ctrl+Tab) keep reaching a webContents.
+    expect(tabs.focused.at(-1)).toBe(1)
     expect(rowsOf()).toEqual(['Home'])
     expect(state().stacks[0]!.name).toBe('home')
 
@@ -270,6 +272,7 @@ describe('stacks main', () => {
     expect(tabs.calls).toContain('close 1')
     expect(state().current!.name).toBe('docs')
     expect(tabs.activeId).toBe(2)
+    expect(tabs.focused.at(-1)).toBe(2)
 
     expect(() => call(channels.switch, 'nope')).toThrow(TypeError)
     expect(() => call(channels.close, 42)).toThrow(TypeError)

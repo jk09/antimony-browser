@@ -206,6 +206,9 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
     if (tabId !== undefined) tabs.activate(tabId)
     else if (stack.activeId !== null) goToNode(stack, stack.activeId)
     else bind(stack, tabs.create({ activate: true }))
+    // Focus follows to the shown page: the hidden one may have held it, and a detached view keeps
+    // focus, so no webContents would see keys (Ctrl+Tab included) until a click.
+    tabs.focus(tabOfStack.get(stack.id)!)
     changed()
   }
 
@@ -507,7 +510,7 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
 
   // Ctrl+[Shift+]Tab: the UI keeps the stacks in most-recently-used order and the highlight; main
   // only knows whether a cycle is open, to end it when Ctrl goes up and cancel it on Escape or
-  // when the window loses focus. Focus stays where it is (the switch moves it to the page).
+  // when the window loses focus. Focus stays where it is until the switch moves it to the page.
   let cycling = false
   const cycleStep = (name: 'cycle-next' | 'cycle-previous', end: boolean) => {
     cycling = !end
