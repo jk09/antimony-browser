@@ -11,7 +11,7 @@
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-03 12:00 +00:00 |
-| **Last updated** | 2026-10-04 10:30 +00:00 |
+| **Last updated** | 2026-10-04 09:00 +00:00 |
 | **Affected features** | prompt, navigation, skills |
 | **Target release** | 0.1.0 |
 | **Related links** | spec amber-switch-b6t1qx (Ctrl/Cmd+B), ADR 0003 |
@@ -109,5 +109,5 @@
 - The field of view is rendered inside `AssistantPanel` (which owns the handoff to its `Prompt`), not mounted separately in `App.tsx`.
 - Opening the sidebar prompt (Ctrl/Cmd+L, Ctrl/Cmd+Alt+I) while the field of view is open closes it.
 - The flight takes 160 ms (not ≤ 400 ms); on landing the entry is copied into the sidebar prompt, which runs it 140 ms later, so the copy is seen.
-- Reopened (Active) for this follow-up; Done again since its PR merged.
+- Reopened (Active) for the handoff follow-up; Done again since its PR (#31) merged.
 - Prior spec drifting-nimbus-r8c3kw was set to Done (its PR is merged) so only this spec is Active.
