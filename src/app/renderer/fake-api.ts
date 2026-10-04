@@ -175,6 +175,7 @@ export function fakeApi(
       setHome: vi.fn(async (url: string | null) => {
         home = url
       }),
+      setMuted: vi.fn(async (_stackId: string, _muted: boolean) => {}),
       onChanged: stacks.subscribe,
       onCommand: stackCommand.subscribe,
     },

@@ -18,8 +18,8 @@ const row = (id: number, depth: number, last = true): StackRow => ({
 const state = (rows: StackRow[], activeId: number): StacksState => ({
   current: { id: 's1', name: 'page-1', rows, activeId },
   stacks: [
-    { id: 's1', name: 'page-1', rootTitle: 'Page 1', pages: rows.length },
-    { id: 's2', name: 'docs', rootTitle: 'Docs', pages: 1 },
+    { id: 's1', name: 'page-1', rootTitle: 'Page 1', pages: rows.length, audio: null },
+    { id: 's2', name: 'docs', rootTitle: 'Docs', pages: 1, audio: null },
   ],
 })
 
@@ -160,9 +160,9 @@ describe('StackHeader', () => {
     const three: StacksState = {
       ...state([row(1, 0)], 1),
       stacks: [
-        { id: 's1', name: 'page-1', rootTitle: 'Page 1', pages: 1 },
-        { id: 's2', name: 'docs', rootTitle: 'Docs', pages: 1 },
-        { id: 's3', name: 'news', rootTitle: 'News', pages: 1 },
+        { id: 's1', name: 'page-1', rootTitle: 'Page 1', pages: 1, audio: null },
+        { id: 's2', name: 'docs', rootTitle: 'Docs', pages: 1, audio: null },
+        { id: 's3', name: 'news', rootTitle: 'News', pages: 1, audio: null },
       ],
     }
     const { api, emit } = await renderHeader(three)
@@ -207,10 +207,35 @@ describe('StackHeader', () => {
     expect(api.stacks.switch).toHaveBeenCalledTimes(2)
   })
 
+  it('shows sound indicators that mute or unmute a stack without switching', async () => {
+    const { api } = await renderHeader({
+      ...state([row(1, 0)], 1),
+      stacks: [
+        { id: 's1', name: 'page-1', rootTitle: 'Page 1', pages: 1, audio: 'playing' },
+        { id: 's2', name: 'docs', rootTitle: 'Docs', pages: 1, audio: 'muted' },
+        { id: 's3', name: 'news', rootTitle: 'News', pages: 1, audio: null },
+      ],
+    })
+    // The current stack's indicator sits next to its name.
+    fireEvent.click(screen.getByRole('button', { name: 'Mute @page-1' }))
+    expect(api.stacks.setMuted).toHaveBeenLastCalledWith('s1', true)
+
+    fireEvent.click(screen.getByRole('button', { name: '@page-1' }))
+    const list = screen.getByRole('dialog', { name: 'Stacks' })
+    expect(within(list).getByRole('button', { name: 'Mute @page-1' })).toBeTruthy()
+    expect(within(list).queryByRole('button', { name: /mute @news/i })).toBeNull()
+    const unmute = within(list).getByRole('button', { name: 'Unmute @docs' })
+    expect(unmute.getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(unmute)
+    expect(api.stacks.setMuted).toHaveBeenLastCalledWith('s2', false)
+    expect(api.stacks.switch).not.toHaveBeenCalled()
+    expect(screen.getByRole('dialog', { name: 'Stacks' })).toBeTruthy()
+  })
+
   it('does not cycle with a single stack', async () => {
     const { api, emit } = await renderHeader({
       ...state([row(1, 0)], 1),
-      stacks: [{ id: 's1', name: 'page-1', rootTitle: 'Page 1', pages: 1 }],
+      stacks: [{ id: 's1', name: 'page-1', rootTitle: 'Page 1', pages: 1, audio: null }],
     })
     act(() => emit.stackCommand('cycle-next'))
     expect(screen.queryByRole('dialog', { name: 'Stacks' })).toBeNull()

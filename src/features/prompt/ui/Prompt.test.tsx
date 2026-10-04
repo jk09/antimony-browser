@@ -88,8 +88,8 @@ describe('Prompt', () => {
     const stacks = {
       current: null,
       stacks: [
-        { id: 's1', name: 'hacker-news', rootTitle: 'Hacker News', pages: 3 },
-        { id: 's2', name: 'rust-docs', rootTitle: 'Rust', pages: 5 },
+        { id: 's1', name: 'hacker-news', rootTitle: 'Hacker News', pages: 3, audio: null },
+        { id: 's2', name: 'rust-docs', rootTitle: 'Rust', pages: 5, audio: null },
       ],
     }
     const { api, box } = await openPrompt({ stacks })

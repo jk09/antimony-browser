@@ -8,6 +8,7 @@ export const channels = {
   closeNode: 'stacks:close-node',
   home: 'stacks:home',
   setHome: 'stacks:set-home',
+  setMuted: 'stacks:set-muted',
   stateChanged: 'stacks:state-changed',
   // A shortcut or File menu item (main → UI), not a state change; the UI runs it like its button.
   command: 'stacks:command',
@@ -66,12 +67,16 @@ export interface StackRow {
   last: boolean
 }
 
+/** A stack's tab muted, playing sound (not muted), or neither (also without a live tab). */
+export type StackAudio = 'playing' | 'muted' | null
+
 export interface StackSummary {
   id: string
   /** '' for a stack without a name yet. */
   name: string
   rootTitle: string
   pages: number
+  audio: StackAudio
 }
 
 export interface StacksState {
@@ -96,6 +101,8 @@ export interface StacksApi {
   home(): Promise<string | null>
   /** Sets (an http(s) URL) or clears (null) the home page. */
   setHome(url: string | null): Promise<void>
+  /** Mutes or unmutes the stack's tab; a stack without a live tab is ignored. */
+  setMuted(stackId: string, muted: boolean): Promise<void>
   /** The stack's outline as text for the model, or null if no stack has that name. */
   outline(name: string): Promise<string | null>
   /** Called whenever stacks or the current tree change. Returns an unsubscribe function. */

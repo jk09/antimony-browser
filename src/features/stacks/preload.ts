@@ -11,6 +11,7 @@ export const stacksBridge: StacksApi = {
   closeNode: (nodeId) => ipcRenderer.invoke(channels.closeNode, nodeId),
   home: () => ipcRenderer.invoke(channels.home),
   setHome: (url) => ipcRenderer.invoke(channels.setHome, url),
+  setMuted: (stackId, muted) => ipcRenderer.invoke(channels.setMuted, { stackId, muted }),
   onChanged: (listener) => {
     const wrapped = (_: unknown, state: StacksState) => listener(state)
     ipcRenderer.on(channels.stateChanged, wrapped)

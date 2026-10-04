@@ -66,6 +66,12 @@ class FakeTabs implements TabControls {
   focus = (id: number) => {
     this.focused.push(id)
   }
+  sound = new Map<number, { audible: boolean; muted: boolean }>()
+  audio = (id: number) =>
+    this.open.has(id) ? (this.sound.get(id) ?? { audible: false, muted: false }) : null
+  setMuted = (id: number, muted: boolean) => {
+    this.calls.push(`setMuted ${id} ${muted}`)
+  }
 }
 
 let tabs = new FakeTabs()
@@ -558,6 +564,51 @@ describe('stacks main', () => {
     await vi.advanceTimersByTimeAsync(20)
     expect(send).toHaveBeenCalledTimes(1)
     expect(send.mock.calls[0]![0]).toBe(channels.stateChanged)
+  })
+
+  it('shows which stacks play sound and mutes a stack without switching', async () => {
+    const { call, visit, state, send } = setup()
+    tabs.open.add(1)
+    tabs.activeId = 1
+    visit(1, 'Video')
+    fire({ tabId: 2, type: 'opened', openerId: 1, active: false })
+    tabs.open.add(2)
+    visit(2, 'Music')
+    const audioOf = () => Object.fromEntries(state().stacks.map((s) => [s.name, s.audio]))
+    expect(audioOf()).toEqual({ video: null, music: null })
+
+    await vi.advanceTimersByTimeAsync(5000)
+    send.mockClear()
+    const written = readFileSync(join(userData, 'stacks.json'), 'utf8')
+    tabs.sound.set(2, { audible: true, muted: false })
+    fire({ tabId: 2, type: 'audio', audible: true, muted: false })
+    await vi.advanceTimersByTimeAsync(20)
+    expect(send).toHaveBeenCalledWith(channels.stateChanged, expect.anything())
+    expect(audioOf()).toEqual({ video: null, music: 'playing' })
+    tabs.sound.set(2, { audible: true, muted: true })
+    expect(audioOf()).toEqual({ video: null, music: 'muted' })
+    // A muted tab that went quiet keeps its indicator, so it can be unmuted.
+    tabs.sound.set(2, { audible: false, muted: true })
+    expect(audioOf()).toEqual({ video: null, music: 'muted' })
+    // Sound isn't stored.
+    vi.advanceTimersByTime(5000)
+    expect(readFileSync(join(userData, 'stacks.json'), 'utf8')).toBe(written)
+
+    const music = state().stacks.find((s) => s.name === 'music')!
+    call(channels.setMuted, { stackId: music.id, muted: false })
+    expect(tabs.calls.at(-1)).toBe('setMuted 2 false')
+    expect(state().current!.name).toBe('video')
+    expect(tabs.activeId).toBe(1)
+
+    for (const bad of [
+      undefined,
+      music.id,
+      { stackId: music.id },
+      { stackId: music.id, muted: 'yes' },
+      { stackId: 'nope', muted: true },
+    ]) {
+      expect(() => call(channels.setMuted, bad)).toThrow(TypeError)
+    }
   })
 
   it('persists stacks and restores only the current one in a tab', () => {

@@ -53,6 +53,16 @@ export interface TabControls {
   prepared(id: number): 'loading' | 'loaded' | 'failed' | null
   /** Gives the tab's page keyboard focus. Unknown ids are ignored. */
   focus(id: number): void
+  /** Whether the tab's page plays sound and whether it is muted; null for an unknown tab. */
+  audio(id: number): TabAudio | null
+  /** Mutes or unmutes the tab's page; reported as an `audio` event. Unknown ids are ignored. */
+  setMuted(id: number, muted: boolean): void
+}
+
+/** A tab's sound: `audible` is Chromium's view (it lags a couple of seconds behind silence). */
+export interface TabAudio {
+  audible: boolean
+  muted: boolean
 }
 
 /**
@@ -102,6 +112,8 @@ export type PageEvent = { tabId: number } & (
   | { type: 'opened'; openerId: number; active: boolean }
   /** The tab became the active one ('' before its first page). */
   | { type: 'activated'; url: string }
+  /** The tab started or stopped playing sound, or was muted or unmuted. */
+  | ({ type: 'audio' } & TabAudio)
 )
 
 type Distribute<T> = T extends unknown ? Omit<T, 'tabId'> : never
@@ -384,6 +396,9 @@ export function register({ window, browsingSession, ipc }: MainContext): void {
       send({ type: 'title', title })
       publishIfActive()
     })
+    contents.on('audio-state-changed', ({ audible }) => {
+      send({ type: 'audio', audible, muted: contents.isAudioMuted() })
+    })
     contents.on('did-start-loading', publishIfActive)
     contents.on('did-stop-loading', () => {
       send({ type: 'loaded', url: contents.getURL() })
@@ -516,6 +531,18 @@ export function register({ window, browsingSession, ipc }: MainContext): void {
     focus(id) {
       const tab = tabs.get(id)
       if (tab && !tab.contents.isDestroyed()) tab.contents.focus()
+    },
+    audio(id) {
+      const tab = tabs.get(id)
+      if (!tab) return null
+      if (tab.contents.isDestroyed()) return { audible: false, muted: false }
+      return { audible: tab.contents.isCurrentlyAudible(), muted: tab.contents.isAudioMuted() }
+    },
+    setMuted(id, muted) {
+      const tab = tabs.get(id)
+      if (!tab || tab.contents.isDestroyed() || tab.contents.isAudioMuted() === muted) return
+      tab.contents.setAudioMuted(muted)
+      emit({ tabId: id, type: 'audio', audible: tab.contents.isCurrentlyAudible(), muted })
     },
   }
 
