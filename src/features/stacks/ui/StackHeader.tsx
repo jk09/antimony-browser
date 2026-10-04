@@ -1,8 +1,9 @@
 import {
   useEffect,
+  useId,
+  useMemo,
   useRef,
   useState,
-  type FocusEvent,
   type KeyboardEvent,
   type ReactNode,
 } from 'react'
@@ -11,15 +12,13 @@ import type { NavigationState } from '../../navigation/ipc'
 import type { StackCommand, StackRow, StacksState } from '../ipc'
 import { shortcutLabel } from '../shared/keys'
 import { collapse, type CollapsedItem } from '../shared/tree'
-import { findMatch } from '../shared/typeahead'
+import { matchRanges, searchPages, urlPrefixLength } from '../shared/search'
 
 export const MAX_ROWS = 8
 export const MAX_HEIGHT_SHARE = 0.35
 export const ROW_HEIGHT = 22
 const INDENT_PX = 12
 const MAX_INDENT_DEPTH = 8
-/** Typing in the tree: the prefix is dropped after this long without a key. */
-export const TYPE_AHEAD_MS = 1000
 
 /** Lines the tree may use in a window `height` px high: ≤ 8 and ≤ 35 % of it, at least 4. */
 export const maxRowsFor = (height: number) =>
@@ -84,15 +83,12 @@ function Row({
   row,
   active,
   loading,
-  matched,
   onPick,
   onClose,
 }: {
   row: StackRow
   active: boolean
   loading: boolean
-  /** How many leading characters of the label the type-ahead prefix matches. */
-  matched: number
   onPick: (row: StackRow) => void
   /** Undefined while closing is blocked (the assistant runs). */
   onClose: ((row: StackRow) => void) | undefined
@@ -129,14 +125,7 @@ function Row({
       )}
       <span className="stack-row-text">
         <span className="stack-row-title">
-          {matched > 0 ? (
-            <>
-              <mark className="stack-match">{label.slice(0, matched)}</mark>
-              {label.slice(matched)}
-            </>
-          ) : (
-            label
-          )}
+          {label}
           {active && loading && <span className="stack-loading" aria-label="Loading" />}
         </span>
         {active && row.title && <span className="stack-row-url">{row.url}</span>}
@@ -161,87 +150,32 @@ function Row({
 }
 
 /**
- * Type-ahead in a tree, as in a file manager: letters build a prefix and focus the next row whose
- * label starts with it; Backspace edits, Escape clears (or leaves the tree), and the prefix is
- * dropped after a second of silence or when focus leaves the tree.
+ * Keys in a tree that leave it: Escape returns to the page (`onLeave`), and a printable character
+ * (no Ctrl/Cmd/Alt; Space still opens the row) starts a search with it (`onType`).
  */
-function useTypeAhead(
-  rows: StackRow[],
-  items: CollapsedItem[],
-  onReveal: ((rowId: number) => void) | undefined,
-  onLeave: (() => void) | undefined,
-) {
-  const list = useRef<HTMLUListElement>(null)
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
-  const prefix = useRef('')
-  const [state, setState] = useState<{ text: string; miss: boolean; matchedRow: number | null }>({
-    text: '',
-    miss: false,
-    matchedRow: null,
-  })
-  const clear = () => {
-    clearTimeout(timer.current)
-    prefix.current = ''
-    setState({ text: '', miss: false, matchedRow: null })
-  }
-  useEffect(() => () => clearTimeout(timer.current), [])
-
-  const update = (text: string, from: number) => {
-    prefix.current = text
-    clearTimeout(timer.current)
-    if (text === '') return clear()
-    timer.current = setTimeout(clear, TYPE_AHEAD_MS)
-    const index = findMatch(
-      rows.map((row) => row.title || row.url),
-      from,
-      text,
-    )
-    const hit = rows[index]
-    setState({ text, miss: !hit, matchedRow: hit?.id ?? null })
-    if (!hit) return
-    const shown = items.some((item) => item.kind === 'row' && rows[item.index]!.id === hit.id)
-    if (!shown && onReveal) return onReveal(hit.id)
-    list.current?.querySelector<HTMLElement>(`[data-row-id="${hit.id}"]`)?.focus()
-  }
-
-  const indexOfRow = (element: HTMLElement) =>
-    rows.findIndex((row) => String(row.id) === element.dataset.rowId)
-
-  const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+function treeKeys(onLeave: (() => void) | undefined, onType: ((text: string) => void) | undefined) {
+  return (event: KeyboardEvent<HTMLElement>) => {
     const target = event.target as HTMLElement
-    if (target.dataset.rowId === undefined || event.nativeEvent.isComposing) return
-    const typed = prefix.current
+    if (!target.hasAttribute('data-tree-item') || event.nativeEvent.isComposing) return
     const consume = () => {
       event.preventDefault()
       event.stopPropagation()
     }
-    if (event.key === 'Escape') {
-      if (typed !== '') {
-        consume()
-        clear()
-      } else if (onLeave) {
-        consume()
-        onLeave()
-      }
-    } else if (event.key === 'Backspace' && typed !== '') {
+    if (event.key === 'Escape' && onLeave) {
       consume()
-      update(typed.slice(0, -1), indexOfRow(target))
+      onLeave()
     } else if (
+      onType &&
       event.key.length === 1 &&
+      event.key !== ' ' &&
       !event.ctrlKey &&
       !event.metaKey &&
-      !event.altKey &&
-      (event.key !== ' ' || typed !== '')
+      !event.altKey
     ) {
       consume()
-      update(typed + event.key, indexOfRow(target))
+      onType(event.key)
     }
   }
-
-  const onBlur = (event: FocusEvent<HTMLElement>) => {
-    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) clear()
-  }
-  return { ...state, list, onKeyDown, onBlur }
 }
 
 /** Rows, or the collapsed form of them (root, ellipses, the rows around the active one). */
@@ -254,8 +188,8 @@ function Tree({
   onPick,
   onClose,
   onMore,
-  onReveal,
   onLeave,
+  onType,
 }: {
   label: string
   rows: StackRow[]
@@ -265,67 +199,145 @@ function Tree({
   onPick: (row: StackRow) => void
   onClose: ((row: StackRow) => void) | undefined
   onMore?: (button: HTMLButtonElement) => void
-  /** Opens the full stack on a row the collapsed tree hides (type-ahead matched it). */
-  onReveal?: (rowId: number) => void
-  /** Escape with nothing typed (the full stack closes itself instead). */
+  /** Escape in the tree (the full stack closes itself instead). */
   onLeave?: () => void
+  /** A character typed in the tree: search with it. */
+  onType?: (text: string) => void
 }) {
-  const { list, onKeyDown, onBlur, text, miss, matchedRow } = useTypeAhead(
-    rows,
-    items,
-    onReveal,
-    onLeave,
-  )
-  const typed = matchedRow === null ? '' : text
   return (
-    <div className="stack-tree-wrap">
-      {text !== '' && (
-        <div className={`stack-typing${miss ? ' miss' : ''}`} role="status">
-          <span className="stack-typing-label">typing:</span> {text}
-          {miss && <span className="visually-hidden"> – no match</span>}
-        </div>
-      )}
-      <ul
-        role="tree"
-        aria-label={label}
-        className="stack-tree"
-        ref={list}
-        onKeyDownCapture={onKeyDown}
-        onKeyDown={moveFocus}
-        onBlur={onBlur}
-      >
-        {items.map((item): ReactNode => {
-          if (item.kind === 'row') {
-            const row = rows[item.index]!
-            return (
-              <Row
-                key={row.id}
-                row={row}
-                active={row.id === activeId}
-                loading={loading}
-                matched={row.id === matchedRow ? typed.length : 0}
-                onPick={onPick}
-                onClose={onClose}
-              />
-            )
-          }
-          const hidden = item.to - item.from + 1
+    <ul
+      role="tree"
+      aria-label={label}
+      className="stack-tree"
+      onKeyDownCapture={treeKeys(onLeave, onType)}
+      onKeyDown={moveFocus}
+    >
+      {items.map((item): ReactNode => {
+        if (item.kind === 'row') {
+          const row = rows[item.index]!
           return (
-            <li role="none" key={`more-${item.from}`} className="stack-more-item">
-              <button
-                type="button"
-                className="stack-more"
-                data-tree-item=""
-                tabIndex={-1}
-                aria-label={`Show ${hidden} more pages`}
-                onClick={(event) => onMore?.(event.currentTarget)}
-              >
-                ⋯ {hidden} more
-              </button>
-            </li>
+            <Row
+              key={row.id}
+              row={row}
+              active={row.id === activeId}
+              loading={loading}
+              onPick={onPick}
+              onClose={onClose}
+            />
           )
-        })}
-      </ul>
+        }
+        const hidden = item.to - item.from + 1
+        return (
+          <li role="none" key={`more-${item.from}`} className="stack-more-item">
+            <button
+              type="button"
+              className="stack-more"
+              data-tree-item=""
+              tabIndex={-1}
+              aria-label={`Show ${hidden} more pages`}
+              onClick={(event) => onMore?.(event.currentTarget)}
+            >
+              ⋯ {hidden} more
+            </button>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+/** `text` with the query's words marked. */
+function Highlight({ text, query }: { text: string; query: string }) {
+  const parts: ReactNode[] = []
+  let at = 0
+  for (const [start, end] of matchRanges(text, query)) {
+    if (start > at) parts.push(text.slice(at, start))
+    parts.push(
+      <mark key={start} className="stack-match">
+        {text.slice(start, end)}
+      </mark>,
+    )
+    at = end
+  }
+  parts.push(text.slice(at))
+  return <>{parts}</>
+}
+
+/** The pages of the stack the search found; `selected` is what Enter opens. */
+function Results({
+  id,
+  rows,
+  hits,
+  selected,
+  query,
+  activeId,
+  maxHeight,
+  onPick,
+  onSelect,
+}: {
+  id: string
+  rows: StackRow[]
+  hits: number[]
+  selected: number
+  query: string
+  activeId: number | null
+  maxHeight: number
+  onPick: (row: StackRow) => void
+  onSelect: (index: number) => void
+}) {
+  const list = useRef<HTMLUListElement>(null)
+  useEffect(() => {
+    list.current
+      ?.querySelector<HTMLElement>('[aria-selected="true"]')
+      ?.scrollIntoView?.({ block: 'nearest' })
+  }, [selected])
+  const count = `${hits.length} matching ${hits.length === 1 ? 'page' : 'pages'}`
+  return (
+    <div className="stack-results-wrap">
+      <span className="visually-hidden" role="status">
+        {count}
+      </span>
+      {hits.length === 0 ? (
+        <p className="stack-results-empty">No matching pages</p>
+      ) : (
+        <ul
+          ref={list}
+          id={id}
+          role="listbox"
+          aria-label="Matching pages"
+          className="stack-results"
+          style={{ maxHeight }}
+        >
+          {hits.map((index, n) => {
+            const row = rows[index]!
+            return (
+              <li
+                key={row.id}
+                id={`${id}-${row.id}`}
+                role="option"
+                aria-selected={n === selected}
+                aria-current={row.id === activeId ? 'page' : undefined}
+                className={`stack-result${n === selected ? ' selected' : ''}`}
+                title={row.url}
+                // Keep focus in the search box.
+                onMouseDown={(event) => event.preventDefault()}
+                onMouseMove={() => n !== selected && onSelect(n)}
+                onClick={() => onPick(row)}
+              >
+                <span className="stack-row-title">
+                  <Highlight text={row.title || row.url} query={query} />
+                </span>
+                {row.title && (
+                  <span className="stack-row-url">
+                    {row.url.slice(0, urlPrefixLength(row.url))}
+                    <Highlight text={row.url.slice(urlPrefixLength(row.url))} query={query} />
+                  </span>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      )}
     </div>
   )
 }
@@ -343,9 +355,14 @@ export function StackHeader() {
   const [listOpen, setListOpen] = useState(false)
   const [overlayOpen, setOverlayOpen] = useState(false)
   const opener = useRef<HTMLButtonElement | null>(null)
-  // The row the full stack opens on (a type-ahead match the collapsed tree hides), else the active one.
-  const revealRow = useRef<number | null>(null)
+  const panel = useRef<HTMLDivElement>(null)
   const tree = useRef<HTMLDivElement>(null)
+  const search = useRef<HTMLInputElement>(null)
+  const resultsId = useId()
+  const [query, setQuery] = useState('')
+  const [selected, setSelected] = useState(0)
+  // Set when the search closes: the active row takes focus once the tree is back.
+  const refocusTree = useRef(false)
   const overlay = useRef<HTMLDivElement>(null)
   const list = useRef<HTMLDivElement>(null)
   const height = useWindowHeight()
@@ -360,10 +377,29 @@ export function StackHeader() {
   const loading = navigation?.loading ?? false
   const report = (reason: unknown) => console.error(reason)
 
-  const reveal = (rowId: number) => {
-    revealRow.current = rowId
-    setOverlayOpen(true)
+  const hits = useMemo(() => searchPages(current?.rows ?? [], query), [current, query])
+  const searching = query.trim() !== ''
+  const selectedHit = Math.min(selected, hits.length - 1)
+  const focusActiveRow = () =>
+    tree.current?.querySelector<HTMLElement>('[aria-current="page"]')?.focus()
+  const startSearch = (text: string) => {
+    setOverlayOpen(false)
+    setQuery(text)
+    setSelected(0)
+    search.current?.focus()
   }
+  const endSearch = () => {
+    setQuery('')
+    setSelected(0)
+    // With results shown the tree comes back on the next render; else it is there already.
+    if (searching) refocusTree.current = true
+    else focusActiveRow()
+  }
+  useEffect(() => {
+    if (searching || !refocusTree.current) return
+    refocusTree.current = false
+    focusActiveRow()
+  })
   const closeOverlay = () => {
     setOverlayOpen(false)
     opener.current?.focus()
@@ -384,12 +420,7 @@ export function StackHeader() {
   // The full stack opens scrolled to the active row, with focus on it.
   useEffect(() => {
     if (!overlayOpen) return
-    const wanted = revealRow.current
-    revealRow.current = null
-    const row =
-      (wanted !== null &&
-        overlay.current?.querySelector<HTMLElement>(`[data-row-id="${wanted}"]`)) ||
-      overlay.current?.querySelector<HTMLElement>('[aria-current="page"]')
+    const row = overlay.current?.querySelector<HTMLElement>('[aria-current="page"]')
     row?.scrollIntoView?.({ block: 'center' })
     row?.focus()
   }, [overlayOpen])
@@ -449,11 +480,31 @@ export function StackHeader() {
     if (switchTo && known && target !== current?.id) api.stacks.switch(target).catch(report)
   }
 
-  // Ctrl/Cmd+E: into the tree on the active page, or back to the page when already in it.
+  // Ctrl/Cmd+E: into the tree on the active page (the search box while searching), or back to the
+  // page when already in the panel.
   const focusTree = () => {
-    const inTree = tree.current?.contains(document.activeElement)
-    if (inTree) void api.prompt.focusPage()
-    else tree.current?.querySelector<HTMLElement>('[aria-current="page"]')?.focus()
+    if (panel.current?.contains(document.activeElement)) void api.prompt.focusPage()
+    else if (searching) search.current?.focus()
+    else focusActiveRow()
+  }
+
+  const onSearchKey = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.nativeEvent.isComposing) return
+    const step = { ArrowDown: 1, ArrowUp: -1 }[event.key]
+    if (step !== undefined) {
+      event.preventDefault()
+      if (hits.length > 0) setSelected((selectedHit + step + hits.length) % hits.length)
+    } else if (event.key === 'Enter') {
+      event.preventDefault()
+      const hit = hits[selectedHit]
+      if (hit === undefined) return
+      pick(rows[hit]!)
+      endSearch()
+    } else if (event.key === 'Escape') {
+      event.preventDefault()
+      event.stopPropagation()
+      endSearch()
+    }
   }
 
   // Ctrl/Cmd+R, +N, +W, +E and Ctrl+Tab from main (caught in the page or the chrome UI) do what the
@@ -479,7 +530,7 @@ export function StackHeader() {
   const target = cycle ? cycle.order[cycle.index] : undefined
 
   return (
-    <div className="stack-header">
+    <div className="stack-header" ref={panel}>
       <div className="stack-switcher" ref={list}>
         <button
           type="button"
@@ -492,6 +543,33 @@ export function StackHeader() {
         >
           {name ? `@${name}` : 'New tab'} <span aria-hidden="true">▾</span>
         </button>
+        {rows.length > 0 && (
+          <input
+            ref={search}
+            className="stack-search"
+            type="text"
+            role="combobox"
+            aria-label="Search pages in this stack"
+            aria-autocomplete="list"
+            aria-expanded={searching && hits.length > 0}
+            aria-controls={searching && hits.length > 0 ? resultsId : undefined}
+            aria-activedescendant={
+              searching && hits[selectedHit] !== undefined
+                ? `${resultsId}-${rows[hits[selectedHit]]!.id}`
+                : undefined
+            }
+            placeholder="Search pages"
+            title="Search this stack's pages by title or URL (or start typing in the tree)"
+            spellCheck={false}
+            autoComplete="off"
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value)
+              setSelected(0)
+            }}
+            onKeyDown={onSearchKey}
+          />
+        )}
         <span className="stack-actions">
           <button
             type="button"
@@ -574,7 +652,23 @@ export function StackHeader() {
           </div>
         )}
       </div>
-      {rows.length > 0 && (
+      {rows.length > 0 && searching && (
+        <Results
+          id={resultsId}
+          rows={rows}
+          hits={hits}
+          selected={selectedHit}
+          query={query}
+          activeId={activeId}
+          maxHeight={maxRowsFor(height) * ROW_HEIGHT * 1.5}
+          onPick={(row) => {
+            pick(row)
+            endSearch()
+          }}
+          onSelect={setSelected}
+        />
+      )}
+      {rows.length > 0 && !searching && (
         <div ref={tree}>
           <Tree
             label="Navigation stack"
@@ -588,8 +682,8 @@ export function StackHeader() {
               opener.current = button
               setOverlayOpen(true)
             }}
-            onReveal={reveal}
             onLeave={() => void api.prompt.focusPage()}
+            onType={startSearch}
           />
         </div>
       )}
@@ -622,6 +716,7 @@ export function StackHeader() {
             items={rows.map((_, index) => ({ kind: 'row', index }))}
             onPick={pick}
             onClose={closeRow}
+            onType={startSearch}
           />
         </div>
       )}
