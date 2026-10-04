@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { fakeApi, idleState } from '../../../app/renderer/fake-api'
 import type { StackRow, StacksState } from '../ipc'
-import { maxRowsFor, StackHeader, TYPE_AHEAD_MS } from './StackHeader'
+import { maxRowsFor, StackHeader } from './StackHeader'
 
 afterEach(cleanup)
 
@@ -224,14 +224,20 @@ describe('StackHeader', () => {
     expect(screen.queryByRole('tree')).toBeNull()
   })
 
-  describe('Ctrl+E and type-ahead', () => {
+  describe('Ctrl+E and search', () => {
     const named = (id: number, depth: number, title: string, last = true): StackRow => ({
       ...row(id, depth, last),
       title,
     })
-    const tree = () => screen.getByRole('tree', { name: 'Navigation stack' })
     const focused = () => document.activeElement?.getAttribute('data-row-id')
     const type = (key: string) => fireEvent.keyDown(document.activeElement!, { key })
+    const box = () => screen.getByRole('combobox', { name: 'Search pages in this stack' })
+    const results = () =>
+      within(screen.getByRole('listbox', { name: 'Matching pages' }))
+        .getAllByRole('option')
+        .map((option) => option.textContent)
+    const selected = () =>
+      screen.getAllByRole('option').find((option) => option.ariaSelected === 'true')?.textContent
     const rowsOf = [
       named(1, 0, 'Home'),
       named(2, 1, 'Hotel deals', false),
@@ -239,7 +245,7 @@ describe('StackHeader', () => {
       named(4, 1, 'Hockey'),
     ]
 
-    it('focuses the active row on Ctrl+E and returns to the page from the tree', async () => {
+    it('focuses the active row on Ctrl+E and returns to the page from the panel', async () => {
       const { api, emit } = await renderHeader(state(rowsOf, 3))
       act(() => emit.stackCommand('focus-tree'))
       expect(focused()).toBe('3')
@@ -247,44 +253,57 @@ describe('StackHeader', () => {
       expect(api.prompt.focusPage).toHaveBeenCalledOnce()
     })
 
-    it('jumps to rows by typed letters and shows what was typed', async () => {
+    it('finds pages by any words of the title or URL, with the matches marked', async () => {
       await renderHeader(state(rowsOf, 3))
-      screen.getByText('News').closest('li')!.focus()
-      type('h')
-      expect(focused()).toBe('4')
-      expect(screen.getByRole('status').textContent).toContain('h')
-      type('o')
-      expect(focused()).toBe('4')
-      type('t')
-      expect(focused()).toBe('2')
-      expect(tree().querySelector('mark')!.textContent).toBe('Hot')
-      type('Backspace')
-      expect(screen.getByRole('status').textContent).toContain('ho')
-      type('Escape')
-      expect(screen.queryByRole('status')).toBeNull()
-      expect(tree().querySelector('mark')).toBeNull()
+      fireEvent.change(box(), { target: { value: 'ho' } })
+      expect(screen.queryByRole('tree')).toBeNull()
+      expect(results()).toEqual([
+        'Homehttps://site.example/1',
+        'Hotel dealshttps://site.example/2',
+        'Hockeyhttps://site.example/4',
+      ])
+      expect(screen.getByRole('status').textContent).toBe('3 matching pages')
+      fireEvent.change(box(), { target: { value: 'deals example/2' } })
+      expect(results()).toEqual(['Hotel dealshttps://site.example/2'])
+      expect(
+        Array.from(screen.getByRole('option').querySelectorAll('mark')).map((m) => m.textContent),
+      ).toEqual(['deals', 'example/2'])
+      fireEvent.change(box(), { target: { value: 'zebra' } })
+      expect(screen.getByText('No matching pages')).toBeTruthy()
     })
 
-    it('marks a prefix without a match and drops it after a pause or on leaving the tree', async () => {
-      vi.useFakeTimers()
-      try {
-        await renderHeader(state(rowsOf, 3))
-        screen.getByText('News').closest('li')!.focus()
-        type('z')
-        expect(screen.getByRole('status').className).toContain('miss')
-        expect(focused()).toBe('3')
-        act(() => void vi.advanceTimersByTime(TYPE_AHEAD_MS))
-        expect(screen.queryByRole('status')).toBeNull()
-        type('h')
-        act(() => document.body.focus())
-        fireEvent.blur(tree().querySelector('li:focus') ?? tree().querySelector('li')!)
-        expect(screen.queryByRole('status')).toBeNull()
-      } finally {
-        vi.useRealTimers()
-      }
+    it('moves the selection with the arrows and opens it with Enter or a click', async () => {
+      const { api } = await renderHeader(state(rowsOf, 3))
+      fireEvent.change(box(), { target: { value: 'ho' } })
+      expect(selected()).toContain('Home')
+      fireEvent.keyDown(box(), { key: 'ArrowUp' })
+      expect(selected()).toContain('Hockey')
+      fireEvent.keyDown(box(), { key: 'ArrowDown' })
+      fireEvent.keyDown(box(), { key: 'ArrowDown' })
+      expect(selected()).toContain('Hotel')
+      expect(box().getAttribute('aria-activedescendant')).toMatch(/-2$/)
+      fireEvent.keyDown(box(), { key: 'Enter' })
+      expect(api.stacks.goToNode).toHaveBeenCalledWith(2)
+      expect((box() as HTMLInputElement).value).toBe('')
+      expect(focused()).toBe('3')
+      fireEvent.change(box(), { target: { value: 'hock' } })
+      fireEvent.click(screen.getByRole('option'))
+      expect(api.stacks.goToNode).toHaveBeenLastCalledWith(4)
     })
 
-    it('keeps Space opening a row until something is typed, and Escape leaves the tree', async () => {
+    it('clears with Escape and returns to the active row', async () => {
+      await renderHeader(state(rowsOf, 3))
+      box().focus()
+      fireEvent.change(box(), { target: { value: 'ho' } })
+      fireEvent.keyDown(box(), { key: 'Escape' })
+      expect((box() as HTMLInputElement).value).toBe('')
+      expect(focused()).toBe('3')
+      box().focus()
+      fireEvent.keyDown(box(), { key: 'Escape' })
+      expect(focused()).toBe('3')
+    })
+
+    it('moves typing in the tree into the search box; Space and Escape still work', async () => {
       const { api } = await renderHeader(state(rowsOf, 3))
       screen.getByText('Home').closest('li')!.focus()
       type(' ')
@@ -292,20 +311,21 @@ describe('StackHeader', () => {
       type('Escape')
       expect(api.prompt.focusPage).toHaveBeenCalledOnce()
       type('h')
-      type(' ')
-      expect(api.stacks.goToNode).toHaveBeenCalledTimes(1)
+      expect(document.activeElement).toBe(box())
+      expect((box() as HTMLInputElement).value).toBe('h')
+      expect(results()).toHaveLength(3)
     })
 
-    it('opens the full stack on a match the collapsed tree hides', async () => {
+    it('searches the whole stack, also pages the collapsed tree hides', async () => {
       const many = Array.from({ length: 12 }, (_, i) =>
         named(i + 1, i === 0 ? 0 : 1, `Page ${i + 1}`),
       )
       many[2] = named(3, 1, 'Zebra')
       await renderHeader(state(many, 1))
+      expect(screen.queryByText('Zebra')).toBeNull()
       screen.getByText('Page 1').closest('li')!.focus()
       type('z')
-      const overlay = screen.getByRole('dialog', { name: 'Full stack' })
-      expect(document.activeElement).toBe(overlay.querySelector('[data-row-id="3"]'))
+      expect(results()).toEqual(['Zebrahttps://site.example/3'])
     })
   })
 })
