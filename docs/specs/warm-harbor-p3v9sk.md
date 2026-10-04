@@ -6,12 +6,12 @@
 | --- | --- |
 | **Feature name** | A new stack (Ctrl/Cmd+N, the + button, start-up after the last stack closes) shows the home page at once by taking over a spare tab that was preloaded at the home page in the background |
 | **Spec ID** | warm-harbor-p3v9sk |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-04 10:00 +00:00 |
-| **Last updated** | 2026-10-04 11:30 +00:00 |
+| **Last updated** | 2026-10-04 16:15 +00:00 |
 | **Affected features** | navigation, stacks |
 | **Target release** | 0.1.0 |
 | **Related links** | specs branching-trail-k4w9zp, silent-orchid-x2m7pd (home page), ADR 0008 |
