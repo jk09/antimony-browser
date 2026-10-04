@@ -106,5 +106,5 @@
 ## 14. Changes during implementation
 
 - Navigation also exposes `TabControls.prepared(id)` (loading / loaded / failed) and `focus(id)`, so stacks can skip a failed spare and focus the new stack's page; the 15-minute replacement runs on a timer set when the spare is prepared, plus an age check when it is taken.
-- ADR 0011 (Proposed) records the choice of a spare tab.
+- ADR 0011 (Accepted) records the choice of a spare tab.
 - e2e (`stacks.spec.ts`) checks that a second Ctrl+N after a pause shows the spare with the page focused; it runs in CI only.

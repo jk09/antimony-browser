@@ -1,6 +1,6 @@
 # 0011. Preload the home page in a spare tab
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-04
 - Features: navigation, stacks
 - Spec: warm-harbor-p3v9sk
