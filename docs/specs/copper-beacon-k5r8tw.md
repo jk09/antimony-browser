@@ -6,12 +6,12 @@
 | --- | --- |
 | **Feature name** | Redesign of the stack panel (assistant panel header): a separate card that shows when it has focus, and a search box that replaces type-ahead |
 | **Spec ID** | copper-beacon-k5r8tw |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-04 09:00 +00:00 |
-| **Last updated** | 2026-10-04 09:00 +00:00 |
+| **Last updated** | 2026-10-04 16:00 +00:00 |
 | **Affected features** | stacks |
 | **Target release** | 0.1.0 |
 | **Related links** | spec silent-orchid-x2m7pd (Ctrl/Cmd+E and type-ahead) |
