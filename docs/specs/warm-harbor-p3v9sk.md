@@ -6,12 +6,12 @@
 | --- | --- |
 | **Feature name** | A new stack (Ctrl/Cmd+N, the + button, start-up after the last stack closes) shows the home page at once by taking over a spare tab that was preloaded at the home page in the background |
 | **Spec ID** | warm-harbor-p3v9sk |
-| **Status** | Draft <!-- one of: Draft, Active, Done --> |
+| **Status** | Active <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-04 10:00 +00:00 |
-| **Last updated** | 2026-10-04 10:00 +00:00 |
+| **Last updated** | 2026-10-04 11:30 +00:00 |
 | **Affected features** | navigation, stacks |
 | **Target release** | 0.1.0 |
 | **Related links** | specs branching-trail-k4w9zp, silent-orchid-x2m7pd (home page), ADR 0008 |
@@ -85,12 +85,12 @@
 
 ## 11. Acceptance Criteria
 
-- [ ] `prepare` loads a tab in the background whose events are held until it is activated, then emitted in order – `navigation/main.test.ts`.
-- [ ] With a home page, a spare tab exists after start-up; Ctrl/Cmd+N activates it instead of creating and loading a new tab, and a new spare is prepared afterwards – `stacks/main.test.ts`.
-- [ ] The spare doesn't appear in stacks state or `stacks.json` until taken – `stacks/main.test.ts`.
-- [ ] Changing or clearing the home page replaces or closes the spare; a spare older than 15 minutes isn't used – `stacks/main.test.ts`.
-- [ ] After a new stack opens at the home page, the page has keyboard focus – `stacks/main.test.ts`.
-- [ ] `npm run check` passes.
+- [x] `prepare` loads a tab in the background whose events are held until it is activated, then emitted in order – `navigation/main.test.ts`.
+- [x] With a home page, a spare tab exists after start-up; Ctrl/Cmd+N activates it instead of creating and loading a new tab, and a new spare is prepared afterwards – `stacks/main.test.ts`.
+- [x] The spare doesn't appear in stacks state or `stacks.json` until taken – `stacks/main.test.ts`.
+- [x] Changing or clearing the home page replaces or closes the spare; a spare older than 15 minutes isn't used – `stacks/main.test.ts`.
+- [x] After a new stack opens at the home page, the page has keyboard focus – `stacks/main.test.ts`.
+- [x] `npm run check` passes.
 
 ## 12. Testing / Verification
 
@@ -105,4 +105,6 @@
 
 ## 14. Changes during implementation
 
-- 
+- Navigation also exposes `TabControls.prepared(id)` (loading / loaded / failed) and `focus(id)`, so stacks can skip a failed spare and focus the new stack's page; the 15-minute replacement runs on a timer set when the spare is prepared, plus an age check when it is taken.
+- ADR 0011 (Proposed) records the choice of a spare tab.
+- e2e (`stacks.spec.ts`) checks that a second Ctrl+N after a pause shows the spare with the page focused; it runs in CI only.

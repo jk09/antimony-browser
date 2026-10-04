@@ -36,6 +36,7 @@ class FakeTabs implements TabControls {
   }
   activate = (id: number | null) => {
     this.activeId = id
+    if (id !== null) this.preparedTabs.delete(id)
     if (id !== null) fire({ tabId: id, type: 'activated', url: '' })
   }
   close = (id: number) => {
@@ -50,6 +51,20 @@ class FakeTabs implements TabControls {
   entries = (id: number) => this.history.get(id) ?? { urls: [], index: -1 }
   goToIndex = (id: number, index: number) => {
     this.calls.push(`goToIndex ${id} ${index}`)
+  }
+  /** Prepared tabs' load state, until activated. */
+  preparedTabs = new Map<number, 'loading' | 'loaded' | 'failed'>()
+  focused: number[] = []
+  prepare = (url: string) => {
+    const id = this.next++
+    this.open.add(id)
+    this.preparedTabs.set(id, 'loading')
+    this.calls.push(`prepare ${id} ${url}`)
+    return id
+  }
+  prepared = (id: number) => this.preparedTabs.get(id) ?? null
+  focus = (id: number) => {
+    this.focused.push(id)
   }
 }
 
@@ -314,9 +329,12 @@ describe('stacks main', () => {
 
     first.call(channels.create)
     expect(tabs.calls).toEqual(['create 1 https://start.example/ active'])
+    expect(tabs.focused).toEqual([1])
     first.visit(1, 'Start')
+    // A second later a spare tab waits at the home page; the next new stack takes it.
+    expect(tabs.calls.at(-1)).toBe('prepare 2 https://start.example/')
     first.call(channels.create)
-    expect(tabs.calls.at(-1)).toBe('create 2 https://start.example/ active')
+    expect(tabs.activeId).toBe(2)
     expect(first.state().stacks).toHaveLength(2)
     quitListeners.forEach((listener) => listener())
 
@@ -332,6 +350,84 @@ describe('stacks main', () => {
     call(channels.setHome, 'https://start.example/')
     call(channels.create)
     expect(tabs.calls).toEqual(['create 1 active', 'load 1 https://start.example/'])
+  })
+
+  it('keeps a spare tab at the home page and shows it, focused, for a new stack', () => {
+    const { call, nav, title, state, rowsOf, dir } = setup(undefined, 'https://start.example/')
+    expect(tabs.calls).toEqual(['create 1 https://start.example/ active'])
+    vi.advanceTimersByTime(999)
+    expect(tabs.calls).toHaveLength(1)
+    vi.advanceTimersByTime(1)
+    expect(tabs.calls.at(-1)).toBe('prepare 2 https://start.example/')
+    nav(1, 'https://site.example/A')
+    title(1, 'A')
+    // The spare isn't a stack until it's taken.
+    expect(state().stacks).toHaveLength(1)
+    quitListeners.forEach((listener) => listener())
+    const stored = JSON.parse(readFileSync(join(dir, 'stacks.json'), 'utf8')) as {
+      stacks: unknown[]
+    }
+    expect(stored.stacks).toHaveLength(1)
+
+    call(channels.create)
+    expect(tabs.activeId).toBe(2)
+    expect(tabs.focused.at(-1)).toBe(2)
+    expect(tabs.calls).toHaveLength(2)
+    // Navigation reports the spare's held events once it's shown.
+    nav(2, 'https://start.example/')
+    title(2, 'Start')
+    expect(rowsOf()).toEqual(['Start'])
+    expect(state().current!.name).toBe('')
+    expect(state().stacks).toHaveLength(2)
+
+    // The next spare follows a second later and is replaced when 15 minutes old.
+    vi.advanceTimersByTime(1000)
+    expect(tabs.calls.at(-1)).toBe('prepare 3 https://start.example/')
+    vi.advanceTimersByTime(15 * 60_000)
+    expect(tabs.calls.slice(-2)).toEqual(['close 3', 'prepare 4 https://start.example/'])
+
+    // A spare whose load failed isn't shown: the new stack loads the home page itself.
+    tabs.preparedTabs.set(4, 'failed')
+    call(channels.create)
+    expect(tabs.calls.slice(-2)).toEqual(['close 4', 'create 5 https://start.example/ active'])
+    expect(tabs.focused.at(-1)).toBe(5)
+    nav(5, 'https://start.example/')
+
+    // Nor is one older than 15 minutes whose timer didn't run (the computer slept).
+    vi.advanceTimersByTime(1000)
+    expect(tabs.calls.at(-1)).toBe('prepare 6 https://start.example/')
+    vi.setSystemTime(Date.now() + 16 * 60_000)
+    call(channels.create)
+    expect(tabs.calls.slice(-2)).toEqual(['close 6', 'create 7 https://start.example/ active'])
+  })
+
+  it('replaces the spare when the home page changes and closes it when cleared', () => {
+    const { call } = setup(undefined, 'https://start.example/')
+    vi.advanceTimersByTime(1000)
+    expect(tabs.calls.at(-1)).toBe('prepare 2 https://start.example/')
+    call(channels.setHome, 'https://start.example/')
+    vi.advanceTimersByTime(1000)
+    expect(tabs.calls.at(-1)).toBe('prepare 2 https://start.example/')
+    call(channels.setHome, 'https://other.example/')
+    expect(tabs.calls.at(-1)).toBe('close 2')
+    vi.advanceTimersByTime(1000)
+    expect(tabs.calls.at(-1)).toBe('prepare 3 https://other.example/')
+    call(channels.setHome, null)
+    expect(tabs.calls.at(-1)).toBe('close 3')
+    vi.advanceTimersByTime(60 * 60_000)
+    expect(tabs.calls.at(-1)).toBe('close 3')
+  })
+
+  it('fills an empty current stack with the spare', () => {
+    const { call, state } = setup()
+    call(channels.create)
+    call(channels.setHome, 'https://start.example/')
+    vi.advanceTimersByTime(1000)
+    call(channels.create)
+    expect(tabs.calls).toEqual(['create 1 active', 'prepare 2 https://start.example/', 'close 1'])
+    expect(tabs.activeId).toBe(2)
+    expect(tabs.focused).toEqual([2])
+    expect(state().stacks).toHaveLength(1)
   })
 
   it('opens a new stack at the default home page at start and after the last one closes', () => {

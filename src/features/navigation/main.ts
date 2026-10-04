@@ -43,6 +43,16 @@ export interface TabControls {
   entries(id: number): { urls: string[]; index: number } | null
   /** Goes to an entry of the tab's session history, reported with transition back_forward. */
   goToIndex(id: number, index: number): void
+  /**
+   * Creates a tab in the background that loads `url` (checked with `toUrl`), sized to the page
+   * area. Its page events are held until it is first activated, then emitted in order after
+   * `activated`, so nothing records it before it's shown. Returns its id, or null for a bad URL.
+   */
+  prepare(url: string): number | null
+  /** How a prepared tab's load went; null once it was activated, or for an unknown tab. */
+  prepared(id: number): 'loading' | 'loaded' | 'failed' | null
+  /** Gives the tab's page keyboard focus. Unknown ids are ignored. */
+  focus(id: number): void
 }
 
 /**
@@ -159,6 +169,10 @@ interface Tab {
   index: number
   /** A page was loaded: the view covers the page area while the tab is active. */
   hasPage: boolean
+  /** Prepared and not yet activated: its events wait here (`prepare`). */
+  held: TabEvent[] | null
+  /** A prepared tab's load: failed stays failed (also when its renderer goes away). */
+  preparedState: 'loading' | 'loaded' | 'failed'
 }
 
 const empty: NavigationState = {
@@ -181,19 +195,26 @@ export function register({ window, browsingSession, ipc }: MainContext): void {
   // The chrome UI reports the page area's insets when it mounts, before a page can be loaded.
   // They're in its CSS pixels: times its zoom factor, they're window pixels.
   let insets: PageInsets = { top: 0, right: 0, bottom: 0, left: 0 }
-  const layout = () => {
-    if (!attached) return
+  const bounds = () => {
     const [width = 0, height = 0] = window.getContentSize()
     const zoom = window.webContents.getZoomFactor()
     const [top, right, bottom, left] = [insets.top, insets.right, insets.bottom, insets.left].map(
       (inset) => Math.round(inset * zoom),
     ) as [number, number, number, number]
-    attached.view.setBounds({
+    return {
       x: left,
       y: top,
       width: Math.max(0, width - left - right),
       height: Math.max(0, height - top - bottom),
-    })
+    }
+  }
+  /** Sizes the shown view and the prepared ones, so they don't reflow when shown. */
+  const layout = () => {
+    const prepared = [...tabs.values()].filter((tab) => tab.held && tab !== attached)
+    if (!attached && prepared.length === 0) return
+    const box = bounds()
+    attached?.view.setBounds(box)
+    for (const tab of prepared) tab.view.setBounds(box)
   }
   window.on('resize', layout)
 
@@ -248,6 +269,12 @@ export function register({ window, browsingSession, ipc }: MainContext): void {
     active = tab
     attach()
     if (tab) emit({ tabId: tab.id, type: 'activated', url: live(tab) ? tab.contents.getURL() : '' })
+    // A prepared tab is shown: what happened in it in the background is reported now.
+    if (tab?.held) {
+      const held = tab.held
+      tab.held = null
+      for (const event of held) emit({ ...event, tabId: tab.id } as PageEvent)
+    }
     publish()
   }
 
@@ -264,9 +291,21 @@ export function register({ window, browsingSession, ipc }: MainContext): void {
       lastInputAt: null,
       index: -1,
       hasPage: false,
+      held: null,
+      preparedState: 'loading',
     }
     tabs.set(tab.id, tab)
-    const send = (event: TabEvent) => emit({ ...event, tabId: tab.id } as PageEvent)
+    const send = (event: TabEvent) => {
+      if (!tab.held) return emit({ ...event, tabId: tab.id } as PageEvent)
+      tab.held.push(event)
+      if (event.type === 'failed') tab.preparedState = 'failed'
+      else if (event.type === 'loaded' && tab.preparedState === 'loading') {
+        tab.preparedState = 'loaded'
+      }
+    }
+    contents.on('render-process-gone', () => {
+      tab.preparedState = 'failed'
+    })
     const publishIfActive = () => {
       if (tab === active) publish()
     }
@@ -460,6 +499,23 @@ export function register({ window, browsingSession, ipc }: MainContext): void {
       if (!live(tab ?? null)) return
       tab!.pending = 'back_forward'
       tab!.contents.navigationHistory.goToIndex(index)
+    },
+    prepare(input) {
+      const url = toUrl(input)
+      if (url === null) return null
+      const tab = createTab()
+      tab.held = []
+      tab.view.setBounds(bounds())
+      open(tab, url, 'typed')
+      return tab.id
+    },
+    prepared(id) {
+      const tab = tabs.get(id)
+      return tab?.held ? tab.preparedState : null
+    },
+    focus(id) {
+      const tab = tabs.get(id)
+      if (tab && !tab.contents.isDestroyed()) tab.contents.focus()
     },
   }
 
