@@ -4,6 +4,7 @@ import { Agent, elideImages, MAX_STEPS, siteOf, type AgentDeps } from './agent'
 import type { ContentBlock, ModelRequest, ModelResponse } from './anthropic'
 import { CLI_NOT_FOUND, CliError, type CliOutcome, type CliTurn } from './claude-cli'
 import { fakeBrowser } from './fake-browser'
+import type { HistoryPort } from './tools'
 
 const response = (content: ContentBlock[], stop_reason = 'end_turn'): ModelResponse => ({
   id: 'msg',
@@ -27,6 +28,7 @@ function setup(
     elements?: Parameters<typeof fakeBrowser>[0]
     model?: ModelId
     cli?: (turn: CliTurn) => Promise<CliOutcome>
+    history?: HistoryPort | null
   } = {},
 ) {
   const { browser, state } = fakeBrowser(options.elements)
@@ -52,6 +54,7 @@ function setup(
       return options.cli(turn)
     }),
     browser: () => browser,
+    history: () => options.history ?? null,
     settings: () => settings,
     missingSetup: () => options.missingSetup ?? null,
     onState: (value) => states.push(structuredClone(value)),
@@ -345,6 +348,46 @@ describe('cross-site navigation after reading a page', () => {
     agent.approve('deny')
     await running
     expect(browser.load).toHaveBeenCalledTimes(2)
+  })
+
+  it('also after a history search, which needs neither page access nor a page', async () => {
+    const history: HistoryPort = {
+      search: vi.fn(async () => ({
+        pages: [
+          {
+            title: 'LLM notes',
+            url: 'https://notes.example/llm',
+            lastVisitAt: 0,
+            visitCount: 1,
+            note: null,
+            description: null,
+            summary: null,
+            snippet: null,
+          },
+        ],
+      })),
+    }
+    const { agent, requests, states } = setup(
+      [
+        async () => response([toolUse('t1', 'search_history', { query: 'LLM' })], 'tool_use'),
+        async () =>
+          response([toolUse('t2', 'navigate', { url: 'https://evil.example/' })], 'tool_use'),
+        async () => response([{ type: 'text', text: 'ok' }]),
+      ],
+      // No page is loaded.
+      { history },
+    )
+    const running = agent.run(input('search history for any mention of LLM'))
+    await waitFor(() => agent.state().status === 'awaiting-approval')
+    expect(requests[0]!.tools.map((tool) => tool.name)).toContain('search_history')
+    expect(history.search).toHaveBeenCalledWith('LLM', 'meaning', false)
+    expect(JSON.stringify(requests[1]!.messages.at(-1))).toContain('https://notes.example/llm')
+    expect(states.at(-1)!.items).toContainEqual(
+      expect.objectContaining({ tool: 'search_history', summary: 'Search history for "LLM"' }),
+    )
+    expect(agent.state().approval!.description).toBe('Open https://evil.example/')
+    agent.approve('deny')
+    await running
   })
 
   it('compares hosts without www', () => {

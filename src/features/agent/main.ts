@@ -29,7 +29,7 @@ import {
   type CliOptions,
 } from './main/claude-cli'
 import { listOllamaModels, ollamaUrl } from './main/ollama'
-import { toolNamed } from './main/tools'
+import { toolNamed, type HistoryPort } from './main/tools'
 import {
   defaultSettings,
   parseKey,
@@ -41,8 +41,10 @@ import {
 import { parseDecision, parseRunInput } from './main/validate'
 
 export type { Step } from './main/agent'
+export type { HistoryHit, HistoryPort, HistorySearchMode } from './main/tools'
 
 let agent: Agent | null = null
+let historySearch: HistoryPort | null = null
 let completer: ((request: CompletionRequest) => Promise<Completion>) | null = null
 
 /** A single model request without tools or conversation (history summaries and search). */
@@ -70,6 +72,11 @@ export interface Completion {
 export function complete(request: CompletionRequest): Promise<Completion> {
   if (!completer) return Promise.reject(new Error('The assistant is not available.'))
   return completer(request)
+}
+
+/** Lets the assistant search browsing history (search_history); called by the history feature. */
+export function provideHistorySearch(port: HistoryPort): void {
+  historySearch = port
 }
 
 /** Runs recorded steps without the model (skills); rejects while another run is going. */
@@ -161,6 +168,7 @@ export function register({ ipc, fileMenu }: MainContext): void {
       const page = getPage()
       return page ? pageBrowser(page) : null
     },
+    history: () => historySearch,
     settings: () => settings.get(),
     missingSetup: () =>
       providerOf(settings.get().model) === 'anthropic' && settings.apiKey() === null ? noKey : null,

@@ -5,4 +5,4 @@
 - Every column indexed by `pages_fts` must be listed in `ftsColumns`; the triggers are generated from it.
 - `shared/page-meta.ts › readPageMeta` is serialized with `toString()`: keep it self-contained (no imports, helpers or outer variables).
 - Costly data (screenshot, summary) needs `max_dwell_ms ≥ HIGH_DWELL_MS`: flush dwell before writing it, or SQLite's CHECK rejects the write.
-- Nothing about a page goes to a model without the user's opt-in (`summaries`) or request (Meaning search); wrap page data in `<untrusted_…>` tags.
+- Nothing about a page goes to a model without the user's opt-in (`summaries`) or request (Meaning search, the assistant's `search_history`); wrap page data in `<untrusted_…>` tags.
