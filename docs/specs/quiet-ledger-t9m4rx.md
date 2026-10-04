@@ -6,15 +6,15 @@
 | --- | --- |
 | **Feature name** | `/history-access on\|off` turns the assistant's `search_history` tool on or off |
 | **Spec ID** | quiet-ledger-t9m4rx |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-04 19:40 +00:00 |
-| **Last updated** | 2026-10-04 19:40 +00:00 |
+| **Last updated** | 2026-10-04 20:00 +00:00 |
 | **Affected features** | agent, prompt |
 | **Target release** | 0.1.0 |
-| **Related links** | spec patient-archive-h6q2wn, ADR 0012 (follow-up it names), PR #39 |
+| **Related links** | spec patient-archive-h6q2wn, ADR 0012 (follow-up it names), PR #39, PR #40 |
 
 **Status definitions:**
 - **Draft:** The spec is being written or reviewed. The scope may still change.
