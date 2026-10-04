@@ -165,6 +165,21 @@ test('closes pages with × and Ctrl+W and opens new stacks at the home page with
     await pressCtrl(app, 'N', 'ui')
     await expect.poll(() => shownUrl(app)).toBe(`${origin}/c2`)
     await expect.poll(titles).toEqual(['Page C2'])
+
+    // A second later a spare tab waits at the home page: the next Ctrl+N shows it, focused.
+    await window.waitForTimeout(1500)
+    await pressCtrl(app, 'N', 'ui')
+    await expect.poll(() => shownUrl(app)).toBe(`${origin}/c2`)
+    await expect.poll(titles).toEqual(['Page C2'])
+    await expect(window.getByRole('button', { name: /^@/ })).toBeVisible()
+    await expect
+      .poll(() =>
+        app.evaluate(({ BrowserWindow }) => {
+          const [view] = BrowserWindow.getAllWindows()[0]!.contentView.children
+          return (view as Electron.WebContentsView).webContents.isFocused()
+        }),
+      )
+      .toBe(true)
   } finally {
     await app.close()
   }

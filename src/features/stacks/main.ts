@@ -28,6 +28,10 @@ import {
 
 const PUBLISH_DELAY_MS = 16
 const MAX_HOME_LENGTH = 2048
+/** The spare tab is prepared this long after the page it follows, so it doesn't compete with it. */
+const SPARE_DELAY_MS = 1000
+/** An older spare is replaced: the search page it shows may be stale. */
+const SPARE_MAX_AGE_MS = 15 * 60_000
 
 /** An http(s) URL the home page may be, or null. */
 function parseHome(value: unknown): string | null {
@@ -292,6 +296,43 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
     goToNode(stack, value)
   })
   ipc.handle(channels.switch, (value) => switchTo(parseStackId(channels.switch, value)))
+
+  // A spare tab waits at the home page in the background, so a new stack shows it at once.
+  // Navigation holds its events until it's shown: history and the tree don't see it before.
+  let spare: { tabId: number; url: string; createdAt: number } | null = null
+  let spareTimer: ReturnType<typeof setTimeout> | null = null
+  const dropSpare = () => {
+    if (spareTimer !== null) clearTimeout(spareTimer)
+    spareTimer = null
+    if (spare) tabs.close(spare.tabId)
+    spare = null
+  }
+  const prepareSpare = () => {
+    dropSpare()
+    if (home === null) return
+    const tabId = tabs.prepare(home)
+    if (tabId === null) return
+    spare = { tabId, url: home, createdAt: Date.now() }
+    spareTimer = setTimeout(prepareSpare, SPARE_MAX_AGE_MS)
+  }
+  const scheduleSpare = () => {
+    dropSpare()
+    if (home !== null) spareTimer = setTimeout(prepareSpare, SPARE_DELAY_MS)
+  }
+  /** The spare's tab if it can be shown (current home page, fresh, not failed), else null. */
+  const takeSpare = (): number | null => {
+    const taken = spare
+    spare = null
+    if (!taken) return null
+    const usable =
+      taken.url === home &&
+      Date.now() - taken.createdAt <= SPARE_MAX_AGE_MS &&
+      (tabs.prepared(taken.tabId) ?? 'failed') !== 'failed'
+    if (usable) return taken.tabId
+    tabs.close(taken.tabId)
+    return null
+  }
+
   /**
    * Starts a new stack in a new tab, or fills the empty current stack: at the home page (its root,
    * the stack named after the next page), else empty at the prompt.
@@ -302,9 +343,28 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
     const empty = cur && cur.rootId === null ? cur : null
     const emptyTab = empty && tabOfStack.get(empty.id)
     if (empty && home === null) return
+    const spareTab = takeSpare()
+    if (spareTab !== null) {
+      const stack = empty ?? addStack()
+      makeCurrent(stack)
+      stack.startRoot = true
+      // Shown before the empty stack's tab closes, so the placeholder doesn't flash.
+      bind(stack, spareTab)
+      tabs.activate(spareTab)
+      if (emptyTab !== undefined && emptyTab !== null) {
+        stackOfTab.delete(emptyTab)
+        tabs.close(emptyTab)
+      }
+      tabs.focus(spareTab)
+      scheduleSpare()
+      changed()
+      return
+    }
     if (emptyTab !== undefined && emptyTab !== null && home !== null) {
       empty!.startRoot = true
       tabs.load(emptyTab, home, 'typed')
+      tabs.focus(emptyTab)
+      scheduleSpare()
       return
     }
     const stack = empty ?? addStack()
@@ -314,10 +374,15 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
       window.webContents.focus()
       ipc.send(promptChannels.open, null)
     } else stack.startRoot = true
-    bind(
-      stack,
-      tabs.create({ activate: true, ...(home !== null && { url: home, transition: 'typed' }) }),
-    )
+    const tabId = tabs.create({
+      activate: true,
+      ...(home !== null && { url: home, transition: 'typed' as const }),
+    })
+    bind(stack, tabId)
+    if (home !== null) {
+      tabs.focus(tabId)
+      scheduleSpare()
+    }
     changed()
   }
   ipc.handle(channels.create, openNewStack)
@@ -349,7 +414,10 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
     if (value !== null && url === null) {
       throw new TypeError(`${channels.setHome} expects an http(s) URL or null`)
     }
-    home = url
+    if (url !== home) {
+      home = url
+      scheduleSpare()
+    }
     changed()
   })
 
@@ -455,4 +523,5 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
   const restored = current()
   if (restored && restored.activeId !== null) switchTo(restored)
   else if (home !== null) openNewStack()
+  if (spareTimer === null) scheduleSpare()
 }

@@ -6,12 +6,12 @@
 | --- | --- |
 | **Feature name** | Ctrl+E focuses the navigation tree; arrow keys and type-ahead move through it |
 | **Spec ID** | silent-orchid-x2m7pd |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-03 00:00 +00:00 |
-| **Last updated** | 2026-10-03 15:10 +00:00 |
+| **Last updated** | 2026-10-04 16:15 +00:00 |
 | **Affected features** | stacks |
 | **Target release** | 0.1.0 |
 | **Related links** | branching-trail-k4w9zp, swift-carousel-t6m2xa, fresh-anchor-w6p3jd |
@@ -113,3 +113,4 @@
 - The menu entry is under File ("Focus Stack"), next to the other stack commands, not View.
 - No Playwright e2e test was added: the Electron binary isn't installed in the cloud session, so it could not be run here. Behaviour is covered by unit and jsdom tests; CI e2e runs the existing stacks specs.
 - Escape in the full-stack overlay still closes it; Escape with nothing typed in the main tree returns focus to the page.
+- Set to Done (its PR is merged; type-ahead was later replaced by the search of copper-beacon-k5r8tw) so only warm-harbor-p3v9sk is Active.

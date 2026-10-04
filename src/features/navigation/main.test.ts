@@ -266,6 +266,69 @@ describe('navigation main', () => {
     expect(page.webContents.navigationHistory.goToIndex).toHaveBeenCalledWith(0)
   })
 
+  it('prepares a tab in the background, sized to the page area, holding its events until shown', () => {
+    const { tab, call, ctx, resize } = setup()
+    tab()
+    call(channels.setInsets, { top: 10, right: 300, bottom: 0, left: 0 })
+    const tabs = getTabs()!
+    expect(tabs.prepare('javascript:alert(1)')).toBeNull()
+    const id = tabs.prepare('start.example')!
+    const spare = FakeView.last
+    expect(spare.webContents.loadURL).toHaveBeenCalledWith('https://start.example/', undefined)
+    expect(spare.setBounds).toHaveBeenLastCalledWith({ x: 0, y: 10, width: 700, height: 690 })
+    expect(ctx.window.contentView.addChildView).not.toHaveBeenCalled()
+    resize(1200, 800)
+    expect(spare.setBounds).toHaveBeenLastCalledWith({ x: 0, y: 10, width: 900, height: 790 })
+
+    const events: unknown[] = []
+    const unsubscribe = onPageEvent((event) => events.push(event))
+    const fire = (name: string, ...args: unknown[]) =>
+      spare.webContents.listeners.get(name)!({}, ...args)
+    spare.webContents.index = 0
+    fire('did-navigate', 'https://start.example/', 200)
+    fire('page-title-updated', 'Start')
+    expect(tabs.prepared(id)).toBe('loading')
+    fire('did-stop-loading')
+    expect(tabs.prepared(id)).toBe('loaded')
+    expect(events).toEqual([])
+
+    tabs.activate(id)
+    expect(ctx.window.contentView.addChildView).toHaveBeenCalledWith(spare)
+    expect(events).toEqual([
+      { tabId: id, type: 'activated', url: 'https://example.com/' },
+      {
+        tabId: id,
+        type: 'navigated',
+        url: 'https://start.example/',
+        status: 200,
+        transition: 'typed',
+        entry: 'new',
+      },
+      { tabId: id, type: 'title', title: 'Start' },
+      { tabId: id, type: 'loaded', url: 'https://example.com/' },
+    ])
+    expect(tabs.prepared(id)).toBeNull()
+    // Shown, it reports as it goes.
+    fire('page-title-updated', 'Later')
+    expect(events.at(-1)).toEqual({ tabId: id, type: 'title', title: 'Later' })
+    tabs.focus(id)
+    expect(spare.webContents.focus).toHaveBeenCalled()
+    unsubscribe()
+  })
+
+  it('marks a prepared tab failed when its load fails or its renderer goes away', () => {
+    setup()
+    const tabs = getTabs()!
+    const failed = tabs.prepare('start.example')!
+    FakeView.last.webContents.listeners.get('did-fail-load')!({}, -2, 'failed', '', true)
+    FakeView.last.webContents.listeners.get('did-stop-loading')!()
+    expect(tabs.prepared(failed)).toBe('failed')
+    const gone = tabs.prepare('start.example')!
+    FakeView.last.webContents.listeners.get('render-process-gone')!({}, { reason: 'crashed' })
+    expect(tabs.prepared(gone)).toBe('failed')
+    expect(tabs.prepared(999)).toBeNull()
+  })
+
   it('lets a history resolver decide what back and forward mean', () => {
     const { go, page, ctx } = setup()
     go('example.com')
