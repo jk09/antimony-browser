@@ -6,15 +6,15 @@
 | --- | --- |
 | **Feature name** | Each stack (tab) whose page plays sound shows a speaker indicator in the stack header and the stack list; one click on it mutes or unmutes that tab |
 | **Spec ID** | quiet-speaker-m8v3tz |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-04 17:00 +00:00 |
-| **Last updated** | 2026-10-04 17:40 +00:00 |
+| **Last updated** | 2026-10-04 17:50 +00:00 |
 | **Affected features** | navigation, stacks |
 | **Target release** | 0.1.0 |
-| **Related links** | specs branching-trail-k4w9zp, nimble-anchor-w3p8kd (stack switcher), ADR 0008 |
+| **Related links** | PR #37, specs branching-trail-k4w9zp, nimble-anchor-w3p8kd (stack switcher), ADR 0008 |
 
 **Status definitions:**
 - **Draft:** The spec is being written or reviewed. The scope may still change.
