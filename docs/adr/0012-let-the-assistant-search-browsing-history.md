@@ -1,6 +1,6 @@
 # 0012. Let the assistant search browsing history
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-04
 - Features: agent, history
 - Spec: patient-archive-h6q2wn

@@ -6,15 +6,15 @@
 | --- | --- |
 | **Feature name** | The assistant gets a `search_history` tool that finds pages in the user's browsing history by meaning (or by text), so requests like "search history for any mention of LLM" work from the prompt |
 | **Spec ID** | patient-archive-h6q2wn |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-04 18:30 +00:00 |
-| **Last updated** | 2026-10-04 19:10 +00:00 |
+| **Last updated** | 2026-10-04 19:30 +00:00 |
 | **Affected features** | agent, history |
 | **Target release** | 0.1.0 |
-| **Related links** | specs ember-ledger-h3x8vq (history, Meaning search), violet-harbinger-p7w3kd (agent); ADRs 0004, 0006, 0012 |
+| **Related links** | specs ember-ledger-h3x8vq (history, Meaning search), violet-harbinger-p7w3kd (agent); ADRs 0004, 0006, 0012; PR #39 |
 
 **Status definitions:**
 - **Draft:** The spec is being written or reviewed. The scope may still change.
