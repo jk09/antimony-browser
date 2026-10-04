@@ -6,7 +6,14 @@ import { createJsonStore } from '../../app/main/json-store'
 import { onHistoryCleared } from '../history/main'
 import { getTabs, onPageEvent, setHistoryResolver, type PageEvent } from '../navigation/main'
 import { channels as promptChannels } from '../prompt/ipc'
-import { channels, DEFAULT_HOME, type Stack, type StackCommand, type StacksState } from './ipc'
+import {
+  channels,
+  DEFAULT_HOME,
+  type Stack,
+  type StackAudio,
+  type StackCommand,
+  type StacksState,
+} from './ipc'
 import { cycleKeyFor, stackCommandFor } from './shared/keys'
 import { parseStoredStacks, STACKS_FILE_VERSION, type StoredStacks } from './shared/stored'
 import {
@@ -70,6 +77,13 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
   const byRecentUse = () => [...stacks.values()].sort((a, b) => b.lastUsedAt - a.lastUsedAt)
   const current = () => (currentId === null ? null : (stacks.get(currentId) ?? null))
 
+  const audioOf = (stack: Stack): StackAudio => {
+    const tabId = tabOfStack.get(stack.id)
+    const audio = tabId === undefined ? null : tabs.audio(tabId)
+    if (audio?.muted) return 'muted'
+    return audio?.audible ? 'playing' : null
+  }
+
   const rootTitle = (stack: Stack) => {
     const node = namingNode(stack) ?? (stack.rootId === null ? null : stack.nodes[stack.rootId]!)
     return node ? node.title || node.url : ''
@@ -89,11 +103,18 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
         name: s.name ?? '',
         rootTitle: rootTitle(s),
         pages: nodeCount(s),
+        audio: audioOf(s),
       })),
     }
   }
 
   let timer: ReturnType<typeof setTimeout> | null = null
+  const publish = () => {
+    timer ??= setTimeout(() => {
+      timer = null
+      ipc.send(channels.stateChanged, state())
+    }, PUBLISH_DELAY_MS)
+  }
   const changed = () => {
     store.set({
       version: STACKS_FILE_VERSION,
@@ -101,10 +122,7 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
       stacks: [...stacks.values()],
       home,
     })
-    timer ??= setTimeout(() => {
-      timer = null
-      ipc.send(channels.stateChanged, state())
-    }, PUBLISH_DELAY_MS)
+    publish()
   }
 
   const bind = (stack: Stack, tabId: number) => {
@@ -268,6 +286,11 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
         if (stack && deriveName(stack, takenNames(stack), true)) changed()
         return
       }
+      // Sound isn't stored: only the switcher's indicators change.
+      case 'audio': {
+        if (stackOfTab.has(event.tabId)) publish()
+        return
+      }
     }
   }
   onPageEvent(onEvent)
@@ -407,6 +430,17 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
     }
     if (removeBranch(stack, value)) goToNode(stack, stack.activeId!)
     changed()
+  })
+  ipc.handle(channels.setMuted, (value) => {
+    const { stackId, muted } = (typeof value === 'object' && value !== null ? value : {}) as {
+      stackId?: unknown
+      muted?: unknown
+    }
+    if (typeof muted !== 'boolean') {
+      throw new TypeError(`${channels.setMuted} expects { stackId, muted: boolean }`)
+    }
+    const tabId = tabOfStack.get(parseStackId(channels.setMuted, stackId).id)
+    if (tabId !== undefined) tabs.setMuted(tabId, muted)
   })
   ipc.handle(channels.home, () => home)
   ipc.handle(channels.setHome, (value) => {

@@ -27,6 +27,13 @@ class FakeWebContents {
   getURL = () => 'https://example.com/'
   getTitle = () => 'Example'
   isLoading = () => this.loading
+  audible = false
+  muted = false
+  isCurrentlyAudible = () => this.audible
+  isAudioMuted = () => this.muted
+  setAudioMuted = vi.fn((muted: boolean) => {
+    this.muted = muted
+  })
   off(event: string) {
     this.listeners.delete(event)
     return this
@@ -264,6 +271,33 @@ describe('navigation main', () => {
     expect(tabs.entries(1)).toEqual({ urls: page.webContents.urls, index: 1 })
     tabs.goToIndex(1, 0)
     expect(page.webContents.navigationHistory.goToIndex).toHaveBeenCalledWith(0)
+  })
+
+  it('reports and mutes each tab’s sound', () => {
+    const { tab } = setup()
+    const page = tab()
+    const tabs = getTabs()!
+    const id = tabs.active()!
+    const events: unknown[] = []
+    const unsubscribe = onPageEvent((event) => events.push(event))
+    expect(tabs.audio(id)).toEqual({ audible: false, muted: false })
+    expect(tabs.audio(999)).toBeNull()
+
+    page.webContents.audible = true
+    page.webContents.listeners.get('audio-state-changed')!({ audible: true })
+    expect(events).toEqual([{ tabId: id, type: 'audio', audible: true, muted: false }])
+    expect(tabs.audio(id)).toEqual({ audible: true, muted: false })
+
+    tabs.setMuted(id, true)
+    expect(page.webContents.setAudioMuted).toHaveBeenCalledWith(true)
+    expect(events.at(-1)).toEqual({ tabId: id, type: 'audio', audible: true, muted: true })
+    expect(tabs.audio(id)).toEqual({ audible: true, muted: true })
+    // Unchanged or unknown: nothing happens.
+    tabs.setMuted(id, true)
+    tabs.setMuted(999, false)
+    expect(page.webContents.setAudioMuted).toHaveBeenCalledTimes(1)
+    expect(events).toHaveLength(2)
+    unsubscribe()
   })
 
   it('prepares a tab in the background, sized to the page area, holding its events until shown', () => {

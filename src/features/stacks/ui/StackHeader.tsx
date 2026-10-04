@@ -9,7 +9,7 @@ import {
 } from 'react'
 import type { AgentState } from '../../agent/ipc'
 import type { NavigationState } from '../../navigation/ipc'
-import type { StackCommand, StackRow, StacksState } from '../ipc'
+import type { StackCommand, StackRow, StacksState, StackSummary } from '../ipc'
 import { shortcutLabel } from '../shared/keys'
 import { collapse, type CollapsedItem } from '../shared/tree'
 import { matchRanges, searchPages, urlPrefixLength } from '../shared/search'
@@ -146,6 +146,50 @@ function Row({
         ×
       </button>
     </li>
+  )
+}
+
+/** A speaker, struck through while muted. */
+function SpeakerIcon({ muted }: { muted: boolean }) {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+      <path d="M2 6h3l4-3v10l-4-3H2z" fill="currentColor" />
+      {muted ? (
+        <path d="M11 6l4 4m0-4l-4 4" stroke="currentColor" strokeWidth="1.5" fill="none" />
+      ) : (
+        <path
+          d="M11 5.5a3.5 3.5 0 0 1 0 5M12.5 3.5a6 6 0 0 1 0 9"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          fill="none"
+        />
+      )}
+    </svg>
+  )
+}
+
+/** The stack's sound indicator: nothing while it's silent, else a button that toggles mute. */
+function AudioButton({ stack, label }: { stack: StackSummary; label: string }) {
+  if (stack.audio === null) return null
+  const muted = stack.audio === 'muted'
+  const action = muted ? 'Unmute' : 'Mute'
+  return (
+    <button
+      type="button"
+      className={`stack-audio${muted ? ' muted' : ''}`}
+      aria-label={`${action} ${label}`}
+      aria-pressed={muted}
+      title={muted ? 'Tab muted – click to unmute' : 'Playing sound – click to mute'}
+      onClick={(event) => {
+        event.stopPropagation()
+        window.antimony.stacks
+          .setMuted(stack.id, !muted)
+          .catch((reason: unknown) => console.error(reason))
+      }}
+    >
+      <SpeakerIcon muted={muted} />
+    </button>
   )
 }
 
@@ -431,6 +475,7 @@ export function StackHeader() {
   }
 
   const name = current?.name || (current && rows.length > 0 ? rows[0]!.title || 'Untitled' : '')
+  const currentSummary = stacks?.stacks.find((stack) => stack.id === current?.id)
   const blocked = running ? 'Stop the assistant first to switch stacks' : undefined
 
   const reload = () => {
@@ -543,6 +588,9 @@ export function StackHeader() {
         >
           {name ? `@${name}` : 'New tab'} <span aria-hidden="true">▾</span>
         </button>
+        {currentSummary && (
+          <AudioButton stack={currentSummary} label={name ? `@${name}` : 'New tab'} />
+        )}
         {rows.length > 0 && (
           <input
             ref={search}
@@ -634,6 +682,7 @@ export function StackHeader() {
                       {stack.rootTitle} · {stack.pages} {stack.pages === 1 ? 'page' : 'pages'}
                     </span>
                   </button>
+                  <AudioButton stack={stack} label={stack.name ? `@${stack.name}` : 'New tab'} />
                   <button
                     type="button"
                     className="stack-list-close"
