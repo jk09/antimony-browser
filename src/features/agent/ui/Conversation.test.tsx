@@ -22,13 +22,12 @@ describe('Conversation', () => {
     expect(container.textContent).toBe('')
   })
 
-  it('shows turns and tool steps, and offers to save a run with steps', async () => {
-    const { api, emit } = fakeApi()
+  it('shows turns and tool steps, and no way to save a run by hand', async () => {
+    const { emit } = fakeApi()
     render(<Conversation />)
     act(() =>
       emit.state({
         ...idleState,
-        savableSteps: 2,
         items: [
           { kind: 'user', text: 'open news', attachments: [{ kind: 'image', name: 'a.png' }] },
           { kind: 'tool', tool: 'navigate', summary: 'Open news.example', status: 'ok' },
@@ -49,8 +48,8 @@ describe('Conversation', () => {
     expect(text).toContain('Open news.example')
     expect(text).toContain('Not found')
     expect(text).toContain('Here is the news.')
-    fireEvent.click(screen.getByRole('button', { name: 'Save as skill (2 steps)' }))
-    expect(api.skills.requestSave).toHaveBeenCalled()
+    // Macros are made by asking the assistant, not from a finished run.
+    expect(screen.queryByRole('button', { name: /save/i })).toBeNull()
   })
 
   it('asks for approval and sends the decision', async () => {
@@ -61,7 +60,6 @@ describe('Conversation', () => {
         status: 'awaiting-approval',
         items: [{ kind: 'approval', description: 'Click button "Buy"', decision: null }],
         approval: { description: 'Click button "Buy"' },
-        savableSteps: 0,
       }),
     )
     const dialog = screen.getByRole('alertdialog', { name: 'Approve action' })

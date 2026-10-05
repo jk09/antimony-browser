@@ -1,5 +1,6 @@
 import { isOllamaModel, ollamaId, type AgentSettings, type ModelInfo } from '../../agent/ipc'
 import type { Skill } from '../../skills/ipc'
+import { paramLabel } from '../../skills/shared/params'
 import { DEFAULT_HOME } from '../../stacks/ipc'
 import { promptCommands } from '../ipc'
 
@@ -12,14 +13,24 @@ export interface CommandResult {
   close?: boolean
 }
 
-const signatureOf = (skill: Skill) =>
-  [`/${skill.name}`, ...skill.params.map((param) => `<${param}>`)].join(' ')
+const signatureOf = (skill: Skill) => [`/${skill.name}`, ...skill.params.map(paramLabel)].join(' ')
 
-/** Runs a built-in command or a skill. Never calls the model. */
+/**
+ * Runs a built-in command or a skill. Never calls the model. `resolveArgs` turns a macro's `@`
+ * references into URLs before it runs.
+ */
 export async function runCommand(
   name: string,
   args: string,
-  { skills, settings }: { skills: Skill[]; settings: AgentSettings | null },
+  {
+    skills,
+    settings,
+    resolveArgs = async (value) => value,
+  }: {
+    skills: Skill[]
+    settings: AgentSettings | null
+    resolveArgs?: (args: string) => Promise<string>
+  },
 ): Promise<CommandResult> {
   const api = window.antimony
   const info = (text: string): CommandResult => ({ message: { kind: 'info', text } })
@@ -120,14 +131,11 @@ export async function runCommand(
       if (!result.ok) return error(result.error)
       return { close: true }
     }
-    case 'save':
-      await api.skills.requestSave(args)
-      return {}
     case 'skills': {
       const saved = skills.filter((skill) => !skill.builtin)
       return info(
         saved.length === 0
-          ? 'No saved skills yet. Run a request, then use /save <name>.'
+          ? 'No macros yet. Ask the assistant, e.g. "open a new stack and store it as /ns".'
           : saved
               .map(
                 (skill) =>
@@ -138,7 +146,7 @@ export async function runCommand(
     }
     case 'forget':
       if (!skills.some((skill) => skill.name === args && !skill.builtin)) {
-        return error(`No saved skill /${args}.`)
+        return error(`No macro /${args}.`)
       }
       await api.skills.delete(args)
       return info(`Deleted /${args}.`)
@@ -197,7 +205,7 @@ export async function runCommand(
       `Unknown command /${name}.${close.length ? ` Did you mean ${close.map((c) => `/${c}`).join(', ')}?` : ''}`,
     )
   }
-  const result = await api.skills.run(skill.name, args)
+  const result = await api.skills.run(skill.name, skill.builtin ? args : await resolveArgs(args))
   if (!result.ok) return error(result.error ?? `/${skill.name} failed.`)
   return skill.builtin ? { close: true } : {}
 }

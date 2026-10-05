@@ -388,7 +388,7 @@ test('Ctrl+B hides and shows the assistant, and the page view follows each time'
   }
 })
 
-test('a question runs the assistant, which drives the browser; the run replays as a skill', async () => {
+test('a question runs the assistant, which drives the browser and stores the action as a macro', async () => {
   const app = await launch()
   try {
     const window = await app.firstWindow()
@@ -416,21 +416,36 @@ test('a question runs the assistant, which drives the browser; the run replays a
     await expect.poll(() => pageBounds(app)).toEqual(before)
     requests.length = 0
 
-    // Save the run as /testpage and replay it: no model request.
-    await window.getByRole('button', { name: /Save as skill/ }).click()
-    const form = window.getByRole('form', { name: 'Save as skill' })
-    await form.getByPlaceholder('my-skill').fill('testpage')
-    await form.getByRole('button', { name: 'Save' }).click()
-    await expect(form).toBeHidden()
+    // No way to save a run by hand: the assistant stores macros when asked.
+    await expect(window.getByRole('button', { name: /Save as skill/ })).toHaveCount(0)
+    script = (messages) =>
+      messages.at(-1)!.content.some((block) => block.type === 'tool_result')
+        ? [{ type: 'text', text: 'Saved /testpage <path>.' }]
+        : [
+            toolUse('toolu_2', 'save_macro', {
+              name: 'testpage',
+              description: 'Open a test page',
+              params: [{ name: 'path', hint: 'page path' }],
+              steps: [{ tool: 'navigate', input: { url: `${origin}/{{path}}` } }],
+            }),
+          ]
+    await prompt.fill('store opening a test page as macro /testpage, with the path as parameter')
+    await prompt.press('Enter')
+    await expect(conversation).toContainText('Saved /testpage <path>.')
+    expect(requests[0]!.body.tools.map((tool) => tool.name)).toContain('save_macro')
+    requests.length = 0
 
     await prompt.fill(`${origin}/other`)
     await prompt.press('Enter')
     await expect.poll(() => pageUrls(app)).toEqual([`${origin}/other`])
 
+    // Typing the macro hints its argument and runs it without the model.
     await openPrompt(app, window)
     await prompt.fill('/testpage')
     await expect(window.getByRole('option', { name: /\/testpage/ })).toBeVisible()
+    await expect(window.getByTestId('prompt-hint')).toContainText('<path: page path>')
     await prompt.press('Escape')
+    await prompt.fill('/testpage hello')
     await prompt.press('Enter')
     await expect.poll(() => pageUrls(app)).toEqual([`${origin}/hello`])
     expect(requests).toHaveLength(0)

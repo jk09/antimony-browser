@@ -380,7 +380,13 @@ describe('Prompt', () => {
   it('suggests commands and skills after /, and Tab fills one in', async () => {
     const skills = [
       ...builtins,
-      { name: 'dash', description: 'Team dashboard', params: ['team'], steps: [], builtin: false },
+      {
+        name: 'dash',
+        description: 'Team dashboard',
+        params: [{ name: 'team', hint: 'team name' }],
+        steps: [],
+        builtin: false,
+      },
     ]
     const { box } = await openPrompt({ skills })
     type(box, '/da')
@@ -388,6 +394,61 @@ describe('Prompt', () => {
     expect(first!.textContent).toContain('/dash <team>')
     press(box, 'Tab')
     expect(box.value).toBe('/dash ')
+  })
+
+  const macro = {
+    name: 'open-in',
+    description: 'Open a page and search it',
+    params: [
+      { name: 'url', hint: 'page or @stack' },
+      { name: 'term', hint: 'search term' },
+    ],
+    steps: [],
+    builtin: false,
+  }
+
+  it('shows a faint hint of the macro arguments still to type', async () => {
+    const { box } = await openPrompt({ skills: [...builtins, macro] })
+    const hint = () => screen.queryByTestId('prompt-hint')?.textContent ?? ''
+    type(box, '/open-in')
+    expect(hint()).toBe('/open-in <url: page or @stack> <term: search term>')
+    expect(box.getAttribute('aria-description')).toBe(
+      'Arguments: <url: page or @stack> <term: search term>',
+    )
+    type(box, '/open-in x')
+    expect(hint()).toBe('/open-in x <term: search term>')
+    type(box, '/open-in x y z')
+    expect(hint()).toBe('')
+    type(box, '/reload')
+    expect(hint()).toBe('')
+  })
+
+  it('suggests @ stacks and pages for macro arguments and runs it with their URLs', async () => {
+    const { api, box } = await openPrompt({ skills: [...builtins, macro], stacks, stackPages })
+    type(box, '/open-in @rust')
+    await waitFor(() => expect(optionNames()).toContain('Stack @rust-docs, Rust · 2 pages'))
+    type(box, '/open-in @hacker-news/comments electron apps')
+    expect(screen.queryByRole('listbox')).toBeNull()
+    press(box, 'Enter')
+    await waitFor(() =>
+      expect(api.skills.run).toHaveBeenCalledWith(
+        'open-in',
+        'https://site.example/comments electron apps',
+      ),
+    )
+    type(box, '/open-in @rust-docs @nobody')
+    press(box, 'Enter')
+    await waitFor(() =>
+      expect(api.skills.run).toHaveBeenCalledWith('open-in', 'https://site.example/rust @nobody'),
+    )
+  })
+
+  it("doesn't suggest @ in built-in commands' arguments", async () => {
+    const { box } = await openPrompt({ stacks, stackPages })
+    type(box, '/history @ru')
+    await act(async () => {})
+    const options = screen.queryAllByRole('option').map((option) => option.textContent ?? '')
+    expect(options.some((text) => text.includes('@rust-docs'))).toBe(false)
   })
 
   it('/menu suggests menu items level by level and runs the chosen one', async () => {

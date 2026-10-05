@@ -2,6 +2,7 @@
 import type { Skill, SkillStep } from '../ipc'
 
 export const NAME_PATTERN = /^[a-z][a-z0-9-]{0,31}$/
+export const PARAM_PATTERN = /^[a-z][a-z0-9_]{0,31}$/i
 const PLACEHOLDER = /\{\{\s*([a-z][a-z0-9_]*)\s*\}\}/gi
 
 /** Parameter names used in the steps' string inputs, in order of first use. */
@@ -50,7 +51,7 @@ export function bindArgs(
 ): { values: Record<string, string> } | { error: string } {
   const args = parseArgs(line)
   if (params.length === 0) {
-    return args.length === 0 ? { values: {} } : { error: 'This skill takes no arguments' }
+    return args.length === 0 ? { values: {} } : { error: 'This macro takes no arguments' }
   }
   if (args.length < params.length) {
     return {
@@ -69,5 +70,25 @@ export function bindArgs(
 
 /** `/name <param> …` */
 export function signature(skill: Pick<Skill, 'name' | 'params'>): string {
-  return [`/${skill.name}`, ...skill.params.map((param) => `<${param}>`)].join(' ')
+  return [`/${skill.name}`, ...skill.params.map((param) => `<${param.name}>`)].join(' ')
+}
+
+/** `<name: hint>`, or `<name>` without a hint. */
+export const paramLabel = (param: Skill['params'][number]) =>
+  `<${param.name}${param.hint ? `: ${param.hint}` : ''}>`
+
+/**
+ * The faint hint shown after `/name …` while a macro is typed: the parameters not yet started,
+ * e.g. `<term: search term>`; '' when nothing is missing. `args` is the text after `/name`
+ * (with its leading space). An argument being typed (no space after it yet) counts as started.
+ */
+export function argumentHint(params: Skill['params'], args: string): string {
+  if (params.length === 0) return ''
+  if (args !== '' && !/^\s/.test(args)) return ''
+  const typed = parseArgs(args).length
+  // The last parameter takes the rest of the line, so once it is started nothing is missing.
+  const missing = params.slice(typed)
+  if (missing.length === 0) return ''
+  const label = missing.map(paramLabel).join(' ')
+  return args === '' ? ` ${label}` : /\s$/.test(args) ? label : ` ${label}`
 }

@@ -63,6 +63,28 @@ export interface HistoryHit {
 
 export type HistorySearchMode = 'meaning' | 'text'
 
+/** A macro (a saved skill) as the agent sees it; its steps are replayable tool calls. */
+export interface MacroInfo {
+  name: string
+  description: string
+  params: { name: string; hint: string }[]
+  steps: { tool: string; input: Record<string, string | number | boolean> }[]
+}
+
+/** The macro store, provided by the skills feature (provideMacros in main.ts). */
+export interface MacroPort {
+  list(): MacroInfo[]
+  /** Validates and stores (creates or replaces) a macro; throws a TypeError the model can read. */
+  save(definition: unknown): MacroInfo
+  /** Throws a TypeError for unknown or built-in names. */
+  delete(name: string): void
+}
+
+/** Opens a new stack (like Ctrl/Cmd+N), provided by the stacks feature (provideStackOpener). */
+export interface StackOpener {
+  open(): void
+}
+
 /** History's search, provided by the history feature (provideHistorySearch in main.ts). */
 export interface HistoryPort {
   search(
@@ -76,9 +98,11 @@ export interface HistoryPort {
  * navigation: like the address bar, never needs approval.
  * history: reads the browsing history; no page access or approval, but like reading a page it
  * makes a later cross-site navigation in the run ask first.
+ * macro: saves, lists or deletes macros; no page access, approval only after page or history
+ * content was read in the run.
  * read: needs page access. action: needs page access and the user's approval.
  */
-export type ToolKind = 'navigation' | 'history' | 'read' | 'action'
+export type ToolKind = 'navigation' | 'history' | 'macro' | 'read' | 'action'
 
 /** Read and action tools work on the page and need page access. */
 export function needsPageAccess(tool: ToolDefinition): boolean {
@@ -101,6 +125,10 @@ export interface ToolDefinition {
 
 const schema = (properties: Record<string, unknown> = {}, required: string[] = []) =>
   ({ type: 'object', properties, required, additionalProperties: false }) as const
+const macroName = {
+  type: 'string',
+  description: 'Macro name without the slash: lowercase letters, digits and -, up to 32.',
+}
 const selector = {
   type: 'string',
   description: 'CSS selector of the element, from read_page.',
@@ -144,6 +172,14 @@ export const toolDefinitions: ToolDefinition[] = [
     input_schema: schema(),
   },
   {
+    name: 'new_stack',
+    kind: 'navigation',
+    replayable: true,
+    description:
+      'Open a new stack (the browser\'s tabs; like Ctrl/Cmd+N, "open a new window/tab") at the home page, or at url if given, and make it the current page.',
+    input_schema: schema({ url: { type: 'string' } }),
+  },
+  {
     name: 'get_page_state',
     kind: 'navigation',
     replayable: false,
@@ -164,6 +200,58 @@ export const toolDefinitions: ToolDefinition[] = [
       },
       ['query'],
     ),
+  },
+  {
+    name: 'save_macro',
+    kind: 'macro',
+    replayable: false,
+    description:
+      "Store a macro the user can run later by typing /name in the prompt, without you. Its steps are browser tool calls replayed in order; only navigate, go_back, go_forward, reload, stop, new_stack, click, type_text, press_key and scroll can be steps, with the same inputs as those tools. A string input may contain {{param}} placeholders, filled from the arguments typed after /name (in order; the last parameter takes the rest of the line; an @stack or @stack/page argument becomes that page's URL). Declare every placeholder in params with a short hint of what to type. Replaces a macro with the same name.",
+    input_schema: schema(
+      {
+        name: macroName,
+        description: { type: 'string', description: 'What the macro does, in a few words.' },
+        params: {
+          type: 'array',
+          description: 'Parameters in the order they are typed after /name.',
+          items: schema(
+            {
+              name: {
+                type: 'string',
+                description: 'Placeholder name: letters, digits and _ (used as {{name}}).',
+              },
+              hint: { type: 'string', description: 'What to type, e.g. "search term".' },
+            },
+            ['name', 'hint'],
+          ),
+        },
+        steps: {
+          type: 'array',
+          items: schema(
+            {
+              tool: { type: 'string', description: 'A replayable tool name.' },
+              input: { type: 'object', description: "The tool's input." },
+            },
+            ['tool', 'input'],
+          ),
+        },
+      },
+      ['name', 'description', 'params', 'steps'],
+    ),
+  },
+  {
+    name: 'list_macros',
+    kind: 'macro',
+    replayable: false,
+    description: 'List the saved macros with their parameters and steps.',
+    input_schema: schema(),
+  },
+  {
+    name: 'delete_macro',
+    kind: 'macro',
+    replayable: false,
+    description: 'Delete a saved macro.',
+    input_schema: schema({ name: macroName }, ['name']),
   },
   {
     name: 'read_page',
@@ -266,7 +354,9 @@ export function validateInput(name: string, input: unknown): Input {
   }
   for (const [key, value] of Object.entries(record)) {
     const spec = properties[key] as { type: string; enum?: string[] }
-    if (typeof value !== spec.type) throw new ToolError(`${name}: ${key} must be a ${spec.type}`)
+    // Arrays and objects are only checked for their shape here; the tool checks their content.
+    const type = Array.isArray(value) ? 'array' : value === null ? 'null' : typeof value
+    if (type !== spec.type) throw new ToolError(`${name}: ${key} must be a ${spec.type}`)
     if (spec.enum && !spec.enum.includes(value as string)) {
       throw new ToolError(`${name}: ${key} must be one of ${spec.enum.join(', ')}`)
     }
@@ -293,8 +383,18 @@ export function describeCall(name: string, input: Input, element?: ElementInfo):
       return 'Reload the page'
     case 'stop':
       return 'Stop loading'
+    case 'new_stack':
+      return input['url'] ? `Open a new stack at ${String(input['url'])}` : 'Open a new stack'
     case 'get_page_state':
       return 'Check the page state'
+    case 'save_macro': {
+      const steps = Array.isArray(input['steps']) ? input['steps'].length : 0
+      return `Save macro /${String(input['name'])} (${steps} step${steps === 1 ? '' : 's'})`
+    }
+    case 'list_macros':
+      return 'List macros'
+    case 'delete_macro':
+      return `Delete macro /${String(input['name'])}`
     case 'search_history':
       return `Search history for "${String(input['query'])}"${input['mode'] === 'text' ? ' by text' : ''}${input['bookmarked'] ? ' in bookmarks' : ''}`
     case 'read_page':
@@ -416,6 +516,66 @@ async function searchHistory(history: HistoryPort | null, input: Input): Promise
   return { text: formatHistory(pages, notice) }
 }
 
+/** `/name <param> …` */
+export const macroSignature = (macro: Pick<MacroInfo, 'name' | 'params'>) =>
+  [`/${macro.name}`, ...macro.params.map((param) => `<${param.name}>`)].join(' ')
+
+/** One line per macro for `<browser_state>`, or '' without macros. */
+export function formatMacroList(macros: MacroInfo[]): string {
+  return macros
+    .map((macro) => `${macroSignature(macro)}${macro.description ? ` – ${macro.description}` : ''}`)
+    .join('\n')
+}
+
+/** Rejections from the macro store (TypeError) become errors the model reads. */
+function macroCall<T>(work: () => T): T {
+  try {
+    return work()
+  } catch (error) {
+    throw new ToolError(error instanceof Error ? error.message : String(error))
+  }
+}
+
+function runMacroTool(macros: MacroPort | null, name: string, input: Input): ToolOutput {
+  if (!macros) throw new ToolError('Macros are not available.')
+  switch (name) {
+    case 'save_macro': {
+      const saved = macroCall(() => macros.save(input))
+      return {
+        text: `Saved ${macroSignature(saved)} (${saved.steps.length} step(s)). The user runs it by typing ${macroSignature(saved)} in the prompt.`,
+      }
+    }
+    case 'delete_macro':
+      macroCall(() => macros.delete(String(input['name'])))
+      return { text: `Deleted /${String(input['name'])}.` }
+    default: {
+      const list = macros.list()
+      return {
+        text:
+          list.length === 0
+            ? 'No macros are saved.'
+            : JSON.stringify(
+                list.map(({ name: macro, description, params, steps }) => ({
+                  name: macro,
+                  description,
+                  params,
+                  steps,
+                })),
+                null,
+                1,
+              ),
+      }
+    }
+  }
+}
+
+/** What the tools reach besides the page: history's search, the macro store, new stacks. */
+export interface ToolPorts {
+  history?: HistoryPort | null
+  macros?: MacroPort | null
+  stacks?: StackOpener | null
+}
+
 /**
  * Runs one tool. Permission checks (page access, approval) happen in the caller; this only does
  * the work and the per-tool safety rules (no typing into sensitive fields).
@@ -424,10 +584,21 @@ export async function executeTool(
   browser: BrowserPort | null,
   name: string,
   input: Input,
-  history: HistoryPort | null = null,
+  ports: ToolPorts = {},
 ): Promise<ToolOutput> {
-  if (name === 'search_history') return searchHistory(history, input)
+  if (name === 'search_history') return searchHistory(ports.history ?? null, input)
+  if (toolNamed(name)?.kind === 'macro') return runMacroTool(ports.macros ?? null, name, input)
   if (!browser) throw new ToolError('The browser page is not available.')
+  if (name === 'new_stack') {
+    if (!ports.stacks) throw new ToolError('Stacks are not available.')
+    ports.stacks.open()
+    if (typeof input['url'] === 'string' && input['url'].trim()) {
+      const url = browser.load(input['url'])
+      if (url === null) throw new ToolError(`Not a web address: ${input['url']}`)
+    }
+    await settle(browser)
+    return { text: `Opened a new stack. ${formatState(browser.state())}` }
+  }
   const needsPage = !['navigate', 'get_page_state'].includes(name)
   if (needsPage && !browser.hasPage()) throw new ToolError('No page is loaded. Use navigate first.')
 

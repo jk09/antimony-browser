@@ -624,6 +624,33 @@ textarea {
   color: var(--muted);
 }
 
+/* A macro's missing arguments, drawn faintly after the typed text (same box as the input). */
+.prompt-input-wrap {
+  position: relative;
+}
+
+.prompt-ghost {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  padding: 4px 2px;
+  overflow: hidden;
+  font-size: 15px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  pointer-events: none;
+}
+
+.prompt-ghost-typed {
+  visibility: hidden;
+}
+
+.prompt-ghost-hint {
+  color: var(--muted);
+  opacity: 0.75;
+}
+
 .prompt-key input {
   box-sizing: border-box;
   width: 100%;
@@ -975,15 +1002,12 @@ textarea {
   margin: 0 0 8px;
 }
 
-.approval-buttons,
-.save-skill-buttons {
+.approval-buttons {
   display: flex;
   gap: 6px;
 }
 
 .approval-buttons button,
-.save-skill,
-.save-skill-buttons button,
 .debug-copy {
   padding: 4px 10px;
   border: 1px solid var(--field-border);
@@ -992,70 +1016,10 @@ textarea {
   cursor: pointer;
 }
 
-.approval-buttons button:first-child,
-.save-skill-buttons button[type='submit'] {
+.approval-buttons button:first-child {
   border-color: var(--accent);
   background: var(--accent);
   color: var(--accent-text);
-}
-
-.save-skill {
-  align-self: flex-start;
-}
-
-/* Skill save form (skills). */
-
-.save-skill-form {
-  flex-shrink: 0;
-  box-sizing: border-box;
-  max-height: 45%;
-  margin: 0 10px 8px;
-  padding: 10px 12px;
-  overflow: auto;
-  border: 1px solid var(--field-border);
-  border-radius: 12px;
-  background: var(--card-bg);
-}
-
-.save-skill-form h2 {
-  margin: 0 0 8px;
-  font-size: 14px;
-}
-
-.save-skill-fields,
-.save-skill-steps li {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-}
-
-.save-skill-form label {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.save-skill-form input {
-  padding: 2px 6px;
-  border: 1px solid var(--field-border);
-  border-radius: 4px;
-  background: var(--field-bg);
-}
-
-.save-skill-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-left: 20px;
-}
-
-.save-skill-hint {
-  color: var(--muted);
-}
-
-.save-skill-error {
-  color: var(--error);
 }
 
 /* Page area (navigation) with the acting frame (agent) and the debugger (agent). */

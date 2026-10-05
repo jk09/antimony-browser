@@ -1,25 +1,27 @@
 # skills
 
-Turns an assistant run into a `/command` that replays the same browser tool calls without the model, optionally with `{{parameters}}` typed after the command; `/reload` and `/stop` ship as built-in skills.
+Runs `/name` commands that replay browser tool calls without the model: macros the assistant stores when asked in the prompt ("open a new stack and store it as /ns", with `{{parameters}}` and a hint for each) and the built-in `/reload` and `/stop`. Arguments are typed after the command, constants or `@stack` / `@stack/page` references (resolved to the page's URL by the prompt).
 
 ## Entry points
-- UI: `ui/SaveSkill.tsx` – mounted in the assistant panel above the prompt (`App.tsx`), opened by `/save` or "Save as skill"
-- IPC: `skills:list|draft|save|delete|run|request-save` (UI → main), `skills:list-changed`, `skills:save-requested` (main → UI) – `ipc.ts`
-- Main: `register` in `main.ts` – skill store, argument binding, replay through the agent
-- Shared: `shared/params.ts` (names, `{{params}}`, argument parsing), `shared/builtins.ts`
+- IPC: `skills:list|delete|run` (UI → main), `skills:list-changed` (main → UI) – `ipc.ts`; there is no channel to create or change a macro
+- Main: `register` in `main.ts` – macro store, `provideMacros` (the agent's `save_macro`, `list_macros`, `delete_macro`), argument binding, replay through the agent
+- Shared: `shared/params.ts` (names, `{{params}}`, argument parsing, `argumentHint` for the prompt's faint hint), `shared/builtins.ts`
 
 ## Invariants
-- Only replayable tools (navigation and page actions) can be saved; names can't shadow commands or built-ins – `main.test.ts › rejects invalid and reserved names…`
-- The last parameter takes the rest of the line; missing arguments run nothing – `shared/params.test.ts`, `main.test.ts › runs a skill…`
+- Macros are created and changed only through the assistant's tools – `main.test.ts › lists the built-in skills and offers no way to save from the UI`
+- Steps are replayable tools whose inputs pass the tool's schema; every `{{param}}` is declared and every param used; names can't shadow commands or built-ins – `main.test.ts › rejects invalid and reserved names…`
+- Macros stored without `params` load with parameters from their steps and no hints – `main.test.ts › loads macros stored without params…`
+- The last parameter takes the rest of the line; missing arguments run nothing – `shared/params.test.ts`, `main.test.ts › runs a macro…`
 - Replays make no model request, need page access for page steps, ask one approval for any page actions, and stop at the first failing step – `../agent/main/agent.test.ts › Agent.replay`, `e2e/prompt.spec.ts`
 
 ## Dependencies
-- Features: agent (`replay`, `savableSteps`, `isReplayableTool` from `main.ts`), prompt (`promptCommands` from `ipc.ts`, reserved names)
+- Features: agent (`replay`, `checkStep`, `provideMacros` from `main.ts`), prompt (`promptCommands` from `ipc.ts`, reserved names)
 - App: `createJsonStore` (`src/app/main/json-store.ts`)
-- Stored data: `userData/skills.json` (`{ skills: [{ name, description, steps }] }`)
+- Stored data: `userData/skills.json` (`{ skills: [{ name, description, params: [{ name, hint }], steps }] }`)
 
 ## Security surface
-- IPC: the chrome UI can save and run skills; runs go through the agent's checks (page access, approval, sensitive fields).
+- IPC: the chrome UI can list, delete and run macros; runs go through the agent's checks (page access, approval, sensitive fields).
+- Agent: the model can save, list and delete macros; after reading page or history content in a run, saving or deleting needs approval (ADR 0013).
 - Web content: –
 
 ## Feature flags
@@ -27,4 +29,4 @@ Turns an assistant run into a `/command` that replays the same browser tool call
 |---|---|---|---|
 | – | | | |
 
-Spec: violet-harbinger-p7w3kd, still-meridian-r4v8nc, glass-meridian-f5y2nq · ADRs: 0004
+Spec: violet-harbinger-p7w3kd, still-meridian-r4v8nc, glass-meridian-f5y2nq, spoken-macro-m4q7zt · ADRs: 0004, 0013

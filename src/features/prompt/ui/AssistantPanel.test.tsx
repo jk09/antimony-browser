@@ -8,12 +8,7 @@ afterEach(cleanup)
 
 async function renderPanel() {
   const fake = fakeApi()
-  render(
-    <AssistantPanel
-      conversation={<section aria-label="Conversation">Hello</section>}
-      form={<form aria-label="Save as skill" />}
-    />,
-  )
+  render(<AssistantPanel conversation={<section aria-label="Conversation">Hello</section>} />)
   await act(async () => {})
   return fake
 }
@@ -30,7 +25,7 @@ describe('AssistantPanel', () => {
     expect(screen.getByRole('region', { name: 'Conversation' })).toBeTruthy()
   })
 
-  it('stacks header, conversation, form and prompt, with suggestions above the input', async () => {
+  it('stacks header, conversation and prompt, with suggestions above the input', async () => {
     const { emit } = await renderPanel()
     act(() => emit.state({ ...idleState, items: [{ kind: 'user', text: 'hi', attachments: [] }] }))
     const box = screen.getByRole('textbox', { name: 'Prompt' })
@@ -38,7 +33,6 @@ describe('AssistantPanel', () => {
     const order = [
       screen.getByTestId('page-info'),
       screen.getByRole('region', { name: 'Conversation' }),
-      screen.getByRole('form', { name: 'Save as skill' }),
       screen.getByRole('listbox'),
       box,
     ]
@@ -104,18 +98,12 @@ describe('AssistantPanel', () => {
     expect(panel()).toBeNull()
   })
 
-  it('shows itself for an approval and for a skill save', async () => {
+  it('shows itself for an approval', async () => {
     const { emit } = await renderPanel()
     act(() => emit.toggle())
     act(() =>
       emit.state({ ...idleState, status: 'awaiting-approval', approval: { description: 'Click' } }),
     )
-    expect(panel()).toBeTruthy()
-
-    act(() => emit.state(idleState))
-    act(() => emit.toggle())
-    expect(panel()).toBeNull()
-    act(() => emit.saveRequested('x'))
     expect(panel()).toBeTruthy()
   })
 

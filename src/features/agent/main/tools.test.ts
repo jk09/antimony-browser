@@ -12,7 +12,7 @@ import {
 } from './tools'
 
 describe('toolsFor', () => {
-  it('offers only navigation tools and history search without page access', () => {
+  it('offers only navigation, history search and macro tools without page access', () => {
     const names = toolsFor({ pageAccess: false, historyAccess: true }).map((tool) => tool.name)
     expect(names).toEqual([
       'navigate',
@@ -20,8 +20,12 @@ describe('toolsFor', () => {
       'go_forward',
       'reload',
       'stop',
+      'new_stack',
       'get_page_state',
       'search_history',
+      'save_macro',
+      'list_macros',
+      'delete_macro',
     ])
   })
 
@@ -203,7 +207,7 @@ describe('search_history', () => {
         }),
       ],
     })
-    const output = await executeTool(null, 'search_history', { query: ' LLM ' }, history)
+    const output = await executeTool(null, 'search_history', { query: ' LLM ' }, { history })
     expect(history.search).toHaveBeenCalledWith('LLM', 'meaning', false)
     expect(output.text).toMatch(/^2 page\(s\) from the browsing history/)
     expect(output.text).toContain(
@@ -222,7 +226,7 @@ describe('search_history', () => {
       null,
       'search_history',
       { query: 'LLM', mode: 'text', bookmarked: true },
-      history,
+      { history },
     )
     expect(history.search).toHaveBeenCalledWith('LLM', 'text', true)
     expect(output.text).toBe(
@@ -232,11 +236,11 @@ describe('search_history', () => {
 
   it('refuses an empty or long query, and fails without history', async () => {
     const history = port({ pages: [] })
-    await expect(executeTool(null, 'search_history', { query: '  ' }, history)).rejects.toThrow(
+    await expect(executeTool(null, 'search_history', { query: '  ' }, { history })).rejects.toThrow(
       'query is empty',
     )
     await expect(
-      executeTool(null, 'search_history', { query: 'x'.repeat(501) }, history),
+      executeTool(null, 'search_history', { query: 'x'.repeat(501) }, { history }),
     ).rejects.toThrow('longer than 500')
     await expect(executeTool(null, 'search_history', { query: 'LLM' })).rejects.toThrow(
       'Browsing history is not available.',

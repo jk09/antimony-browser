@@ -5,7 +5,6 @@ import { HistoryView } from '../../features/history/ui/HistoryView'
 import { RecallView } from '../../features/history/ui/RecallView'
 import { PageArea } from '../../features/navigation/ui/PageArea'
 import { AssistantPanel } from '../../features/prompt/ui/AssistantPanel'
-import { SaveSkill } from '../../features/skills/ui/SaveSkill'
 import { StackHeader } from '../../features/stacks/ui/StackHeader'
 
 /**
@@ -30,7 +29,6 @@ export function App() {
       <AssistantPanel
         header={<StackHeader />}
         conversation={<Conversation />}
-        form={<SaveSkill />}
         overlay={<HistoryView />}
       />
     </div>

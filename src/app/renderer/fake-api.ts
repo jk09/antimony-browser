@@ -35,7 +35,7 @@ function channel<T>() {
   }
 }
 
-export const idleState: AgentState = { status: 'idle', items: [], approval: null, savableSteps: 0 }
+export const idleState: AgentState = { status: 'idle', items: [], approval: null }
 export const defaultSettings: AgentSettings = {
   model: 'claude-sonnet-5-5',
   provider: 'anthropic',
@@ -74,7 +74,6 @@ export function fakeApi(
   const state = channel<AgentState>()
   const settings = channel<AgentSettings>()
   const skills = channel<Skill[]>()
-  const saveRequested = channel<string>()
   const debugEvent = channel<{ event: DebugEvent; label: string }>()
   const debugToggled = channel<void>()
   const navigation = channel<NavigationState>()
@@ -158,12 +157,8 @@ export function fakeApi(
     skills: {
       list: vi.fn(async () => options.skills ?? builtins),
       onListChanged: skills.subscribe,
-      draft: vi.fn(async () => []),
-      save: vi.fn(async (draft) => ({ ...draft, params: [], builtin: false })),
       delete: vi.fn(async () => {}),
       run: vi.fn(async () => ({ ok: true })),
-      requestSave: vi.fn(async (name?: string) => saveRequested.emit(name ?? '')),
-      onSaveRequested: saveRequested.subscribe,
     },
     stacks: {
       state: vi.fn(async () => options.stacks ?? { current: null, stacks: [] }),
@@ -195,7 +190,6 @@ export function fakeApi(
       state: state.emit,
       settings: settings.emit,
       skills: skills.emit,
-      saveRequested: saveRequested.emit,
       debugEvent: (event: DebugEvent, label: string) => debugEvent.emit({ event, label }),
       debugToggled: () => debugToggled.emit(),
       navigation: navigation.emit,

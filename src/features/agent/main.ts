@@ -29,7 +29,13 @@ import {
   type CliOptions,
 } from './main/claude-cli'
 import { listOllamaModels, ollamaUrl } from './main/ollama'
-import { toolNamed, type HistoryPort } from './main/tools'
+import {
+  toolNamed,
+  validateInput,
+  type HistoryPort,
+  type MacroPort,
+  type StackOpener,
+} from './main/tools'
 import {
   defaultSettings,
   parseKey,
@@ -41,10 +47,19 @@ import {
 import { parseDecision, parseRunInput } from './main/validate'
 
 export type { Step } from './main/agent'
-export type { HistoryHit, HistoryPort, HistorySearchMode } from './main/tools'
+export type {
+  HistoryHit,
+  HistoryPort,
+  HistorySearchMode,
+  MacroInfo,
+  MacroPort,
+  StackOpener,
+} from './main/tools'
 
 let agent: Agent | null = null
 let historySearch: HistoryPort | null = null
+let macroStore: MacroPort | null = null
+let stackOpener: StackOpener | null = null
 let completer: ((request: CompletionRequest) => Promise<Completion>) | null = null
 
 /** A single model request without tools or conversation (history summaries and search). */
@@ -85,14 +100,32 @@ export function replay(label: string, steps: Step[]): Promise<{ ok: boolean; err
   return agent.replay(label, steps)
 }
 
-/** Replayable steps of the last finished model run (empty if none). */
-export function savableSteps(): Step[] {
-  return agent?.savableSteps() ?? []
+/** Lets the assistant save, list and delete macros (save_macro …); called by the skills feature. */
+export function provideMacros(port: MacroPort): void {
+  macroStore = port
+}
+
+/** Lets the assistant open new stacks (new_stack); called by the stacks feature. */
+export function provideStackOpener(opener: StackOpener): void {
+  stackOpener = opener
 }
 
 /** True for tools a skill may replay (navigation and page actions, not read-only tools). */
 export function isReplayableTool(name: string): boolean {
   return toolNamed(name)?.replayable === true
+}
+
+/**
+ * Throws a TypeError unless `step` is a replayable tool call whose input fits the tool's schema
+ * (string inputs may still hold {{parameter}} placeholders).
+ */
+export function checkStep(step: Step): void {
+  if (!isReplayableTool(step.tool)) throw new TypeError(`${step.tool} can't be a macro step`)
+  try {
+    validateInput(step.tool, step.input)
+  } catch (error) {
+    throw new TypeError(error instanceof Error ? error.message : String(error))
+  }
 }
 
 const safeStorageCrypto: KeyCrypto = {
@@ -169,6 +202,8 @@ export function register({ ipc, fileMenu }: MainContext): void {
       return page ? pageBrowser(page) : null
     },
     history: () => historySearch,
+    macros: () => macroStore,
+    stacks: () => stackOpener,
     settings: () => settings.get(),
     missingSetup: () =>
       providerOf(settings.get().model) === 'anthropic' && settings.apiKey() === null ? noKey : null,
