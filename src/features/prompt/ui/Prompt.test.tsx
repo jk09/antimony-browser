@@ -84,46 +84,171 @@ describe('Prompt', () => {
     expect(box.value).toBe('')
   })
 
-  it('suggests stacks after @, switches with @name alone and attaches named stacks', async () => {
-    const stacks = {
-      current: null,
-      stacks: [
-        { id: 's1', name: 'hacker-news', rootTitle: 'Hacker News', pages: 3, audio: null },
-        { id: 's2', name: 'rust-docs', rootTitle: 'Rust', pages: 5, audio: null },
+  const stacks = {
+    current: null,
+    stacks: [
+      { id: 's1', name: 'hacker-news', rootTitle: 'Hacker News', pages: 3, audio: null },
+      { id: 's2', name: 'rust-docs', rootTitle: 'Rust', pages: 2, audio: null },
+    ],
+  }
+  const row = (id: number, title: string, depth: number, last: boolean, ref: string) => ({
+    id,
+    url: `https://site.example/${ref}`,
+    title,
+    depth,
+    last,
+    ref,
+  })
+  const stackPages = [
+    {
+      id: 's1',
+      name: 'hacker-news',
+      rootTitle: 'Hacker News',
+      activeId: 3,
+      rows: [
+        row(1, 'Hacker News', 0, true, 'hacker-news'),
+        row(2, 'Kent Beck: Software Engineering', 1, false, 'kent-beck-software-engineering'),
+        row(3, 'Comments', 1, true, 'comments'),
       ],
-    }
-    const { api, box } = await openPrompt({ stacks })
+    },
+    {
+      id: 's2',
+      name: 'rust-docs',
+      rootTitle: 'Rust',
+      activeId: 4,
+      rows: [row(4, 'Rust', 0, false, 'rust'), row(5, 'The Book', 0, true, 'the-book')],
+    },
+  ]
+  const optionNames = () =>
+    within(screen.getByRole('listbox'))
+      .getAllByRole('option')
+      .map((option) => option.getAttribute('aria-label') ?? option.textContent)
+
+  it('suggests stacks and their pages after @ as a tree; Tab completes, Ctrl+Tab doesn’t', async () => {
+    const { box } = await openPrompt({ stacks, stackPages })
+    type(box, '@')
+    await waitFor(() => expect(optionNames()).toHaveLength(7))
+    expect(optionNames()).toEqual([
+      'Stack @hacker-news, Hacker News · 3 pages',
+      'Page Hacker News, site.example/hacker-news',
+      'Page Kent Beck: Software Engineering, site.example/kent-beck-software-engineering',
+      'Page Comments, site.example/comments, current page',
+      'Stack @rust-docs, Rust · 2 pages',
+      'Page Rust, site.example/rust, current page',
+      'Page The Book, site.example/the-book',
+    ])
+    const options = within(screen.getByRole('listbox')).getAllByRole('option')
+    expect(options[0]!.className).toContain('prompt-suggestion-stack')
+    expect(options[2]!.className).toContain('prompt-suggestion-page')
+    expect(options[2]!.textContent).toBe(
+      '├Kent Beck: Software Engineeringsite.example/kent-beck-software-engineering',
+    )
+    expect(options[3]!.textContent?.startsWith('└')).toBe(true)
+
     type(box, 'compare @ru')
-    const list = screen.getByRole('listbox')
-    expect(
-      within(list)
-        .getAllByRole('option')
-        .map((option) => option.textContent),
-    ).toEqual(['↳@rust-docsRust'])
+    expect(optionNames()[0]).toBe('Stack @rust-docs, Rust · 2 pages')
     // Ctrl+Tab switches stacks; it doesn't complete.
     press(box, 'Tab', { ctrlKey: true })
     expect(box.value).toBe('compare @ru')
     press(box, 'Tab')
     expect(box.value).toBe('compare @rust-docs ')
+    // Tab only completes, even with nothing else typed.
+    type(box, '@kent')
+    press(box, 'Tab')
+    expect(box.value).toBe('@hacker-news ')
+  })
 
-    type(box, 'compare @rust-docs with @hacker-news and @unknown')
+  it('goes to a stack or page in one click or Enter when only the @word is typed', async () => {
+    const { api, box } = await openPrompt({ stacks, stackPages })
+    type(box, '@hack')
+    await waitFor(() => expect(optionNames()).toHaveLength(4))
+    fireEvent.click(screen.getByRole('option', { name: /^Stack @hacker-news/ }))
+    await waitFor(() => expect(api.stacks.switch).toHaveBeenCalledWith('s1'))
+    expect(api.stacks.switch).toHaveBeenCalledTimes(1)
+    expect(api.prompt.record).toHaveBeenCalledWith({ kind: 'command', text: '@hacker-news' })
+    expect(box.value).toBe('')
+    expect(screen.queryByRole('listbox')).toBeNull()
+
+    type(box, '@kent')
+    await waitFor(() => screen.getByRole('option', { name: /^Page Kent Beck/ }))
+    fireEvent.click(screen.getByRole('option', { name: /^Page Kent Beck/ }))
+    await waitFor(() => expect(api.stacks.openPage).toHaveBeenCalledWith('s1', 2))
+    expect(box.value).toBe('')
+
+    // Enter on a selected page works like a click.
+    type(box, '@rust-docs/book')
+    press(box, 'ArrowDown')
+    press(box, 'ArrowDown')
+    press(box, 'Enter')
+    await waitFor(() => expect(api.stacks.openPage).toHaveBeenCalledWith('s2', 5))
+    expect(api.agent.run).not.toHaveBeenCalled()
+  })
+
+  it('inserts the reference when other text is typed, and attaches named stacks and pages', async () => {
+    const { api, box } = await openPrompt({ stacks, stackPages })
+    type(box, 'Mute all tabs in @hack')
+    await waitFor(() => screen.getByRole('option', { name: /^Stack @hacker-news/ }))
+    fireEvent.click(screen.getByRole('option', { name: /^Stack @hacker-news/ }))
+    expect(box.value).toBe('Mute all tabs in @hacker-news ')
+    type(box, 'summarize @kent')
+    await waitFor(() => screen.getByRole('option', { name: /^Page Kent Beck/ }))
+    fireEvent.click(screen.getByRole('option', { name: /^Page Kent Beck/ }))
+    expect(box.value).toBe('summarize @hacker-news/kent-beck-software-engineering ')
+    expect(api.stacks.switch).not.toHaveBeenCalled()
+    expect(api.stacks.openPage).not.toHaveBeenCalled()
+
+    type(box, 'compare @rust-docs with @hacker-news/comments and @unknown')
     press(box, 'Enter')
     await waitFor(() => expect(api.agent.run).toHaveBeenCalled())
-    expect(api.stacks.outline.mock.calls).toEqual([['rust-docs'], ['hacker-news']])
+    expect(api.stacks.outline.mock.calls).toEqual([['rust-docs'], ['hacker-news/comments']])
     expect(api.agent.run).toHaveBeenCalledWith({
-      text: 'compare @rust-docs with @hacker-news and @unknown',
+      text: 'compare @rust-docs with @hacker-news/comments and @unknown',
       attachments: [
         { kind: 'text', name: '@rust-docs', text: 'Navigation stack @rust-docs' },
-        { kind: 'text', name: '@hacker-news', text: 'Navigation stack @hacker-news' },
+        {
+          kind: 'text',
+          name: '@hacker-news/comments',
+          text: 'Navigation stack @hacker-news/comments',
+        },
       ],
     })
+  })
 
+  it('goes to a typed @name or @name/ref on Enter', async () => {
+    const { api, box } = await openPrompt({ stacks, stackPages })
     type(box, '@hacker-news')
-    expect(screen.queryByRole('listbox')).toBeNull()
     press(box, 'Enter')
     await waitFor(() => expect(api.stacks.switch).toHaveBeenCalledWith('s1'))
-    expect(api.agent.run).toHaveBeenCalledTimes(1)
+    type(box, '@rust-docs/the-book')
+    press(box, 'Enter')
+    await waitFor(() => expect(api.stacks.openPage).toHaveBeenCalledWith('s2', 5))
+    expect(api.agent.run).not.toHaveBeenCalled()
     expect(box.value).toBe('')
+  })
+
+  it('scrolls long @ lists to the selected row and says how many more match', async () => {
+    const scrolled: Element[] = []
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this)
+    }
+    try {
+      const big = {
+        id: 's1',
+        name: 'hacker-news',
+        rootTitle: 'Hacker News',
+        activeId: null,
+        rows: Array.from({ length: 250 }, (_, i) => row(i + 1, `Page ${i}`, 0, i === 249, `p${i}`)),
+      }
+      const { box } = await openPrompt({ stacks, stackPages: [big] })
+      type(box, '@')
+      await waitFor(() => expect(optionNames()).toHaveLength(201))
+      expect(screen.getByText('⋯ 51 more – type to narrow')).toBeTruthy()
+      press(box, 'ArrowUp')
+      expect(scrolled.at(-1)?.getAttribute('aria-label')).toBe('Page Page 198, site.example/p198')
+    } finally {
+      Element.prototype.scrollIntoView = original
+    }
   })
 
   it('asks for an API key before sending a query without one', async () => {

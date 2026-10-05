@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MenuItemConstructorOptions } from 'electron'
 import type { MainContext } from '../../app/main/features'
 import type { HistoryResolver, PageEvent, TabControls } from '../navigation/main'
-import type { StacksState } from './ipc'
+import type { StackPages, StacksState } from './ipc'
 
 let userData = ''
 const quitListeners: (() => void)[] = []
@@ -567,6 +567,54 @@ describe('stacks main', () => {
     await vi.advanceTimersByTimeAsync(20)
     expect(send).toHaveBeenCalledTimes(1)
     expect(send.mock.calls[0]![0]).toBe(channels.stateChanged)
+  })
+
+  it('lists every stack’s pages with refs and opens a page of another stack', () => {
+    const { call, visit, state } = setup()
+    tabs.open.add(1)
+    tabs.activeId = 1
+    visit(1, 'Home')
+    visit(1, 'Page')
+    fire({ tabId: 2, type: 'opened', openerId: 1, active: true })
+    tabs.open.add(2)
+    tabs.activate(2)
+    visit(2, 'Docs')
+    const pages = call(channels.pages) as StackPages[]
+    expect(pages.map((stack) => [stack.name, stack.rows.map((row) => row.ref)])).toEqual([
+      ['docs', ['docs']],
+      ['home', ['home', 'page']],
+    ])
+    const home = pages[1]!
+    expect(home.activeId).toBe(home.rows[1]!.id)
+    expect(call(channels.outline, '@home/page')).toBe(
+      'Page @home/page in navigation stack @home (the stack’s current page):\nPage — https://site.example/Page',
+    )
+    expect(call(channels.outline, 'home/nope')).toBeNull()
+
+    // Another stack's page: switch, then load it from the tree.
+    tabs.history.set(1, {
+      urls: ['https://site.example/Home', 'https://site.example/Page'],
+      index: 1,
+    })
+    tabs.calls.length = 0
+    call(channels.openPage, { stackId: home.id, nodeId: home.rows[0]!.id })
+    expect(tabs.activeId).toBe(1)
+    expect(tabs.calls).toEqual(['goToIndex 1 0'])
+    expect(tabs.focused.at(-1)).toBe(1)
+    expect(state().current!.name).toBe('home')
+
+    // The page already shown isn't reloaded.
+    const docs = pages[0]!
+    call(channels.switch, docs.id)
+    tabs.calls.length = 0
+    call(channels.openPage, { stackId: docs.id, nodeId: docs.rows[0]!.id })
+    expect(tabs.calls).toEqual([])
+    expect(tabs.focused.at(-1)).toBe(2)
+
+    expect(() => call(channels.openPage, { stackId: 'nope', nodeId: 1 })).toThrow(TypeError)
+    expect(() => call(channels.openPage, { stackId: docs.id, nodeId: 999 })).toThrow(TypeError)
+    expect(() => call(channels.openPage, { stackId: docs.id, nodeId: '1' })).toThrow(TypeError)
+    expect(() => call(channels.openPage, null)).toThrow(TypeError)
   })
 
   it('shows which stacks play sound and mutes a stack without switching', async () => {

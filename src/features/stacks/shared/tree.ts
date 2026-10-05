@@ -1,5 +1,5 @@
 // Pure operations on a stack's tree: no electron, Node or React imports.
-import type { Stack, StackNode, StackRow } from '../ipc'
+import type { Stack, StackNode, StackPageRow, StackRow } from '../ipc'
 
 export const MAX_STACKS = 50
 export const MAX_NODES = 500
@@ -195,6 +195,27 @@ export function rows(stack: Stack): StackRow[] {
     }
   }
   return result
+}
+
+/** Rows with each page's `@stack/<ref>`: the title's slug (else the host's), unique in tree order. */
+export function pageRefs(all: StackRow[]): StackPageRow[] {
+  const taken = new Set<string>()
+  return all.map((row) => {
+    const ref = uniqueName(slug(row.title) || slug(hostOf(row.url)) || 'page', taken)
+    taken.add(ref)
+    return { ...row, ref }
+  })
+}
+
+/** The page `ref` names, as text for the model, or null if the stack has no such page. */
+export function pageOutline(stack: Stack, ref: string): string | null {
+  const row = pageRefs(rows(stack)).find((candidate) => candidate.ref === ref)
+  if (!row) return null
+  const current = row.id === stack.activeId ? ' (the stack’s current page)' : ''
+  return [
+    `Page @${stack.name ?? ''}/${ref} in navigation stack @${stack.name ?? ''}${current}:`,
+    `${row.title || '(untitled)'} — ${row.url}`,
+  ].join('\n')
 }
 
 /** Node ids from the root to `id`. */

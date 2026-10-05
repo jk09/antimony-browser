@@ -12,6 +12,7 @@ import {
   type Stack,
   type StackAudio,
   type StackCommand,
+  type StackPages,
   type StacksState,
 } from './ipc'
 import { cycleKeyFor, stackCommandFor } from './shared/keys'
@@ -26,6 +27,8 @@ import {
   newStack,
   nodeCount,
   outline,
+  pageOutline,
+  pageRefs,
   prune,
   removeBranch,
   rows,
@@ -550,9 +553,39 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
   })
   ipc.handle(channels.outline, (value) => {
     if (typeof value !== 'string') throw new TypeError(`${channels.outline} expects a name`)
-    const name = value.replace(/^@/, '')
+    const [name, ref] = value.replace(/^@/, '').split('/', 2)
     const stack = [...stacks.values()].find((s) => s.name === name)
-    return stack ? outline(stack) : null
+    if (!stack) return null
+    return ref === undefined ? outline(stack) : pageOutline(stack, ref)
+  })
+  ipc.handle(channels.pages, (): StackPages[] =>
+    byRecentUse()
+      .filter((stack) => stack.name)
+      .map((stack) => ({
+        id: stack.id,
+        name: stack.name!,
+        rootTitle: rootTitle(stack),
+        rows: pageRefs(rows(stack)),
+        activeId: stack.activeId,
+      })),
+  )
+  ipc.handle(channels.openPage, (value) => {
+    const { stackId, nodeId } = (value ?? {}) as { stackId?: unknown; nodeId?: unknown }
+    const stack = typeof stackId === 'string' ? stacks.get(stackId) : undefined
+    if (!stack || typeof nodeId !== 'number' || !stack.nodes[nodeId]) {
+      throw new TypeError(
+        `${channels.openPage} expects { stackId, nodeId } of an open stack's page`,
+      )
+    }
+    if (stack.id !== currentId) {
+      makeCurrent(stack)
+      const tabId = tabOfStack.get(stack.id)
+      if (tabId !== undefined) tabs.activate(tabId)
+    }
+    // The shown page already is the one asked for: nothing to load (a load would reload it).
+    if (!(tabOfStack.has(stack.id) && stack.activeId === nodeId)) goToNode(stack, nodeId)
+    tabs.focus(tabOfStack.get(stack.id)!)
+    changed()
   })
 
   // Restore: only the current stack gets a tab now, at its active page. Without one, a new

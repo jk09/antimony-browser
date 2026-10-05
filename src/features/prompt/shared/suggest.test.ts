@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { HistoryEntry } from '../ipc'
+import type { StackPages } from '../../stacks/ipc'
 import {
+  mentionOnly,
   stackRefs,
   suggest,
-  suggestStacks,
+  suggestMentions,
   SUGGESTION_LIMIT,
   withVisited,
   type SuggestCommand,
@@ -177,31 +179,139 @@ describe('withVisited', () => {
   })
 })
 
-describe('suggestStacks', () => {
-  const stacks = [
-    { name: 'hacker-news', rootTitle: 'Hacker News' },
-    { name: 'news-today', rootTitle: 'Today' },
-    { name: '', rootTitle: 'Unnamed' },
+describe('suggestMentions', () => {
+  const page = (id: number, title: string, depth: number, last: boolean, ref: string) => ({
+    id,
+    url: `https://site.example/${ref}`,
+    title,
+    depth,
+    last,
+    ref,
+  })
+  const stacks: StackPages[] = [
+    {
+      id: 's1',
+      name: 'hacker-news',
+      rootTitle: 'Hacker News',
+      activeId: 2,
+      rows: [
+        page(1, 'Hacker News', 0, true, 'hacker-news'),
+        page(2, 'Rust 2.0 released', 1, false, 'rust-2-0-released'),
+        page(3, 'Comments', 2, true, 'comments'),
+        page(4, 'Kent Beck interview', 1, true, 'kent-beck-interview'),
+      ],
+    },
+    {
+      id: 's2',
+      name: 'news-today',
+      rootTitle: 'Today',
+      activeId: null,
+      rows: [page(5, 'Today', 0, true, 'today')],
+    },
+    { id: 's3', name: '', rootTitle: 'Unnamed', activeId: null, rows: [] },
   ]
+  const labels = (input: string, limit?: number) =>
+    suggestMentions(input, stacks, limit).items.map(
+      (s) =>
+        `${s.kind === 'page' ? '  '.repeat(s.depth! + 1) + (s.last ? '└' : '├') : ''}${s.label}`,
+    )
 
-  it('suggests stacks for the @word at the end, by name prefix first', () => {
-    expect(suggestStacks('read @news', stacks).map((s) => s.text)).toEqual([
-      'read @news-today ',
-      'read @hacker-news ',
+  it('lists every named stack with its pages as a tree for @ alone', () => {
+    expect(labels('@')).toEqual([
+      '@hacker-news',
+      '  └Hacker News',
+      '    ├Rust 2.0 released',
+      '      └Comments',
+      '    └Kent Beck interview',
+      '@news-today',
+      '  └Today',
     ])
-    expect(suggestStacks('@', stacks).map((s) => s.label)).toEqual(['@hacker-news', '@news-today'])
-    expect(suggestStacks('@hacker-news', stacks)).toEqual([])
-    expect(suggestStacks('mail@news', stacks)).toEqual([])
-    expect(suggestStacks('/note @news', stacks)).toEqual([])
-    expect(suggestStacks('@news and more', stacks)).toEqual([])
+    const [stack, root, rust] = suggestMentions('@', stacks).items
+    expect(stack).toMatchObject({
+      kind: 'stack',
+      text: '@hacker-news ',
+      detail: 'Hacker News · 4 pages',
+      target: { stackId: 's1', reference: '@hacker-news' },
+    })
+    expect(root!.current).toBe(false)
+    expect(rust).toMatchObject({
+      kind: 'page',
+      text: '@hacker-news/rust-2-0-released ',
+      detail: 'site.example/rust-2-0-released',
+      target: { stackId: 's1', nodeId: 2, reference: '@hacker-news/rust-2-0-released' },
+      current: true,
+    })
   })
 
-  it('finds the known @names in a text once each', () => {
+  it('matches stacks by name (prefix first) and other stacks’ pages with their ancestors', () => {
+    expect(labels('read @news')).toEqual([
+      '@news-today',
+      '  └Today',
+      '@hacker-news',
+      '  └Hacker News',
+      '    ├Rust 2.0 released',
+      '      └Comments',
+      '    └Kent Beck interview',
+    ])
+    expect(suggestMentions('read @news', stacks).items[0]!.text).toBe('read @news-today ')
+    expect(labels('@comm')).toEqual([
+      '@hacker-news',
+      '  └Hacker News',
+      '    └Rust 2.0 released',
+      '      └Comments',
+    ])
+    // Titles and addresses match too.
+    expect(labels('@kent')).toEqual(['@hacker-news', '  └Hacker News', '    └Kent Beck interview'])
+  })
+
+  it('searches one stack after @name/ and leaves out the reference already typed', () => {
+    expect(labels('@hacker-news/k')).toEqual([
+      '@hacker-news',
+      '  └Hacker News',
+      '    └Kent Beck interview',
+    ])
+    expect(labels('@hacker-news/').length).toBe(5)
+    expect(labels('@nope/x')).toEqual([])
+    // The typed stack itself isn't suggested again, its pages are.
+    expect(labels('@news-today')).toEqual(['  └Today'])
+    expect(labels('@news-today/today')).toEqual(['@news-today'])
+  })
+
+  it('needs an @word at the end, outside /commands', () => {
+    expect(labels('mail@news')).toEqual([])
+    expect(labels('/note @news')).toEqual([])
+    expect(labels('@news and more')).toEqual([])
+    expect(labels('@zzz')).toEqual([])
+  })
+
+  it('caps the rows and counts the rest', () => {
+    const big: StackPages = {
+      id: 'big',
+      name: 'big',
+      rootTitle: 'Big',
+      activeId: null,
+      rows: Array.from({ length: 300 }, (_, i) =>
+        page(i + 1, `Page ${i}`, i === 0 ? 0 : 1, i === 299, `page-${i}`),
+      ),
+    }
+    const result = suggestMentions('@', [big])
+    expect(result.items).toHaveLength(200)
+    expect(result.more).toBe(101)
+  })
+
+  it('tells an input that is only an @word', () => {
+    expect(mentionOnly(' @hacker-news ')).toBe(true)
+    expect(mentionOnly('@hacker-news/rust')).toBe(true)
+    expect(mentionOnly('@')).toBe(true)
+    expect(mentionOnly('mute @hacker-news')).toBe(false)
+  })
+
+  it('finds the known @names and @name/refs in a text once each', () => {
     expect(
-      stackRefs('compare @news-today, @hacker-news and @news-today; @nope a@hacker-news', [
-        'hacker-news',
-        'news-today',
-      ]),
-    ).toEqual(['news-today', 'hacker-news'])
+      stackRefs(
+        'compare @news-today, @hacker-news/comments and @news-today; @nope/x a@hacker-news',
+        ['hacker-news', 'news-today'],
+      ),
+    ).toEqual(['news-today', 'hacker-news/comments'])
   })
 })

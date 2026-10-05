@@ -811,8 +811,14 @@ textarea {
 }
 
 .prompt-suggestions {
+  flex: 0 1 auto;
+  /* Long lists (`@` with many pages) scroll inside the card, never sideways. */
+  min-height: 48px;
+  max-height: 50vh;
   margin: 0;
   padding: 4px 0;
+  overflow-x: hidden;
+  overflow-y: auto;
   border-bottom: 1px solid var(--field-border);
   list-style: none;
 }
@@ -821,6 +827,7 @@ textarea {
   display: flex;
   align-items: baseline;
   gap: 8px;
+  min-width: 0;
   padding: 4px 8px;
   border-radius: 6px;
   cursor: pointer;
@@ -851,6 +858,53 @@ textarea {
   color: var(--muted);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* `@` suggestions: stacks stand out, their pages hang beneath as a tree. */
+.prompt-suggestions li.prompt-suggestion-stack {
+  margin-top: 2px;
+}
+
+.prompt-suggestion-stack .prompt-suggestion-label {
+  font-weight: 600;
+}
+
+.prompt-suggestion-page {
+  font-size: 0.95em;
+}
+
+.prompt-suggestion-page .prompt-suggestion-label {
+  flex: 0 1 auto;
+  min-width: 3em;
+  max-width: none;
+}
+
+/* The address gives way first, so titles keep their room. */
+.prompt-suggestion-page .prompt-suggestion-detail {
+  flex: 0 4 auto;
+  min-width: 0;
+  max-width: 35%;
+  font-size: 0.9em;
+}
+
+.prompt-suggestion-branch {
+  flex-shrink: 0;
+  font-family: ui-monospace, monospace;
+}
+
+.prompt-suggestion-page.current .prompt-suggestion-label {
+  color: var(--accent);
+}
+
+.prompt-suggestions li.prompt-suggestion-more {
+  padding-left: 32px;
+  color: var(--muted);
+  font-style: italic;
+  cursor: default;
+}
+
+.prompt-suggestions li.prompt-suggestion-more:hover {
+  background: none;
 }
 
 /* Conversation (agent), filling the assistant panel above the prompt. */
