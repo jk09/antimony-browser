@@ -17,7 +17,7 @@ import type { MenuEntry, RunResult } from '../../features/menu/ipc'
 import type { NavigationState } from '../../features/navigation/ipc'
 import { toUrl } from '../../features/navigation/shared/to-url'
 import type { Skill } from '../../features/skills/ipc'
-import type { StackCommand, StacksState } from '../../features/stacks/ipc'
+import type { StackCommand, StackPages, StacksState } from '../../features/stacks/ipc'
 import type { AntimonyApi } from '../../shared/api'
 
 type Listener<T> = (value: T) => void
@@ -65,6 +65,7 @@ export function fakeApi(
     models?: ModelList
     menu?: MenuEntry[]
     stacks?: StacksState
+    stackPages?: StackPages[]
   } = {},
 ) {
   const open = channel<void>()
@@ -171,6 +172,8 @@ export function fakeApi(
       create: vi.fn(async () => {}),
       close: vi.fn(async (_stackId: string) => {}),
       outline: vi.fn(async (name: string) => `Navigation stack @${name}`),
+      pages: vi.fn(async () => options.stackPages ?? []),
+      openPage: vi.fn(async (_stackId: string, _nodeId: number) => {}),
       closeNode: vi.fn(async (_nodeId: number) => {}),
       home: vi.fn(async () => home),
       setHome: vi.fn(async (url: string | null) => {

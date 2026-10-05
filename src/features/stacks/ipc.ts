@@ -9,6 +9,8 @@ export const channels = {
   home: 'stacks:home',
   setHome: 'stacks:set-home',
   setMuted: 'stacks:set-muted',
+  pages: 'stacks:pages',
+  openPage: 'stacks:open-page',
   stateChanged: 'stacks:state-changed',
   // A shortcut or File menu item (main → UI), not a state change; the UI runs it like its button.
   command: 'stacks:command',
@@ -79,6 +81,23 @@ export interface StackSummary {
   audio: StackAudio
 }
 
+/** A row with the reference `@<stack>/<ref>` that names the page in the prompt. */
+export interface StackPageRow extends StackRow {
+  /** Slug of the title (else the host), unique within the stack. */
+  ref: string
+}
+
+/** A named stack with all its pages, for the prompt's `@` suggestions. */
+export interface StackPages {
+  id: string
+  name: string
+  rootTitle: string
+  /** All pages in depth-first order. */
+  rows: StackPageRow[]
+  /** The stack's active page. */
+  activeId: number | null
+}
+
 export interface StacksState {
   /** The current stack; null with no stack at all ("New tab"). */
   current: { id: string; name: string; rows: StackRow[]; activeId: number | null } | null
@@ -103,8 +122,15 @@ export interface StacksApi {
   setHome(url: string | null): Promise<void>
   /** Mutes or unmutes the stack's tab; a stack without a live tab is ignored. */
   setMuted(stackId: string, muted: boolean): Promise<void>
-  /** The stack's outline as text for the model, or null if no stack has that name. */
+  /**
+   * The stack's outline as text for the model, or, for `name/ref`, that page; null if no stack
+   * (or page) has that name.
+   */
   outline(name: string): Promise<string | null>
+  /** Every named stack with all its pages, most recently used first. */
+  pages(): Promise<StackPages[]>
+  /** Makes a stack current (if it isn't) and loads one of its pages; focuses the page. */
+  openPage(stackId: string, nodeId: number): Promise<void>
   /** Called whenever stacks or the current tree change. Returns an unsubscribe function. */
   onChanged(listener: (state: StacksState) => void): () => void
   /** Called when a stack shortcut is pressed. Returns an unsubscribe function. */

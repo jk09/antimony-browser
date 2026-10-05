@@ -24,14 +24,16 @@ import {
 import type { VisitedSuggestion } from '../../history/ipc'
 import type { MenuEntry } from '../../menu/ipc'
 import type { Skill } from '../../skills/ipc'
-import type { StacksState } from '../../stacks/ipc'
+import type { StackPages, StacksState } from '../../stacks/ipc'
 import { promptCommands, type HistoryEntry } from '../ipc'
 import { classify } from '../shared/classify'
 import { historyText } from '../shared/history'
 import {
+  mentionOnly,
+  mentionTyped,
   stackRefs,
   suggest,
-  suggestStacks,
+  suggestMentions,
   withVisited,
   type OptionNode,
   type SuggestCommand,
@@ -114,6 +116,15 @@ export function Prompt({
   const skills = useMemo(() => skillList ?? [], [skillList])
   const stackState = useSubscription<StacksState>(api.stacks.state, api.stacks.onChanged)
   const stacks = useMemo(() => stackState?.stacks ?? [], [stackState])
+  // Every stack's pages for `@`, fetched while an `@word` is typed, until stacks change.
+  const [pageCache, setPageCache] = useState<{ for: StacksState | null; pages: StackPages[] }>({
+    for: null,
+    pages: [],
+  })
+  const stackPages = useMemo<StackPages[] | null>(
+    () => (pageCache.for !== null && pageCache.for === stackState ? pageCache.pages : null),
+    [pageCache, stackState],
+  )
   const [modelList, setModelList] = useState<ModelList | null>(null)
   const [menu, setMenu] = useState<MenuEntry[]>([])
   const running = agent !== null && agent.status !== 'idle'
@@ -194,19 +205,48 @@ export function Prompt({
     }
   }, [api, text])
 
-  const suggestions = useMemo(
+  const mentioning = mentionTyped(text) !== null
+  useEffect(() => {
+    if (!mentioning || stackPages !== null || stackState === null) return
+    let stale = false
+    api.stacks
+      .pages()
+      .then((pages) => {
+        if (!stale) setPageCache({ for: stackState, pages })
+      })
+      .catch((reason: unknown) => console.error(reason))
+    return () => {
+      stale = true
+    }
+  }, [api, mentioning, stackPages, stackState])
+
+  // Until the pages arrive, `@` lists the stacks alone.
+  const mentionTargets = useMemo<StackPages[]>(
     () =>
-      listHidden || recall !== -1
-        ? []
-        : suggestStacks(text, stacks).length > 0
-          ? suggestStacks(text, stacks)
-          : withVisited(
-              suggest(text, history, commands),
-              visited.text === text ? visited.pages : [],
-              text,
-            ),
-    [text, history, commands, listHidden, recall, visited, stacks],
+      stackPages ??
+      stacks.map((stack) => ({
+        id: stack.id,
+        name: stack.name,
+        rootTitle: stack.rootTitle,
+        rows: [],
+        activeId: null,
+      })),
+    [stackPages, stacks],
   )
+
+  const { suggestions, more } = useMemo(() => {
+    if (listHidden || recall !== -1) return { suggestions: [], more: 0 }
+    const mentions = suggestMentions(text, mentionTargets)
+    if (mentions.items.length > 0) return { suggestions: mentions.items, more: mentions.more }
+    return {
+      suggestions: withVisited(
+        suggest(text, history, commands),
+        visited.text === text ? visited.pages : [],
+        text,
+      ),
+      more: 0,
+    }
+  }, [text, history, commands, listHidden, recall, visited, mentionTargets])
 
   const edit = (value: string) => {
     setText(value)
@@ -252,31 +292,54 @@ export function Prompt({
     })
   }
 
+  /** Switches to a stack, or opens one of its pages, without the model. */
+  const goTo = async (target: NonNullable<Suggestion['target']>) => {
+    if (running) {
+      setMessage({ kind: 'error', text: 'Stop the current run first (Esc).' })
+      return
+    }
+    record('command', target.reference)
+    setText('')
+    reset()
+    try {
+      if (target.nodeId === undefined) await api.stacks.switch(target.stackId)
+      else await api.stacks.openPage(target.stackId, target.nodeId)
+    } catch (reason) {
+      setMessage({
+        kind: 'error',
+        text: reason instanceof Error ? reason.message : String(reason),
+      })
+    }
+  }
+
+  /** The stack or page an `@name` or `@name/ref` names, or null. */
+  const resolveMention = async (
+    value: string,
+  ): Promise<NonNullable<Suggestion['target']> | null> => {
+    const alone = /^@([a-z0-9-]+)(?:\/([a-z0-9-]+))?$/.exec(value.trim())
+    if (!alone) return null
+    const [reference, name, ref] = alone
+    if (ref === undefined) {
+      const stack = stacks.find((candidate) => candidate.name === name)
+      return stack ? { stackId: stack.id, reference } : null
+    }
+    // A handed-over entry can arrive before this prompt has the pages.
+    const pages = stackPages ?? (await api.stacks.pages())
+    const stack = pages.find((candidate) => candidate.name === name)
+    const row = stack?.rows.find((candidate) => candidate.ref === ref)
+    return stack && row ? { stackId: stack.id, nodeId: row.id, reference } : null
+  }
+
   const submit = async (value = text, entered = attachments) => {
     if (compose) {
       if (value.trim() === '' && entered.length === 0) return
       compose.onSend({ text: value, attachments: entered })
       return
     }
-    // `@name` alone switches to that stack, without the model.
-    const alone = /^@([a-z0-9-]+)$/.exec(value.trim())
-    const stack = alone && stacks.find((candidate) => candidate.name === alone[1])
-    if (stack) {
-      if (running) {
-        setMessage({ kind: 'error', text: 'Stop the current run first (Esc).' })
-        return
-      }
-      record('command', value.trim())
-      setText('')
-      reset()
-      try {
-        await api.stacks.switch(stack.id)
-      } catch (reason) {
-        setMessage({
-          kind: 'error',
-          text: reason instanceof Error ? reason.message : String(reason),
-        })
-      }
+    // `@name` or `@name/ref` alone goes there, without the model.
+    const mentioned = await resolveMention(value)
+    if (mentioned) {
+      await goTo(mentioned)
       return
     }
     const parsed = classify(value, {
@@ -348,6 +411,13 @@ export function Prompt({
   }, [handoff])
 
   const accept = (suggestion: Suggestion, andSubmit: boolean) => {
+    // A stack or page picked with nothing else typed goes there at once; else it's inserted.
+    if (andSubmit && suggestion.target && mentionOnly(text)) {
+      // The field of view hands the reference over; the sidebar prompt goes there.
+      if (compose) compose.onSend({ text: suggestion.target.reference, attachments })
+      else void goTo(suggestion.target)
+      return
+    }
     setText(suggestion.text)
     setSelected(-1)
     setListHidden(true)
@@ -525,6 +595,7 @@ export function Prompt({
       {suggestions.length > 0 && !keyMode && (
         <SuggestionList
           suggestions={suggestions}
+          more={more}
           selected={selected}
           onPick={(suggestion) => accept(suggestion, true)}
         />

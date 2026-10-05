@@ -16,8 +16,8 @@ beforeEach(() => vi.useFakeTimers({ shouldAdvanceTime: true }))
 const overlay = () => screen.queryByRole('dialog', { name: 'Field of view prompt' })
 const boxes = () => screen.getAllByRole('textbox', { name: 'Prompt' }) as HTMLTextAreaElement[]
 
-async function open(snapshot: string | null = null) {
-  const fake = fakeApi()
+async function open(snapshot: string | null = null, options: Parameters<typeof fakeApi>[0] = {}) {
+  const fake = fakeApi(options)
   fake.api.prompt.coverPage = vi.fn(async () => snapshot)
   render(<AssistantPanel />)
   await act(async () => {})
@@ -117,6 +117,34 @@ describe('FieldOfView', () => {
       await vi.advanceTimersByTimeAsync(FLIGHT_MS + HANDOFF_MS + 100)
     })
     expect(api.navigation.go).toHaveBeenCalledWith('https://example.com/')
+  })
+
+  it('hands a stack or page picked alone over in one click, and the sidebar goes there', async () => {
+    const stacks = {
+      current: null,
+      stacks: [{ id: 's1', name: 'docs', rootTitle: 'Docs', pages: 2, audio: null }],
+    }
+    const stackPages = [
+      {
+        id: 's1',
+        name: 'docs',
+        rootTitle: 'Docs',
+        activeId: 1,
+        rows: [
+          { id: 1, url: 'https://d.example/', title: 'Docs', depth: 0, last: false, ref: 'docs' },
+          { id: 2, url: 'https://d.example/g', title: 'Guide', depth: 0, last: true, ref: 'guide' },
+        ],
+      },
+    ]
+    const { api } = await open(null, { stacks, stackPages })
+    fireEvent.change(boxes()[1]!, { target: { value: '@gui' } })
+    const page = await screen.findByRole('option', { name: /^Page Guide/ })
+    fireEvent.click(page)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FLIGHT_MS + HANDOFF_MS + 100)
+    })
+    expect(api.stacks.openPage).toHaveBeenCalledWith('s1', 2)
+    expect(api.agent.run).not.toHaveBeenCalled()
   })
 
   it('sends nothing for an empty entry', async () => {

@@ -12,6 +12,7 @@ import {
   removeBranch,
   rows,
   setTitle,
+  pageRefs,
   slug,
   trimToActive,
   uniqueName,
@@ -224,5 +225,30 @@ describe('stack tree', () => {
     trimToActive(stack)
     expect(shape(stack)).toEqual([B])
     expect(backTarget(stack)).toBeNull()
+  })
+})
+
+describe('pageRefs', () => {
+  it('names pages by title slug, else host, unique in tree order', () => {
+    const row = (id: number, title: string, url = 'https://www.site.example/x') => ({
+      id,
+      url,
+      title,
+      depth: 0,
+      last: true,
+    })
+    expect(
+      pageRefs([
+        row(1, 'Kent Beck: Software Engineering in the Age of AI and Everything After'),
+        row(2, 'Kent Beck: Software Engineering in the Age of AI and Everything After'),
+        row(3, ''),
+        row(4, '日本語', 'about:blank'),
+      ]).map((r) => r.ref),
+    ).toEqual([
+      'kent-beck-software-engineering-i',
+      'kent-beck-software-engineering-2',
+      'site-example',
+      'page',
+    ])
   })
 })
