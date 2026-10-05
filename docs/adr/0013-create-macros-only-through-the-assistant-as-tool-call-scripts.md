@@ -1,6 +1,6 @@
 # 0013. Create macros only through the assistant, as scripts of browser tool calls
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-05
 - Features: skills, agent, prompt, stacks
 - Spec: spoken-macro-m4q7zt
