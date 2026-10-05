@@ -6,15 +6,15 @@
 | --- | --- |
 | **Feature name** | The prompt's `@` suggestions list stacks and their pages as a tree; a click (or Enter) on one goes there at once when nothing else is typed, and inserts the reference otherwise |
 | **Spec ID** | nested-mention-r6q4zd |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-04 17:50 +00:00 |
-| **Last updated** | 2026-10-05 08:00 +00:00 |
+| **Last updated** | 2026-10-05 04:05 +00:00 |
 | **Affected features** | prompt, stacks |
 | **Target release** | 0.1.0 |
-| **Related links** | specs fresh-anchor-w6p3jd (`@name` in the prompt), nimble-anchor-w3p8kd (stack switcher), ADR 0008 |
+| **Related links** | PR #42, specs fresh-anchor-w6p3jd (`@name` in the prompt), nimble-anchor-w3p8kd (stack switcher), ADR 0008 |
 
 **Status definitions:**
 - **Draft:** The spec is being written or reviewed. The scope may still change.
