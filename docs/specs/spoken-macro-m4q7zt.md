@@ -6,15 +6,15 @@
 | --- | --- |
 | **Feature name** | Macros created by the assistant from the prompt |
 | **Spec ID** | spoken-macro-m4q7zt |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude (for Jozef Kosik) |
 | **Owner** | Jozef Kosik |
 | **Reviewers** | Jozef Kosik |
 | **Created on** | 2026-10-05 10:00 +00:00 |
-| **Last updated** | 2026-10-05 19:15 +00:00 |
+| **Last updated** | 2026-10-05 19:55 +00:00 |
 | **Affected features** | skills, agent, prompt, stacks |
 | **Target release** | |
-| **Related links** | violet-harbinger-p7w3kd (skills, "Save as skill"), still-meridian-r4v8nc, glass-meridian-f5y2nq; ADR 0004, ADR 0013 |
+| **Related links** | PR #44, violet-harbinger-p7w3kd (skills, "Save as skill"), still-meridian-r4v8nc, glass-meridian-f5y2nq; ADR 0004, ADR 0013 |
 
 ## 2. Summary
 
