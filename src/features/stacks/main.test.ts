@@ -90,6 +90,13 @@ vi.mock('../navigation/main', () => ({
     resolver = value
   },
 }))
+let stackOpener: { open(): void } | null = null
+vi.mock('../agent/main', () => ({
+  provideStackOpener: (opener: { open(): void }) => {
+    stackOpener = opener
+  },
+}))
+
 vi.mock('../history/main', () => ({
   onHistoryCleared: (listener: (all: boolean) => void) => {
     clearedListener = listener
@@ -293,6 +300,12 @@ describe('stacks main', () => {
     visit(1, 'First')
     expect(state().stacks).toHaveLength(1)
     expect(state().current!.name).toBe('first')
+  })
+
+  it('lets the assistant open a new stack like Ctrl/Cmd+N', () => {
+    setup()
+    stackOpener!.open()
+    expect(tabs.calls).toEqual(['create 1 active'])
   })
 
   it('closes a page with its branch; the root closes the stack', () => {

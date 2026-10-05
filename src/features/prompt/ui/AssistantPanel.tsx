@@ -27,22 +27,19 @@ export function clampWidth(requested: number): number {
 /**
  * The assistant panel, docked on the right edge of the window: the header (stacks' tree, or the
  * page title and URL), the
- * conversation filling the height, the skill form, and the prompt at the bottom. Its width only
+ * conversation filling the height, and the prompt at the bottom. Its width only
  * changes when the user drags its edge, so the page view keeps its size while the conversation
  * grows. Ctrl/Cmd+L shows it and focuses the prompt, Ctrl/Cmd+B shows or hides it (it has no close button:
- * it is only ever hidden, never removed); it also shows itself for an approval or a
- * skill save.
+ * it is only ever hidden, never removed); it also shows itself for an approval.
  */
 export function AssistantPanel({
   header,
   conversation,
-  form,
   overlay,
 }: {
   /** Replaces the page title and URL in the header (stacks' navigation tree). */
   header?: ReactNode
   conversation?: ReactNode
-  form?: ReactNode
   /** Laid over the conversation when it renders anything (history's view). */
   overlay?: ReactNode
 }) {
@@ -97,7 +94,6 @@ export function AssistantPanel({
   )
   // Showing the sidebar prompt (Ctrl/Cmd+L, Ctrl/Cmd+Alt+I) closes the field of view.
   useEffect(() => api.prompt.onOpen(closeFov), [api, closeFov])
-  useEffect(() => api.skills.onSaveRequested(() => setShown(true)), [api])
   useEffect(() => api.history.onOpen(() => setShown(true)), [api])
   // An approval is asked in the conversation: show the panel, and keep it shown while pending.
   useEffect(
@@ -186,7 +182,6 @@ export function AssistantPanel({
           {hasConversation && conversation}
           {overlay}
         </div>
-        {form}
         <Prompt focusRequest={focusRequest} handoff={handoff} />
       </aside>
       {fov && (

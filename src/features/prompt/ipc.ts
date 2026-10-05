@@ -25,7 +25,7 @@ export interface HistoryEntry {
 
 export const HISTORY_LIMIT = 500
 
-/** A built-in /command. Skills share the namespace, so their names can't be used for skills. */
+/** A built-in /command. Skills share the namespace, so their names can't be used for macros. */
 export interface CommandInfo {
   name: string
   /** Argument placeholders shown in suggestions, e.g. `<model>`. */
@@ -65,9 +65,12 @@ export const promptCommands: CommandInfo[] = [
     options: ['clear', 'reset'],
   },
   { name: 'menu', usage: '<menu> <item>', description: 'Run an item from the application menu' },
-  { name: 'save', usage: '<name>', description: 'Save the last run as a skill' },
-  { name: 'skills', usage: '', description: 'List saved skills' },
-  { name: 'forget', usage: '<skill>', description: 'Delete a saved skill' },
+  {
+    name: 'skills',
+    usage: '',
+    description: 'List macros (ask the assistant to make one: "… and store it as /name")',
+  },
+  { name: 'forget', usage: '<macro>', description: 'Delete a macro' },
   { name: 'forget-history', usage: '', description: 'Clear the prompt history' },
   { name: 'history', usage: '<search>', description: 'Search the pages you visited' },
   {

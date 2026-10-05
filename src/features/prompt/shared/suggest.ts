@@ -186,10 +186,23 @@ export const MENTION_LIMIT = 200
 
 const MENTION = /(^|\s)@([a-z0-9-]*(?:\/[a-z0-9-]*)?)$/
 
-/** The `@word` being typed at the end of the input (without `@`), or null; never in a /command. */
-export function mentionTyped(input: string): string | null {
+/** Which `/commands` take `@` references in their arguments (macros); none by default. */
+export type MentionCommands = (name: string) => boolean
+
+/**
+ * The `@word` being typed at the end of the input (without `@`), or null; in a /command only in
+ * the arguments of a command `inCommand` accepts (a macro).
+ */
+export function mentionTyped(
+  input: string,
+  inCommand: MentionCommands = () => false,
+): string | null {
   const match = MENTION.exec(input)
-  return match && !input.trimStart().startsWith('/') ? match[2]! : null
+  if (!match) return null
+  const text = input.trimStart()
+  if (!text.startsWith('/')) return match[2]!
+  const command = /^\/([a-z][a-z0-9-]*)\s/.exec(text)
+  return command && inCommand(command[1]!) ? match[2]! : null
 }
 
 /** Whether the input is nothing but an `@word` (spaces aside): picking a stack or page goes there. */
@@ -212,8 +225,9 @@ export function suggestMentions(
   input: string,
   stacks: StackPages[],
   limit = MENTION_LIMIT,
+  inCommand?: MentionCommands,
 ): Mentions {
-  const typed = mentionTyped(input)
+  const typed = mentionTyped(input, inCommand)
   if (typed === null) return { items: [], more: 0 }
   const before = input.slice(0, input.length - typed.length - 1)
   const slash = typed.indexOf('/')
@@ -304,4 +318,23 @@ export function stackRefs(text: string, names: string[]): string[] {
     if (known.has(reference.split('/')[0]!) && !found.includes(reference)) found.push(reference)
   }
   return found
+}
+
+/**
+ * Macro arguments with each `@name` / `@name/ref` that names a known stack or page replaced by
+ * its URL (a stack: its active page, else its first). Unknown `@words` stay as they are.
+ */
+export function resolveRefs(args: string, stacks: StackPages[]): string {
+  return args.replace(
+    /(^|\s)@([a-z0-9-]+)(?:\/([a-z0-9-]+))?(?=$|\s)/g,
+    (whole, space: string, name: string, ref: string | undefined) => {
+      const stack = stacks.find((candidate) => candidate.name === name && name !== '')
+      if (!stack) return whole
+      const row =
+        ref === undefined
+          ? (stack.rows.find((candidate) => candidate.id === stack.activeId) ?? stack.rows[0])
+          : stack.rows.find((candidate) => candidate.ref === ref)
+      return row ? `${space}${row.url}` : whole
+    },
+  )
 }

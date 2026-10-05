@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SkillStep } from '../ipc'
-import { bindArgs, extractParams, fillParams, parseArgs, signature } from './params'
+import { argumentHint, bindArgs, extractParams, fillParams, parseArgs, signature } from './params'
 
 const steps: SkillStep[] = [
   { tool: 'navigate', input: { url: 'https://dash.example/{{team}}' } },
@@ -10,7 +10,31 @@ const steps: SkillStep[] = [
 describe('skill parameters', () => {
   it('finds parameters in order of first use', () => {
     expect(extractParams(steps)).toEqual(['team', 'query'])
-    expect(signature({ name: 'dash', params: ['team', 'query'] })).toBe('/dash <team> <query>')
+    expect(
+      signature({
+        name: 'dash',
+        params: [
+          { name: 'team', hint: '' },
+          { name: 'query', hint: 'search' },
+        ],
+      }),
+    ).toBe('/dash <team> <query>')
+  })
+
+  it('hints the parameters still to type', () => {
+    const params = [
+      { name: 'team', hint: 'team name' },
+      { name: 'query', hint: '' },
+    ]
+    expect(argumentHint(params, '')).toBe(' <team: team name> <query>')
+    expect(argumentHint(params, ' ')).toBe('<team: team name> <query>')
+    expect(argumentHint(params, ' alpha')).toBe(' <query>')
+    expect(argumentHint(params, ' alpha ')).toBe('<query>')
+    expect(argumentHint(params, ' alpha open bugs')).toBe('')
+    expect(argumentHint(params, ' "two words" ')).toBe('<query>')
+    expect(argumentHint([], '')).toBe('')
+    // Still typing the command name.
+    expect(argumentHint(params, 'x')).toBe('')
   })
 
   it('fills parameters into string inputs only', () => {
@@ -31,6 +55,6 @@ describe('skill parameters', () => {
     })
     expect(bindArgs(['team', 'query'], 'alpha')).toEqual({ error: 'Missing <query>' })
     expect(bindArgs([], '')).toEqual({ values: {} })
-    expect(bindArgs([], 'x')).toEqual({ error: 'This skill takes no arguments' })
+    expect(bindArgs([], 'x')).toEqual({ error: 'This macro takes no arguments' })
   })
 })

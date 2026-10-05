@@ -1,36 +1,36 @@
 export const channels = {
   list: 'skills:list',
-  draft: 'skills:draft',
-  save: 'skills:save',
   delete: 'skills:delete',
   run: 'skills:run',
-  requestSave: 'skills:request-save',
   // main → UI
   listChanged: 'skills:list-changed',
-  // A command (/save, "Save as skill"), not a state change.
-  saveRequested: 'skills:save-requested',
 } as const
 
-/** One recorded tool call; string inputs may contain {{parameter}} placeholders. */
+/** One tool call of a macro; string inputs may contain {{parameter}} placeholders. */
 export interface SkillStep {
   tool: string
   input: Record<string, string | number | boolean>
 }
 
+/** A parameter typed after `/name`, with a hint of what to type. */
+export interface SkillParam {
+  name: string
+  /** Shown faintly while the macro is typed; '' for none. */
+  hint: string
+}
+
+/**
+ * A `/name` that replays tool calls without the model: a built-in skill or a macro the assistant
+ * saved (save_macro).
+ */
 export interface Skill {
   name: string
   description: string
-  /** Parameter names, in order of first use in the steps. */
-  params: string[]
+  /** In the order they are typed. */
+  params: SkillParam[]
   steps: SkillStep[]
   /** Shipped with the app (/reload, /stop); can't be changed or deleted. */
   builtin: boolean
-}
-
-export interface SkillDraft {
-  name: string
-  description: string
-  steps: SkillStep[]
 }
 
 export interface RunResult {
@@ -39,16 +39,10 @@ export interface RunResult {
 }
 
 export interface SkillsApi {
-  /** Built-in and saved skills, sorted by name. */
+  /** Built-in skills and macros, sorted by name. */
   list(): Promise<Skill[]>
   onListChanged(listener: (skills: Skill[]) => void): () => void
-  /** The replayable steps of the last assistant run, to start a draft from. */
-  draft(): Promise<SkillStep[]>
-  save(draft: SkillDraft): Promise<Skill>
   delete(name: string): Promise<void>
-  /** Runs a skill; `args` is the rest of the prompt line after `/name`. */
+  /** Runs a skill; `args` is the rest of the prompt line after `/name`, `@` references resolved. */
   run(name: string, args: string): Promise<RunResult>
-  /** Opens the save form (for /save and the "Save as skill" button). */
-  requestSave(name?: string): Promise<void>
-  onSaveRequested(listener: (name: string) => void): () => void
 }

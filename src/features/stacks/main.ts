@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import type { MainContext } from '../../app/main/features'
 import { createJsonStore } from '../../app/main/json-store'
+import { provideStackOpener } from '../agent/main'
 import { onHistoryCleared } from '../history/main'
 import { getTabs, onPageEvent, setHistoryResolver, type PageEvent } from '../navigation/main'
 import { channels as promptChannels } from '../prompt/ipc'
@@ -415,6 +416,8 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
     changed()
   }
   ipc.handle(channels.create, openNewStack)
+  // The assistant's new_stack tool (and macros replaying it) open stacks like Ctrl/Cmd+N.
+  provideStackOpener({ open: openNewStack })
   const closeAndSwitch = (stack: Stack) => {
     const wasCurrent = stack.id === currentId
     closeStack(stack)

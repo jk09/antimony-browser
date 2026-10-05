@@ -4,7 +4,7 @@ import { Agent, elideImages, MAX_STEPS, siteOf, type AgentDeps } from './agent'
 import type { ContentBlock, ModelRequest, ModelResponse } from './anthropic'
 import { CLI_NOT_FOUND, CliError, type CliOutcome, type CliTurn } from './claude-cli'
 import { fakeBrowser } from './fake-browser'
-import type { HistoryPort } from './tools'
+import type { HistoryPort, MacroInfo, MacroPort, StackOpener } from './tools'
 
 const response = (content: ContentBlock[], stop_reason = 'end_turn'): ModelResponse => ({
   id: 'msg',
@@ -30,6 +30,8 @@ function setup(
     cli?: (turn: CliTurn) => Promise<CliOutcome>
     history?: HistoryPort | null
     historyAccess?: boolean
+    macros?: MacroPort | null
+    stacks?: StackOpener | null
   } = {},
 ) {
   const { browser, state } = fakeBrowser(options.elements)
@@ -57,6 +59,8 @@ function setup(
     }),
     browser: () => browser,
     history: () => options.history ?? null,
+    macros: () => options.macros ?? null,
+    stacks: () => options.stacks ?? null,
     settings: () => settings,
     missingSetup: () => options.missingSetup ?? null,
     onState: (value) => states.push(structuredClone(value)),
@@ -85,13 +89,11 @@ describe('Agent.run', () => {
     const results = requests[1]!.messages.at(-1)!
     expect(results.role).toBe('user')
     expect(results.content[0]).toMatchObject({ type: 'tool_result', tool_use_id: 't1' })
-    const { items, status, savableSteps } = agent.state()
+    const { items, status } = agent.state()
     expect(status).toBe('idle')
     expect(items.map((item) => item.kind)).toEqual(['user', 'tool', 'assistant'])
     expect(items[1]).toMatchObject({ status: 'ok', summary: 'Open example.com' })
     expect(items[2]).toMatchObject({ text: 'Opened example.com.' })
-    expect(savableSteps).toBe(1)
-    expect(agent.savableSteps()).toEqual([{ tool: 'navigate', input: { url: 'example.com' } }])
   })
 
   it('starts each user turn with the browser state and sends attachments as blocks', async () => {
@@ -113,6 +115,7 @@ describe('Agent.run', () => {
       /^<browser_state>\nURL: https:\/\/a.com\/\nTitle: <untrusted_page_content>/,
     )
     expect(state0!.text).toContain('Page access: off')
+    expect(state0!.text).toContain('Saved macros: none')
     expect(image).toEqual({
       type: 'image',
       source: { type: 'base64', media_type: 'image/png', data: 'AAAA' },
@@ -418,6 +421,116 @@ describe('cross-site navigation after reading a page', () => {
   })
 })
 
+/** An in-memory macro store that accepts anything with a name and steps. */
+function macroStore(): MacroPort & { saved: MacroInfo[] } {
+  const saved: MacroInfo[] = []
+  return {
+    saved,
+    list: () => saved,
+    save: vi.fn((definition: unknown) => {
+      const macro = definition as MacroInfo
+      if (macro.name === 'key') throw new TypeError('/key is a built-in command')
+      saved.push(macro)
+      return macro
+    }),
+    delete: vi.fn((name: string) => {
+      const index = saved.findIndex((macro) => macro.name === name)
+      if (index < 0) throw new TypeError(`No macro /${name}`)
+      saved.splice(index, 1)
+    }),
+  }
+}
+
+describe('macros', () => {
+  const wiki = {
+    name: 'wiki',
+    description: 'Search Wikipedia',
+    params: [{ name: 'term', hint: 'search term' }],
+    steps: [
+      { tool: 'navigate', input: { url: 'https://en.wikipedia.org/w/index.php?search={{term}}' } },
+    ],
+  }
+
+  it('saves, lists and deletes macros without page access or approval, and lists them in the browser state', async () => {
+    const macros = macroStore()
+    const { agent, requests } = setup(
+      [
+        async () => response([toolUse('t1', 'save_macro', wiki)], 'tool_use'),
+        async () => response([toolUse('t2', 'list_macros', {})], 'tool_use'),
+        async () => response([toolUse('t3', 'save_macro', { ...wiki, name: 'key' })], 'tool_use'),
+        async () => response([{ type: 'text', text: 'Saved /wiki <term>.' }]),
+        async () => response([toolUse('t4', 'delete_macro', { name: 'wiki' })], 'tool_use'),
+        async () => response([{ type: 'text', text: 'Deleted.' }]),
+      ],
+      { macros },
+    )
+    await agent.run(input('make a macro /wiki that searches Wikipedia for a term'))
+    expect(requests[0]!.tools.map((tool) => tool.name)).toEqual(
+      expect.arrayContaining(['save_macro', 'list_macros', 'delete_macro', 'new_stack']),
+    )
+    expect(macros.save).toHaveBeenCalledWith(wiki)
+    expect(JSON.stringify(requests[1]!.messages.at(-1))).toContain('Saved /wiki <term>')
+    expect(JSON.stringify(requests[2]!.messages.at(-1))).toContain('search={{term}}')
+    expect(requests[3]!.messages.at(-1)!.content[0]).toMatchObject({
+      is_error: true,
+      content: '/key is a built-in command',
+    })
+    expect(agent.state().items).toContainEqual(
+      expect.objectContaining({ summary: 'Save macro /wiki (1 step)', status: 'ok' }),
+    )
+
+    await agent.run(input('delete the macro /wiki'))
+    const turn = requests[4]!.messages.at(-1)!.content[0] as { text: string }
+    expect(turn.text).toContain('Saved macros:\n/wiki <term> – Search Wikipedia')
+    expect(macros.delete).toHaveBeenCalledWith('wiki')
+    expect(macros.saved).toEqual([])
+  })
+
+  it('asks before saving or deleting a macro after page or history content was read', async () => {
+    const macros = macroStore()
+    const { agent, state } = setup(
+      [
+        async () => response([toolUse('t1', 'read_page', {})], 'tool_use'),
+        async () => response([toolUse('t2', 'save_macro', wiki)], 'tool_use'),
+        async () => response([{ type: 'text', text: 'Not saved.' }]),
+      ],
+      { macros, pageAccess: true },
+    )
+    state.url = 'https://a.com/'
+    const running = agent.run(input('save what this page says as /wiki'))
+    await waitFor(() => agent.state().status === 'awaiting-approval')
+    expect(agent.state().approval!.description).toBe('Save macro /wiki (1 step)')
+    agent.approve('deny')
+    await running
+    expect(macros.save).not.toHaveBeenCalled()
+  })
+
+  it('opens a new stack, optionally at a URL', async () => {
+    const stacks = { open: vi.fn() }
+    const { agent, browser } = setup(
+      [
+        async () => response([toolUse('t1', 'new_stack', {})], 'tool_use'),
+        async () => response([toolUse('t2', 'new_stack', { url: 'news.example' })], 'tool_use'),
+        async () => response([{ type: 'text', text: 'ok' }]),
+      ],
+      { stacks },
+    )
+    await agent.run(input('open a new window, then one at news.example'))
+    expect(stacks.open).toHaveBeenCalledTimes(2)
+    expect(browser.load).toHaveBeenCalledWith('news.example')
+    expect(agent.state().items).toContainEqual(
+      expect.objectContaining({ summary: 'Open a new stack at news.example', status: 'ok' }),
+    )
+  })
+
+  it('replays new_stack steps', async () => {
+    const stacks = { open: vi.fn() }
+    const { agent } = setup([], { stacks })
+    expect(await agent.replay('/ns', [{ tool: 'new_stack', input: {} }])).toEqual({ ok: true })
+    expect(stacks.open).toHaveBeenCalled()
+  })
+})
+
 describe('Agent.replay', () => {
   it('replays navigation steps without the model or approval', async () => {
     const { agent, browser, deps } = setup([])
@@ -516,7 +629,6 @@ describe('Agent.run with the Claude Code CLI', () => {
     expect(status).toBe('idle')
     expect(items.map((item) => item.kind)).toEqual(['user', 'tool', 'assistant'])
     expect(items[2]).toMatchObject({ text: 'Opened example.com.' })
-    expect(agent.savableSteps()).toEqual([{ tool: 'navigate', input: { url: 'example.com' } }])
     expect(events.map((event) => event.type)).toEqual([
       'request',
       'response',

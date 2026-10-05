@@ -56,9 +56,8 @@ function Item({ item }: { item: ConversationItem }) {
 const STICK_DISTANCE = 24
 
 /**
- * The assistant conversation, filling the assistant panel above the prompt, with approvals and
- * "Save as skill". It follows new items unless the user has scrolled up; a new question follows
- * again.
+ * The assistant conversation, filling the assistant panel above the prompt, with approvals. It
+ * follows new items unless the user has scrolled up; a new question follows again.
  */
 export function Conversation() {
   const state = useAgentState()
@@ -126,17 +125,6 @@ export function Conversation() {
             </button>
           </div>
         </div>
-      )}
-      {state.status === 'idle' && state.savableSteps > 0 && (
-        <button
-          type="button"
-          className="save-skill"
-          onClick={() =>
-            window.antimony.skills.requestSave().catch((reason: unknown) => console.error(reason))
-          }
-        >
-          Save as skill ({state.savableSteps} step{state.savableSteps === 1 ? '' : 's'})
-        </button>
       )}
     </section>
   )

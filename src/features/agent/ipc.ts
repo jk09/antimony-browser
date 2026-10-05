@@ -133,8 +133,6 @@ export interface AgentState {
   items: ConversationItem[]
   /** Set while status is 'awaiting-approval'. */
   approval: { description: string } | null
-  /** Replayable tool calls of the last finished run (what "Save as skill" would save). */
-  savableSteps: number
 }
 
 export interface AgentSettings {

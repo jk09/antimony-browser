@@ -24,13 +24,16 @@ import {
 import type { VisitedSuggestion } from '../../history/ipc'
 import type { MenuEntry } from '../../menu/ipc'
 import type { Skill } from '../../skills/ipc'
+import { argumentHint } from '../../skills/shared/params'
 import type { StackPages, StacksState } from '../../stacks/ipc'
 import { promptCommands, type HistoryEntry } from '../ipc'
 import { classify } from '../shared/classify'
 import { historyText } from '../shared/history'
 import {
+  MENTION_LIMIT,
   mentionOnly,
   mentionTyped,
+  resolveRefs,
   stackRefs,
   suggest,
   suggestMentions,
@@ -183,8 +186,8 @@ export function Prompt({
       ),
       ...skills.map((skill) => ({
         name: skill.name,
-        usage: skill.params.map((param) => `<${param}>`).join(' '),
-        description: skill.description || (skill.builtin ? 'Built-in skill' : 'Saved skill'),
+        usage: skill.params.map((param) => `<${param.name}>`).join(' '),
+        description: skill.description || (skill.builtin ? 'Built-in skill' : 'Macro'),
       })),
     ].sort((a, b) => a.name.localeCompare(b.name))
   }, [skills, modelList, menu])
@@ -205,7 +208,16 @@ export function Prompt({
     }
   }, [api, text])
 
-  const mentioning = mentionTyped(text) !== null
+  // Macros with parameters take `@` references as arguments.
+  const macroNames = useMemo(
+    () =>
+      new Set(
+        skills.filter((skill) => !skill.builtin && skill.params.length > 0).map((s) => s.name),
+      ),
+    [skills],
+  )
+  const inMacro = useCallback((name: string) => macroNames.has(name), [macroNames])
+  const mentioning = mentionTyped(text, inMacro) !== null
   useEffect(() => {
     if (!mentioning || stackPages !== null || stackState === null) return
     let stale = false
@@ -236,7 +248,7 @@ export function Prompt({
 
   const { suggestions, more } = useMemo(() => {
     if (listHidden || recall !== -1) return { suggestions: [], more: 0 }
-    const mentions = suggestMentions(text, mentionTargets)
+    const mentions = suggestMentions(text, mentionTargets, MENTION_LIMIT, inMacro)
     if (mentions.items.length > 0) return { suggestions: mentions.items, more: mentions.more }
     return {
       suggestions: withVisited(
@@ -246,7 +258,14 @@ export function Prompt({
       ),
       more: 0,
     }
-  }, [text, history, commands, listHidden, recall, visited, mentionTargets])
+  }, [text, history, commands, listHidden, recall, visited, mentionTargets, inMacro])
+
+  // While a macro is typed, its parameters still to type, shown faintly after the text.
+  const hint = useMemo(() => {
+    const typed = /^\/([a-z][a-z0-9-]*)([^\n]*)$/.exec(text)
+    const macro = typed && skills.find((skill) => skill.name === typed[1] && !skill.builtin)
+    return macro ? argumentHint(macro.params, typed[2]!) : ''
+  }, [text, skills])
 
   const edit = (value: string) => {
     setText(value)
@@ -383,7 +402,19 @@ export function Prompt({
         case 'command': {
           record('command', historyText(value))
           setText('')
-          const result = await runCommand(parsed.name, parsed.args, { skills, settings })
+          const result = await runCommand(parsed.name, parsed.args, {
+            skills,
+            settings,
+            // `@stack` and `@stack/ref` arguments become the page's URL.
+            resolveArgs: async (args) => {
+              const names = stackRefs(
+                args,
+                stacks.map((stack) => stack.name),
+              )
+              if (names.length === 0) return args
+              return resolveRefs(args, stackPages ?? (await api.stacks.pages()))
+            },
+          })
           setMessage(result.message ?? null)
           if (result.keyMode) setKeyMode(true)
           if (result.close) reset()
@@ -618,21 +649,30 @@ export function Prompt({
           />
         </form>
       ) : (
-        <textarea
-          ref={input}
-          className="prompt-input"
-          aria-label="Prompt"
-          aria-autocomplete="list"
-          aria-controls={suggestions.length > 0 ? 'prompt-suggestions' : undefined}
-          aria-activedescendant={selected >= 0 ? suggestionId(selected) : undefined}
-          placeholder="Ask, type a URL, or / for skills"
-          rows={1}
-          spellCheck={false}
-          value={text}
-          onChange={(event) => edit(event.target.value)}
-          onKeyDown={onKeyDown}
-          onPaste={onPaste}
-        />
+        <div className="prompt-input-wrap">
+          {hint && (
+            <div className="prompt-ghost" aria-hidden="true" data-testid="prompt-hint">
+              <span className="prompt-ghost-typed">{text}</span>
+              <span className="prompt-ghost-hint">{hint}</span>
+            </div>
+          )}
+          <textarea
+            ref={input}
+            className="prompt-input"
+            aria-label="Prompt"
+            aria-description={hint ? `Arguments: ${hint.trim()}` : undefined}
+            aria-autocomplete="list"
+            aria-controls={suggestions.length > 0 ? 'prompt-suggestions' : undefined}
+            aria-activedescendant={selected >= 0 ? suggestionId(selected) : undefined}
+            placeholder="Ask, type a URL, or / for skills"
+            rows={1}
+            spellCheck={false}
+            value={text}
+            onChange={(event) => edit(event.target.value)}
+            onKeyDown={onKeyDown}
+            onPaste={onPaste}
+          />
+        </div>
       )}
       <div className="prompt-row">
         <button
