@@ -6,15 +6,15 @@
 | --- | --- |
 | **Feature name** | The assistant gets a `recall_history` tool: Recall's ranking with keywords and scores, by a request and/or an image the user attached, and shows the result as Recall's cloud |
 | **Spec ID** | amber-orbit-q7t3vn |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-06 05:15 +00:00 |
-| **Last updated** | 2026-10-06 05:45 +00:00 |
+| **Last updated** | 2026-10-06 05:30 +00:00 |
 | **Affected features** | agent, history |
 | **Target release** | 0.1.0 |
-| **Related links** | specs drifting-nimbus-r8c3kw (Recall), patient-archive-h6q2wn (search_history); ADRs 0010, 0012, 0014 |
+| **Related links** | specs drifting-nimbus-r8c3kw (Recall), patient-archive-h6q2wn (search_history); ADRs 0010, 0012, 0014; PR jk09/antimony-browser#47 |
 
 **Status definitions:**
 - **Draft:** The spec is being written or reviewed. The scope may still change.
