@@ -15,6 +15,7 @@ export const channels = {
   // Main → UI.
   open: 'history:open',
   openRecall: 'history:open-recall',
+  recallShown: 'history:recall-shown',
   changed: 'history:pages-changed',
   settingsChanged: 'history:settings-changed',
 } as const
@@ -114,6 +115,15 @@ export interface RecallResult {
   notice?: string
 }
 
+/** A recall the assistant ran (recall_history), for the Recall page to show. */
+export interface RecallShown {
+  query: string
+  result: RecallResult
+  view: RecallView
+  /** The assistant looked for a picture the user attached. */
+  byImage: boolean
+}
+
 export interface HistoryApi {
   /** Visited pages whose URL (without scheme and www.) or domain starts with `text`. */
   suggest(text: string): Promise<VisitedSuggestion[]>
@@ -139,6 +149,8 @@ export interface HistoryApi {
   /** Opens the Recall page with `query` (from /recall); main answers with an `openRecall` event. */
   requestRecall(query: string): Promise<void>
   onOpenRecall(listener: (query: string) => void): () => void
+  /** The assistant recalled pages (recall_history); the Recall page opens with them. */
+  onRecallShown(listener: (shown: RecallShown) => void): () => void
   /** History changed in a way an open view should show (note, delete, clear). */
   onChanged(listener: () => void): () => void
   onSettingsChanged(listener: (settings: HistorySettings) => void): () => void

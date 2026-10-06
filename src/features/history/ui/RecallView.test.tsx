@@ -178,6 +178,29 @@ describe('RecallView', () => {
     expect(api.history.cancelRecall).toHaveBeenCalled()
   })
 
+  it('opens with a result the assistant recalled, in its view, without asking again', async () => {
+    const fake = fakeApi()
+    render(<RecallView />)
+    await act(async () => {})
+    act(() => fake.emit.recallShown({ query: '', result, view: 'images', byImage: true }))
+    expect(screen.getByRole('region', { name: 'Recall' })).toBeTruthy()
+    expect(screen.getByRole('list', { name: 'Picture cloud' })).toBeTruthy()
+    expect(screen.getByText(/recalled these pages by the image you attached/)).toBeTruthy()
+    expect(fake.api.history.recall).not.toHaveBeenCalled()
+
+    act(() => fake.emit.recallShown({ query: 'lions', result, view: 'words', byImage: false }))
+    expect(screen.getByRole('list', { name: 'Keyword cloud' })).toBeTruthy()
+    expect(
+      (screen.getByRole('searchbox', { name: 'What to recall' }) as HTMLInputElement).value,
+    ).toBe('lions')
+    expect(screen.getByText('The assistant recalled these pages.')).toBeTruthy()
+
+    // The user's own recall replaces the note.
+    fireEvent.submit(screen.getByRole('search'))
+    await waitFor(() => expect(fake.api.history.recall).toHaveBeenCalled())
+    expect(screen.queryByText('The assistant recalled these pages.')).toBeNull()
+  })
+
   it('ignores an answer that arrives after a newer request', async () => {
     const fake = fakeApi()
     let resolveFirst: (value: RecallResult) => void = () => {}

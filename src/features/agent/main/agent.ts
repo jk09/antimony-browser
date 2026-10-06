@@ -27,6 +27,7 @@ import {
   ToolError,
   validateInput,
   formatMacroList,
+  type AttachedImage,
   type BrowserPort,
   type HistoryPort,
   type MacroPort,
@@ -39,7 +40,7 @@ export const SYSTEM_PROMPT = `You are the assistant built into Antimony, a web b
 Browser
 - Each user message starts with a <browser_state> block: the current page, page and history access, and the saved macros.
 - The browser's tabs are called stacks. new_stack opens one (also for "open a new window/tab"), optionally at a URL; navigate loads a page in the current stack.
-- For pages the user visited before ("that article I read last week", "search my history for …"), use search_history; it works without page access but not while history access is off (/history-access on).
+- For pages the user visited before ("that article I read last week", "search my history for …"), use search_history; it works without page access but not while history access is off (/history-access on). To find a page by a picture the user attached ("a page with an image like this"), or to show the user what they read about a topic as a cloud, use recall_history.
 - With page access on, read_page shows the page text and its interactive elements with CSS selectors for click and type_text; find_in_page, scroll and screenshot help too. Without page access you only know the URL and title; if the request needs the page content, tell the user to turn page access on (/page-access on).
 
 Acting
@@ -163,6 +164,8 @@ export class Agent {
     resolve: (decision: Decision | 'stopped') => void
   } | null = null
   private controller: AbortController | null = null
+  /** Images attached to the request being run, for recall_history. */
+  private requestImages: AttachedImage[] = []
   private runs: DebugRun[] = []
   private nextRunId = 1
 
@@ -202,6 +205,11 @@ export class Agent {
   /** Sends a request to the model and runs the tools it calls until it's done. */
   async run(input: RunInput): Promise<void> {
     this.begin()
+    this.requestImages = input.attachments.flatMap((attachment) =>
+      attachment.kind === 'image'
+        ? [{ mediaType: attachment.mediaType, data: attachment.data }]
+        : [],
+    )
     const run = this.startDebugRun(input.text || '(attachments)')
     this.items = [
       ...this.items,
@@ -434,6 +442,7 @@ export class Agent {
   async replay(label: string, steps: Step[]): Promise<{ ok: boolean; error?: string }> {
     this.begin()
     const run = this.startDebugRun(label)
+    this.requestImages = []
     this.addItem({ kind: 'user', text: label, attachments: [] })
     const signal = this.controller!.signal
     let result: { ok: boolean; error?: string } = { ok: true }
@@ -665,6 +674,8 @@ export class Agent {
           history: this.deps.history(),
           macros: this.deps.macros(),
           stacks: this.deps.stacks(),
+          images: this.requestImages,
+          signal,
         }),
         signal,
       )

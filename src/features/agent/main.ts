@@ -48,8 +48,11 @@ import { parseDecision, parseRunInput } from './main/validate'
 
 export type { Step } from './main/agent'
 export type {
+  AttachedImage,
   HistoryHit,
   HistoryPort,
+  HistoryRecall,
+  HistoryRecallRequest,
   HistorySearchMode,
   MacroInfo,
   MacroPort,

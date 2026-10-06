@@ -1,5 +1,11 @@
 import { ipcRenderer } from 'electron'
-import { channels, type HistoryApi, type HistorySettings, type OpenRequest } from './ipc'
+import {
+  channels,
+  type HistoryApi,
+  type HistorySettings,
+  type OpenRequest,
+  type RecallShown,
+} from './ipc'
 
 export const historyBridge: HistoryApi = {
   suggest: (text) => ipcRenderer.invoke(channels.suggest, text),
@@ -24,6 +30,11 @@ export const historyBridge: HistoryApi = {
     const wrapped = (_: unknown, query: string) => listener(query)
     ipcRenderer.on(channels.openRecall, wrapped)
     return () => ipcRenderer.off(channels.openRecall, wrapped)
+  },
+  onRecallShown: (listener) => {
+    const wrapped = (_: unknown, shown: RecallShown) => listener(shown)
+    ipcRenderer.on(channels.recallShown, wrapped)
+    return () => ipcRenderer.off(channels.recallShown, wrapped)
   },
   onChanged: (listener) => {
     const wrapped = () => listener()
