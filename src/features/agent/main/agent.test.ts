@@ -371,6 +371,7 @@ describe('cross-site navigation after reading a page', () => {
           },
         ],
       })),
+      recall: vi.fn(),
     }
     const { agent, requests, states } = setup(
       [
@@ -395,8 +396,85 @@ describe('cross-site navigation after reading a page', () => {
     await running
   })
 
+  it('recalls by an attached image, and a later cross-site navigation asks first', async () => {
+    const history: HistoryPort = {
+      search: vi.fn(),
+      recall: vi.fn(async () => ({
+        view: 'images' as const,
+        pages: [
+          {
+            title: 'Lion photos',
+            url: 'https://photos.example/lions',
+            lastVisitAt: 0,
+            score: 0.8,
+            keywords: ['lion'],
+            note: null,
+          },
+        ],
+        keywords: [{ text: 'lion', weight: 0.8 }],
+      })),
+    }
+    const { agent, requests, states } = setup(
+      [
+        async () => response([toolUse('t1', 'recall_history', { image: 1 })], 'tool_use'),
+        async () =>
+          response([toolUse('t2', 'navigate', { url: 'https://evil.example/' })], 'tool_use'),
+        async () => response([{ type: 'text', text: 'ok' }]),
+      ],
+      { history },
+    )
+    const running = agent.run({
+      text: 'which page in my history had a picture like this?',
+      attachments: [
+        { kind: 'text', name: 'notes.txt', text: 'x' },
+        { kind: 'image', name: 'lion.png', mediaType: 'image/png', data: 'iVBORw0K' },
+      ],
+    })
+    await waitFor(() => agent.state().status === 'awaiting-approval')
+    expect(history.recall).toHaveBeenCalledWith(
+      {
+        query: '',
+        image: { mediaType: 'image/png', data: 'iVBORw0K' },
+        view: null,
+        show: true,
+      },
+      expect.any(AbortSignal),
+    )
+    expect(JSON.stringify(requests[1]!.messages.at(-1))).toContain('https://photos.example/lions')
+    expect(states.at(-1)!.items).toContainEqual(
+      expect.objectContaining({
+        tool: 'recall_history',
+        summary: 'Recall history for your image 1',
+      }),
+    )
+    expect(agent.state().approval!.description).toBe('Open https://evil.example/')
+    agent.approve('deny')
+    await running
+  })
+
+  it('aborts a recall when the run stops', async () => {
+    let signal: AbortSignal | undefined
+    const history: HistoryPort = {
+      search: vi.fn(),
+      recall: vi.fn((_request, recallSignal?: AbortSignal) => {
+        signal = recallSignal
+        return new Promise<never>(() => {})
+      }),
+    }
+    const { agent } = setup(
+      [async () => response([toolUse('t1', 'recall_history', { query: 'lions' })], 'tool_use')],
+      { history },
+    )
+    const running = agent.run(input('show me what I read about lions'))
+    await waitFor(() => signal !== undefined)
+    expect(signal!.aborted).toBe(false)
+    agent.stop()
+    await running
+    expect(signal!.aborted).toBe(true)
+  })
+
   it('history search is neither offered nor run while history access is off', async () => {
-    const history: HistoryPort = { search: vi.fn(async () => ({ pages: [] })) }
+    const history: HistoryPort = { search: vi.fn(async () => ({ pages: [] })), recall: vi.fn() }
     const { agent, requests } = setup(
       [
         async () => response([toolUse('t1', 'search_history', { query: 'LLM' })], 'tool_use'),

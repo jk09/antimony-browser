@@ -152,6 +152,8 @@ export function RecallView() {
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [thumbnails, setThumbnails] = useState(new Map<number, string>())
+  /** Set when the shown result came from the assistant (recall_history). */
+  const [byAssistant, setByAssistant] = useState<string | null>(null)
   const latest = useRef(0)
   const field = useRef<HTMLInputElement>(null)
   // The sketch as recall sees it when /recall opens the view.
@@ -171,6 +173,7 @@ export function RecallView() {
       setBusy(true)
       setError(null)
       setSelected(null)
+      setByAssistant(null)
       api.history
         .recall({ query: text.trim(), sketch: jpeg })
         .then((found) => {
@@ -199,6 +202,27 @@ export function RecallView() {
         if (text.trim()) recall(text)
       }),
     [api, recall],
+  )
+
+  // The assistant's recall_history: show its result as it is, without asking the model again.
+  useEffect(
+    () =>
+      api.history.onRecallShown((shown) => {
+        latest.current++
+        setOpen(true)
+        setBusy(false)
+        setError(null)
+        setSelected(null)
+        setQuery(shown.query)
+        setResult(shown.result)
+        setView(shown.view)
+        setByAssistant(
+          shown.byImage
+            ? 'The assistant recalled these pages by the image you attached.'
+            : 'The assistant recalled these pages.',
+        )
+      }),
+    [api],
   )
 
   // Screenshots of recalled pages, for the picture cloud and the keyword's page list.
@@ -301,6 +325,7 @@ export function RecallView() {
           {error}
         </p>
       )}
+      {byAssistant && <p className="recall-notice">{byAssistant}</p>}
       {result?.notice && <p className="recall-notice">{result.notice}</p>}
       {busy && <p className="recall-notice">Recalling…</p>}
       {result && !busy && result.pages.length === 0 && (

@@ -22,6 +22,7 @@ vi.mock('electron', () => ({
     createFromBuffer: (buffer: Buffer) => ({
       isEmpty: () => buffer.length === 0,
       getSize: () => ({ width: 800, height: 500 }),
+      toJPEG: () => Buffer.from(`full-${buffer.toString('hex')}`),
       resize: ({ width }: { width: number }) => ({
         toJPEG: () => Buffer.from(`small-${width}-${buffer.toString('hex')}`),
       }),
@@ -449,6 +450,102 @@ describe('history main', () => {
     const pending = call(channels.recall, { query: 'lions', sketch: null }) as Promise<unknown>
     call(channels.cancelRecall)
     expect(await pending).toEqual({ view: 'words', pages: [], keywords: [] })
+  })
+
+  it("runs the assistant's recall by an attached image and shows it on the Recall page", async () => {
+    const { call, page, ctx } = setup()
+    page({ type: 'navigated', url: 'https://example.com/lions', status: 200, transition: 'link' })
+    await vi.advanceTimersByTimeAsync(HIGH_DWELL_MS + 5000)
+    const lions = call(channels.current) as { id: number }
+    call(channels.setNote, lions.id, 'lion photos')
+    complete.mockResolvedValue({
+      text: JSON.stringify({
+        view: 'images',
+        pages: [{ id: lions.id, score: 0.8, keywords: ['lion'] }],
+      }),
+      model: 'm',
+    })
+    const png = Buffer.from('png-bytes').toString('base64')
+    const result = await historySearch!.recall({
+      query: '',
+      image: { mediaType: 'image/png', data: png },
+      view: 'words',
+      show: true,
+    })
+    expect(result).toEqual({
+      view: 'images',
+      pages: [
+        {
+          title: 'Write-ahead logging',
+          url: 'https://example.com/lions',
+          lastVisitAt: expect.any(Number),
+          score: 0.8,
+          keywords: ['lion'],
+          note: 'lion photos',
+        },
+      ],
+      keywords: [{ text: 'lion', weight: 0.8 }],
+    })
+    const [request] = complete.mock.calls[0]! as [
+      { images: { label: string; jpegBase64: string }[] },
+    ]
+    expect(request.images[0]).toEqual({
+      label: 'Sketch:',
+      jpegBase64: Buffer.from(`full-${Buffer.from('png-bytes').toString('hex')}`).toString(
+        'base64',
+      ),
+    })
+    expect(request.images[1]!.label).toBe(`Screenshot of page ${lions.id}:`)
+    expect(ctx.ipc.send).toHaveBeenCalledWith(channels.recallShown, {
+      query: '',
+      result: expect.objectContaining({
+        view: 'images',
+        pages: [expect.objectContaining({ id: lions.id })],
+      }),
+      view: 'words',
+      byImage: true,
+    })
+
+    ctx.ipc.send.mockClear()
+    await historySearch!.recall({ query: 'lions', image: null, view: null, show: false })
+    expect(ctx.ipc.send).not.toHaveBeenCalledWith(channels.recallShown, expect.anything())
+  })
+
+  it('refuses images it cannot use as a sketch', async () => {
+    setup()
+    const recall = (mediaType: string, data: string) =>
+      historySearch!.recall({ query: '', image: { mediaType, data }, view: null, show: true })
+    await expect(recall('image/gif', 'R0lG')).rejects.toThrow('Only PNG or JPEG')
+    await expect(recall('image/png', '')).rejects.toThrow('could not be read')
+    await expect(recall('image/png', 'A'.repeat(8_000_000))).rejects.toThrow('larger than 5 MB')
+    await expect(
+      historySearch!.recall({ query: ' ', image: null, view: null, show: true }),
+    ).rejects.toThrow('needs a query or an image')
+    expect(complete).not.toHaveBeenCalled()
+  })
+
+  it("keeps the assistant's and the Recall page's recalls apart; the run's signal stops it", async () => {
+    const { call, page } = setup()
+    page({ type: 'navigated', url: 'https://example.com/a', status: 200, transition: 'link' })
+    call(channels.setNote, (call(channels.current) as { id: number }).id, 'lions')
+    const signals: AbortSignal[] = []
+    complete.mockImplementation(({ signal }: { signal: AbortSignal }) => {
+      signals.push(signal)
+      return new Promise((_, reject) =>
+        signal.addEventListener('abort', () => reject(new Error('aborted'))),
+      )
+    })
+    const run = new AbortController()
+    const assistant = historySearch!.recall(
+      { query: 'lions', image: null, view: null, show: true },
+      run.signal,
+    )
+    const ui = call(channels.recall, { query: 'lions', sketch: null }) as Promise<unknown>
+    call(channels.cancelRecall)
+    expect(await ui).toEqual({ view: 'words', pages: [], keywords: [] })
+    expect(signals[0]!.aborted).toBe(false)
+    run.abort()
+    await expect(assistant).rejects.toThrow('Recall was stopped.')
   })
 
   it('adds File → Recall from History… (Ctrl/Cmd+Shift+Y) and opens Recall from /recall', () => {

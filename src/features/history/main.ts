@@ -3,7 +3,13 @@ import { join } from 'node:path'
 import { app, nativeImage, powerMonitor } from 'electron'
 import type { MainContext } from '../../app/main/features'
 import { createJsonStore } from '../../app/main/json-store'
-import { complete, provideHistorySearch, type HistoryHit } from '../agent/main'
+import {
+  complete,
+  provideHistorySearch,
+  type AttachedImage,
+  type HistoryHit,
+  type HistoryRecall,
+} from '../agent/main'
 import { getPage, getTabs, onPageEvent } from '../navigation/main'
 import {
   channels,
@@ -15,6 +21,7 @@ import {
   type RecalledPage,
   type RecallRequest,
   type RecallResult,
+  type RecallShown,
   type SearchMode,
   type SearchRequest,
   type SearchResult,
@@ -110,6 +117,28 @@ export function parseOpen(value: unknown): OpenRequest {
 }
 
 const SKETCH_PREFIX = 'data:image/jpeg;base64,'
+/** Same limit as the prompt's image attachments. */
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+const IMAGE_WIDTH = 800
+
+/** An image the user attached, as a JPEG sketch data URL (PNG or JPEG only). */
+export function attachedImageSketch(image: AttachedImage): string {
+  if (image.mediaType !== 'image/png' && image.mediaType !== 'image/jpeg') {
+    throw new TypeError(
+      `Only PNG or JPEG images can be recalled by; this one is ${image.mediaType}.`,
+    )
+  }
+  if (image.data.length > Math.ceil(MAX_IMAGE_BYTES / 3) * 4) {
+    throw new TypeError('The attached image is larger than 5 MB.')
+  }
+  const decoded = nativeImage.createFromBuffer(Buffer.from(image.data, 'base64'))
+  if (decoded.isEmpty()) throw new TypeError('The attached image could not be read.')
+  const scaled =
+    decoded.getSize().width > IMAGE_WIDTH ? decoded.resize({ width: IMAGE_WIDTH }) : decoded
+  const sketch = `${SKETCH_PREFIX}${scaled.toJPEG(75).toString('base64')}`
+  if (sketch.length > MAX_SKETCH) throw new TypeError('The attached image is too detailed.')
+  return sketch
+}
 
 export function parseRecallRequest(value: unknown): RecallRequest {
   if (!isRecord(value)) throw new TypeError(`${channels.recall} expects { query, sketch }`)
@@ -429,6 +458,8 @@ export function register({ window, ipc, fileMenu }: MainContext): void {
         ...(notice && { notice }),
       }
     },
+    // Defined below; only called once a run uses recall_history.
+    recall: (request, signal) => assistantRecall(request, signal),
   })
 
   /** A stored screenshot, scaled down to send to the model, base64; null if there's none. */
@@ -452,12 +483,20 @@ export function register({ window, ipc, fileMenu }: MainContext): void {
     })
   }
 
-  let recalling: AbortController | null = null
+  // The Recall page and the assistant each have at most one recall in flight; a new one replaces
+  // only its own.
+  const recalling = new Map<'ui' | 'assistant', AbortController>()
 
-  const recall = async ({ query, sketch }: RecallRequest): Promise<RecallResult> => {
-    recalling?.abort()
+  const recall = async (
+    { query, sketch }: RecallRequest,
+    owner: 'ui' | 'assistant' = 'ui',
+    signal?: AbortSignal,
+  ): Promise<RecallResult> => {
+    recalling.get(owner)?.abort()
     const controller = new AbortController()
-    recalling = controller
+    recalling.set(owner, controller)
+    signal?.addEventListener('abort', () => controller.abort(), { once: true })
+    if (signal?.aborted) controller.abort()
     const view = sketch ? 'images' : 'words'
     const or = query ? ftsQuery(query, 'or') : null
     const matched = or
@@ -466,7 +505,10 @@ export function register({ window, ipc, fileMenu }: MainContext): void {
     const visual = sketch ? db.recentWithScreenshot(VISUAL_CANDIDATES) : []
     const ids = [...new Set([...matched, ...visual, ...db.recentDescribed(RECENT_CANDIDATES)])]
     const candidates = db.candidates(ids)
-    if (candidates.length === 0) return { view, pages: [], keywords: [] }
+    if (candidates.length === 0) {
+      if (recalling.get(owner) === controller) recalling.delete(owner)
+      return { view, pages: [], keywords: [] }
+    }
     try {
       const images = sketch
         ? [
@@ -510,7 +552,45 @@ export function register({ window, ipc, fileMenu }: MainContext): void {
         notice: `Recall by meaning failed (${reason}); showing text matches.`,
       }
     } finally {
-      if (recalling === controller) recalling = null
+      if (recalling.get(owner) === controller) recalling.delete(owner)
+    }
+  }
+
+  /** The assistant's recall_history: Recall, optionally by an attached image, shown on request. */
+  const assistantRecall = async (
+    request: {
+      query: string
+      image: AttachedImage | null
+      view: 'words' | 'images' | null
+      show: boolean
+    },
+    signal?: AbortSignal,
+  ): Promise<HistoryRecall> => {
+    const query = request.query.trim().slice(0, MAX_QUERY)
+    const sketch = request.image ? attachedImageSketch(request.image) : null
+    if (!query && !sketch) throw new TypeError('Recall needs a query or an image.')
+    const result = await recall({ query, sketch }, 'assistant', signal)
+    if (signal?.aborted) throw new Error('Recall was stopped.')
+    if (request.show) {
+      ipc.send(channels.recallShown, {
+        query,
+        result,
+        view: request.view ?? result.view,
+        byImage: sketch !== null,
+      } satisfies RecallShown)
+    }
+    return {
+      view: result.view,
+      pages: result.pages.map((page) => ({
+        title: page.title,
+        url: page.url,
+        lastVisitAt: page.lastVisitAt,
+        score: page.score,
+        keywords: page.keywords,
+        note: page.note,
+      })),
+      keywords: result.keywords.map(({ text, weight }) => ({ text, weight })),
+      ...(result.notice && { notice: result.notice }),
     }
   }
 
@@ -558,7 +638,7 @@ export function register({ window, ipc, fileMenu }: MainContext): void {
   ipc.handle(channels.requestOpen, (value) => ipc.send(channels.open, parseOpen(value)))
   ipc.handle(channels.recall, (value) => recall(parseRecallRequest(value)))
   ipc.handle(channels.cancelRecall, () => {
-    recalling?.abort()
+    recalling.get('ui')?.abort()
   })
   ipc.handle(channels.requestRecall, (query) => {
     if (typeof query !== 'string' || query.length > MAX_QUERY) {

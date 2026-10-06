@@ -63,6 +63,44 @@ export interface HistoryHit {
 
 export type HistorySearchMode = 'meaning' | 'text'
 
+/** A page recalled from history (recall_history): how well it matches and what it is about. */
+export interface RecalledHit {
+  title: string
+  url: string
+  /** Epoch milliseconds. */
+  lastVisitAt: number
+  /** 0–1. */
+  score: number
+  keywords: string[]
+  note: string | null
+}
+
+/** An image the user attached to the current request, as the prompt sent it. */
+export interface AttachedImage {
+  mediaType: string
+  /** base64, no data: prefix */
+  data: string
+}
+
+export type RecallView = 'words' | 'images'
+
+export interface HistoryRecallRequest {
+  query: string
+  image: AttachedImage | null
+  view: RecallView | null
+  /** Open the Recall page with the result. */
+  show: boolean
+}
+
+export interface HistoryRecall {
+  view: RecallView
+  /** Best match first. */
+  pages: RecalledHit[]
+  /** Heaviest first. */
+  keywords: { text: string; weight: number }[]
+  notice?: string
+}
+
 /** A macro (a saved skill) as the agent sees it; its steps are replayable tool calls. */
 export interface MacroInfo {
   name: string
@@ -92,6 +130,8 @@ export interface HistoryPort {
     mode: HistorySearchMode,
     bookmarked: boolean,
   ): Promise<{ pages: HistoryHit[]; notice?: string }>
+  /** Recall (keywords and scores, by a request and/or an image); rejects with a readable error. */
+  recall(request: HistoryRecallRequest, signal?: AbortSignal): Promise<HistoryRecall>
 }
 
 /**
@@ -200,6 +240,26 @@ export const toolDefinitions: ToolDefinition[] = [
       },
       ['query'],
     ),
+  },
+  {
+    name: 'recall_history',
+    kind: 'history',
+    replayable: false,
+    description:
+      "Recall pages from the user's browsing history by a request and/or by an image the user attached to their current message (compared with screenshots of the pages, e.g. \"the page with a picture like this\"). Returns up to 20 pages with a relevance score (0–1) and keywords saying what each is about, and the overall keywords. Unless show is false it also opens the Recall page, where the user sees the result as a keyword cloud (view 'words') or a picture cloud (view 'images'). Use it to show the user what they read about a topic, or to find a page by a picture; use search_history for a quick list. Give query, image or both.",
+    input_schema: schema({
+      query: { type: 'string', description: "What to recall, in the user's words." },
+      image: {
+        type: 'integer',
+        description:
+          "Use the n-th image attached to the user's current message (1 = first) as the picture to look for.",
+      },
+      view: { type: 'string', enum: ['words', 'images'] },
+      show: {
+        type: 'boolean',
+        description: 'Open the Recall page with the cloud (default true).',
+      },
+    }),
   },
   {
     name: 'save_macro',
@@ -355,7 +415,13 @@ export function validateInput(name: string, input: unknown): Input {
   for (const [key, value] of Object.entries(record)) {
     const spec = properties[key] as { type: string; enum?: string[] }
     // Arrays and objects are only checked for their shape here; the tool checks their content.
-    const type = Array.isArray(value) ? 'array' : value === null ? 'null' : typeof value
+    const type = Array.isArray(value)
+      ? 'array'
+      : value === null
+        ? 'null'
+        : Number.isInteger(value) && spec.type === 'integer'
+          ? 'integer'
+          : typeof value
     if (type !== spec.type) throw new ToolError(`${name}: ${key} must be a ${spec.type}`)
     if (spec.enum && !spec.enum.includes(value as string)) {
       throw new ToolError(`${name}: ${key} must be one of ${spec.enum.join(', ')}`)
@@ -397,6 +463,11 @@ export function describeCall(name: string, input: Input, element?: ElementInfo):
       return `Delete macro /${String(input['name'])}`
     case 'search_history':
       return `Search history for "${String(input['query'])}"${input['mode'] === 'text' ? ' by text' : ''}${input['bookmarked'] ? ' in bookmarks' : ''}`
+    case 'recall_history': {
+      const image = input['image'] !== undefined ? `your image ${String(input['image'])}` : ''
+      const query = input['query'] ? `"${String(input['query'])}"` : ''
+      return `Recall history for ${[query, image].filter(Boolean).join(' by ')}`
+    }
     case 'read_page':
       return 'Read the page'
     case 'find_in_page':
@@ -516,6 +587,75 @@ async function searchHistory(history: HistoryPort | null, input: Input): Promise
   return { text: formatHistory(pages, notice) }
 }
 
+const MAX_RECALL_KEYWORDS = 20
+
+/** Recall results for the model: pages with score and keywords, then the overall keywords. */
+export function formatRecall(result: HistoryRecall, shown: boolean): string {
+  const lines = result.pages.slice(0, MAX_HISTORY_RESULTS).map((page, index) => {
+    const date = new Date(page.lastVisitAt).toISOString().slice(0, 10)
+    return [
+      `${index + 1}. ${oneLine(clip(page.title, 200)) || '(untitled)'} – ${clip(page.url, 300)}`,
+      `score ${page.score.toFixed(2)}`,
+      `last visited ${date}`,
+      ...(page.keywords.length > 0 ? [`keywords: ${page.keywords.join(', ')}`] : []),
+      ...(page.note ? [`note: ${oneLine(clip(page.note, 500))}`] : []),
+    ].join(' · ')
+  })
+  const keywords = result.keywords
+    .slice(0, MAX_RECALL_KEYWORDS)
+    .map((keyword) => `${keyword.text} (${keyword.weight})`)
+  const head =
+    lines.length === 0
+      ? 'No pages in history match.'
+      : `${lines.length} page(s) recalled from the browsing history, best match first.`
+  const page = shown
+    ? `The Recall page shows them to the user as a ${result.view === 'images' ? 'picture' : 'keyword'} cloud.`
+    : ''
+  return [
+    ...(result.notice ? [result.notice] : []),
+    head,
+    ...(page && lines.length > 0 ? [page] : []),
+    ...(lines.length > 0
+      ? [
+          untrusted(
+            [...lines, ...(keywords.length ? [`Keywords: ${keywords.join(', ')}`] : [])].join('\n'),
+          ),
+        ]
+      : []),
+  ].join('\n')
+}
+
+async function recallHistory(ports: ToolPorts, input: Input): Promise<ToolOutput> {
+  if (!ports.history) throw new ToolError('Browsing history is not available.')
+  const query = typeof input['query'] === 'string' ? input['query'].trim() : ''
+  if (query.length > MAX_HISTORY_QUERY) {
+    throw new ToolError(`recall_history: query is longer than ${MAX_HISTORY_QUERY} characters`)
+  }
+  let image: AttachedImage | null = null
+  if (input['image'] !== undefined) {
+    const images = ports.images ?? []
+    const n = Number(input['image'])
+    image = images[n - 1] ?? null
+    if (!image) {
+      throw new ToolError(
+        images.length === 0
+          ? 'recall_history: no image is attached to the current request; ask the user to attach one.'
+          : `recall_history: there is no image ${n}; the current request has ${images.length} image(s).`,
+      )
+    }
+  }
+  if (!query && !image) throw new ToolError('recall_history: give a query, an image or both')
+  const view = input['view'] === 'words' || input['view'] === 'images' ? input['view'] : null
+  const show = input['show'] !== false
+  let result: HistoryRecall
+  try {
+    result = await ports.history.recall({ query, image, view, show }, ports.signal)
+  } catch (error) {
+    throw new ToolError(error instanceof Error ? error.message : String(error))
+  }
+  return { text: formatRecall(result, show) }
+}
+
 /** `/name <param> …` */
 export const macroSignature = (macro: Pick<MacroInfo, 'name' | 'params'>) =>
   [`/${macro.name}`, ...macro.params.map((param) => `<${param.name}>`)].join(' ')
@@ -574,6 +714,10 @@ export interface ToolPorts {
   history?: HistoryPort | null
   macros?: MacroPort | null
   stacks?: StackOpener | null
+  /** Images attached to the current request (recall_history). */
+  images?: AttachedImage[]
+  /** Aborted when the run stops (tools that wait on a model request). */
+  signal?: AbortSignal
 }
 
 /**
@@ -587,6 +731,7 @@ export async function executeTool(
   ports: ToolPorts = {},
 ): Promise<ToolOutput> {
   if (name === 'search_history') return searchHistory(ports.history ?? null, input)
+  if (name === 'recall_history') return recallHistory(ports, input)
   if (toolNamed(name)?.kind === 'macro') return runMacroTool(ports.macros ?? null, name, input)
   if (!browser) throw new ToolError('The browser page is not available.')
   if (name === 'new_stack') {

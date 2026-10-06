@@ -12,6 +12,7 @@ import type {
   OpenRequest,
   RecallRequest,
   RecallResult,
+  RecallShown,
 } from '../../features/history/ipc'
 import type { MenuEntry, RunResult } from '../../features/menu/ipc'
 import type { NavigationState } from '../../features/navigation/ipc'
@@ -81,6 +82,7 @@ export function fakeApi(
   const historyChanged = channel<void>()
   const historySettings = channel<HistorySettings>()
   const recallOpen = channel<string>()
+  const recallShown = channel<RecallShown>()
   const stacks = channel<StacksState>()
   const stackCommand = channel<StackCommand>()
   let home: string | null = null
@@ -126,6 +128,7 @@ export function fakeApi(
       cancelRecall: vi.fn(async () => {}),
       requestRecall: vi.fn(async (query: string) => recallOpen.emit(query)),
       onOpenRecall: recallOpen.subscribe,
+      onRecallShown: recallShown.subscribe,
       onChanged: historyChanged.subscribe,
       onSettingsChanged: historySettings.subscribe,
     },
@@ -196,6 +199,7 @@ export function fakeApi(
       historyOpen: historyOpen.emit,
       historyChanged: () => historyChanged.emit(),
       recallOpen: recallOpen.emit,
+      recallShown: recallShown.emit,
       stacks: stacks.emit,
       stackCommand: stackCommand.emit,
     },
