@@ -1,6 +1,6 @@
 # 0010. Send history screenshots to the model when recalling by sketch
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-02
 - Features: history, agent
 - Spec: drifting-nimbus-r8c3kw
