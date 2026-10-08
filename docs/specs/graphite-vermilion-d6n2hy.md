@@ -6,12 +6,12 @@
 | --- | --- |
 | **Feature name** | Redesign of the chrome UI: floating rounded page card, assistant panel as cards, vermilion accent |
 | **Spec ID** | graphite-vermilion-d6n2hy |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-08 10:45 +00:00 |
-| **Last updated** | 2026-10-08 13:53 +00:00 |
+| **Last updated** | 2026-10-08 14:00 +00:00 |
 | **Affected features** | navigation, prompt, stacks, agent, history, skills |
 | **Target release** | 0.1.0 |
 | **Related links** | Claude Design canvas "Antimony Redesign" (https://claude.ai/artifact/7m5SaVUq9YekoijyotUpcD); spec ember-console-k5w9tb (/config page) |
