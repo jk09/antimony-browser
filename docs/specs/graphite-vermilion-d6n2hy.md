@@ -11,7 +11,7 @@
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-08 10:45 +00:00 |
-| **Last updated** | 2026-10-08 11:00 +00:00 |
+| **Last updated** | 2026-10-08 13:53 +00:00 |
 | **Affected features** | navigation, prompt, stacks, agent, history, skills |
 | **Target release** | 0.1.0 |
 | **Related links** | Claude Design canvas "Antimony Redesign" (https://claude.ai/artifact/7m5SaVUq9YekoijyotUpcD); spec ember-console-k5w9tb (/config page) |
@@ -105,3 +105,4 @@ Note any deviations from the original spec during implementation.
 - Not run in the cloud session (no Electron binary): `npm run dev`, e2e and a visual check of the result; CI runs e2e. The page card's inset comes from `.shell` padding, so no change to `PageArea` or its test was needed.
 - Also restyled: debug panel, Recall, History and `/config` as rounded cards (same tokens).
 - The e2e layout assertions in `e2e/prompt.spec.ts` assumed an edge-to-edge page view; they now expect the 10 px frame (`FRAME`) around and between the page card and the panel.
+- The debugger e2e test now polls until the panel width (`400 + 3 * FRAME`) is reached before it measures, because a single read once saw an unsettled layout in CI (404 instead of 400).
