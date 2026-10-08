@@ -2,6 +2,7 @@ import { ActingFrame } from '../../features/agent/ui/ActingFrame'
 import { Conversation } from '../../features/agent/ui/Conversation'
 import { DebugPanel } from '../../features/agent/ui/DebugPanel'
 import { HistoryView } from '../../features/history/ui/HistoryView'
+import { MapView } from '../../features/history/ui/MapView'
 import { RecallView } from '../../features/history/ui/RecallView'
 import { PageArea } from '../../features/navigation/ui/PageArea'
 import { AssistantPanel } from '../../features/prompt/ui/AssistantPanel'
@@ -25,6 +26,7 @@ export function App() {
           </PageArea>
         </ActingFrame>
         <RecallView />
+        <MapView />
         <ConfigView />
         <DebugPanel />
       </div>

@@ -350,6 +350,10 @@ describe('Prompt', () => {
       expect(api.history.requestRecall).toHaveBeenCalledWith('show all pages about lions'),
     )
 
+    type(box, '/history-map')
+    press(box, 'Enter')
+    await waitFor(() => expect(api.history.requestMap).toHaveBeenCalled())
+
     api.history.current.mockResolvedValue({
       id: 7,
       url: 'https://example.com/',

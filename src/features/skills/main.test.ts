@@ -74,6 +74,7 @@ describe('skills main', () => {
     call(channels.requestConfig)
     expect(ctx.ipc.send).toHaveBeenCalledWith(channels.openConfig, null)
     expect(() => macros.save({ ...macro, name: 'config' })).toThrow('built-in command')
+    expect(() => macros.save({ ...macro, name: 'history-map' })).toThrow('built-in command')
   })
 
   it('saves macros from the assistant with parameters and hints, persists them and tells the UI', () => {

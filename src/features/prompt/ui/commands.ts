@@ -162,6 +162,9 @@ export async function runCommand(
     case 'recall':
       await api.history.requestRecall(args)
       return { close: true }
+    case 'history-map':
+      await api.history.requestMap()
+      return { close: true }
     case 'note': {
       const page = await api.history.current()
       if (!args) {

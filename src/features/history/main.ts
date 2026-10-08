@@ -14,7 +14,13 @@ import { getPage, getTabs, onPageEvent } from '../navigation/main'
 import {
   channels,
   MAX_NOTE,
+  MAP_LIMIT,
+  MAP_RANGES,
+  MAX_MAP_TEXT,
   MAX_QUERY,
+  type MapRange,
+  type MapRequest,
+  type MapResult,
   MAX_SKETCH,
   type HistorySettings,
   type OpenRequest,
@@ -30,6 +36,7 @@ import {
   type HistoryPage,
 } from './ipc'
 import { HistoryDb } from './main/db'
+import { buildMap } from './main/map'
 import {
   aggregateKeywords,
   MAX_SCREENSHOTS,
@@ -138,6 +145,23 @@ export function attachedImageSketch(image: AttachedImage): string {
   const sketch = `${SKETCH_PREFIX}${scaled.toJPEG(75).toString('base64')}`
   if (sketch.length > MAX_SKETCH) throw new TypeError('The attached image is too detailed.')
   return sketch
+}
+
+const RANGE_MS = { '24h': 86_400_000, '7d': 7 * 86_400_000, '30d': 30 * 86_400_000 } as const
+
+export function parseMapRequest(value: unknown): MapRequest {
+  if (!isRecord(value)) throw new TypeError(`${channels.map} expects { range, text }`)
+  for (const key of Object.keys(value)) {
+    if (key !== 'range' && key !== 'text') throw new TypeError(`unknown field ${key}`)
+  }
+  const { range, text } = value
+  if (!MAP_RANGES.includes(range as MapRange)) {
+    throw new TypeError(`range must be one of ${MAP_RANGES.join(', ')}`)
+  }
+  if (typeof text !== 'string' || text.length > MAX_MAP_TEXT) {
+    throw new TypeError(`text must be a string of up to ${MAX_MAP_TEXT} characters`)
+  }
+  return { range: range as MapRange, text: text.trim() }
 }
 
 export function parseRecallRequest(value: unknown): RecallRequest {
@@ -637,6 +661,13 @@ export function register({ window, ipc, fileMenu }: MainContext): void {
   })
   ipc.handle(channels.requestOpen, (value) => ipc.send(channels.open, parseOpen(value)))
   ipc.handle(channels.recall, (value) => recall(parseRecallRequest(value)))
+  ipc.handle(channels.map, (value): MapResult => {
+    const { range, text } = parseMapRequest(value)
+    const since = range === 'all' ? null : Date.now() - RANGE_MS[range]
+    const { rows, total } = db.mapPages(since, text, MAP_LIMIT)
+    return buildMap(rows, db.follows(rows.map((row) => row.id)), total)
+  })
+  ipc.handle(channels.requestMap, () => ipc.send(channels.openMap, null))
   ipc.handle(channels.cancelRecall, () => {
     recalling.get('ui')?.abort()
   })
