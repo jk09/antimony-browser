@@ -103,7 +103,12 @@ export function MapView() {
         height: NODE_HEIGHT,
       })),
     }))
-    return { groups, placed: layoutMap(groups) }
+    const groupOf = new Map(result.nodes.map((node) => [node.id, node.group ?? OTHER]))
+    const links = result.edges.flatMap((edge) => {
+      const [a, b] = [groupOf.get(edge.from), groupOf.get(edge.to)]
+      return a === undefined || b === undefined || a === b ? [] : [{ a, b, weight: edge.weight }]
+    })
+    return { groups, placed: layoutMap(groups, links) }
   }, [result])
 
   if (!open) return null

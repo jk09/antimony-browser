@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { layoutMap, type Box, type MapLayoutGroup } from './map-layout'
+import { crosses, crossingScore, layoutMap, type Box, type MapLayoutGroup } from './map-layout'
 
 const group = (id: number, count: number, first = id * 100): MapLayoutGroup => ({
   id,
@@ -51,5 +51,35 @@ describe('layoutMap', () => {
       nodes: new Map(),
       bounds: { x: 0, y: 0, width: 0, height: 0 },
     })
+  })
+
+  it('orders groups so links between them avoid running through other groups', () => {
+    // A–C are linked; in the given order B sits between them on one shelf.
+    const three = [group(1, 4), group(2, 4), group(3, 4)]
+    const links = [{ a: 1, b: 3, weight: 5 }]
+    const naive = layoutMap(three)
+    const smart = layoutMap(three, links)
+    const frames = (layout: typeof naive) => new Map(layout.groups.map((box) => [box.id, box]))
+    const through = (layout: typeof naive) => {
+      const boxes = frames(layout)
+      const centre = (box: Box) => ({ x: box.x + box.width / 2, y: box.y + box.height / 2 })
+      return crosses(centre(boxes.get(1)!), centre(boxes.get(3)!), boxes.get(2)!)
+    }
+    expect(through(naive)).toBe(true)
+    expect(through(smart)).toBe(false)
+    expect(crossingScore(frames(smart), links)).toBeLessThan(crossingScore(frames(naive), links))
+    expect(layoutMap(three, links)).toEqual(smart)
+    // Still no overlaps, and every page is placed.
+    expect(smart.nodes.size).toBe(12)
+    smart.groups.forEach((a, i) =>
+      smart.groups.slice(i + 1).forEach((b) => expect(overlap(a, b)).toBe(false)),
+    )
+  })
+
+  it('detects when a segment passes through a box', () => {
+    const box = { x: 10, y: 10, width: 10, height: 10 }
+    expect(crosses({ x: 0, y: 15 }, { x: 30, y: 15 }, box)).toBe(true)
+    expect(crosses({ x: 0, y: 0 }, { x: 30, y: 0 }, box)).toBe(false)
+    expect(crosses({ x: 0, y: 0 }, { x: 5, y: 30 }, box)).toBe(false)
   })
 })
