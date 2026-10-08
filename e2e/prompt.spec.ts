@@ -530,8 +530,15 @@ test('the debugger shows requests, responses and tool calls', async () => {
         return { content, page: window.contentView.children[0]?.getBounds().width ?? 0 }
       })
     // The assistant panel takes the right edge (400 px at start), inside the window's frame.
+    // Polled: the page view's bounds follow the chrome UI's reported insets, which can arrive a
+    // moment after the conversation finishes (CI once measured 404 instead of 400 here).
+    await expect
+      .poll(async () => {
+        const { content, page } = await widths()
+        return content - page
+      })
+      .toBe(400 + 3 * FRAME)
     const start = await widths()
-    expect(start.content - start.page).toBe(400 + 3 * FRAME)
     await app.evaluate(({ Menu }) =>
       Menu.getApplicationMenu()!.getMenuItemById('toggle-debugger')!.click(),
     )
