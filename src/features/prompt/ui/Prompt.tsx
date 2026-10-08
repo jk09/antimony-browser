@@ -33,7 +33,9 @@ import {
   MENTION_LIMIT,
   mentionOnly,
   mentionTyped,
+  commandMatches,
   resolveRefs,
+  SUGGESTION_LIMIT,
   stackRefs,
   suggest,
   suggestMentions,
@@ -165,7 +167,7 @@ export function Prompt({
 
   const commands = useMemo<SuggestCommand[]>(() => {
     const saved = skills.filter((skill) => !skill.builtin).map((skill) => skill.name)
-    return [
+    const all: SuggestCommand[] = [
       ...promptCommands.map((command) =>
         command.name === 'forget'
           ? { ...command, options: saved }
@@ -188,8 +190,11 @@ export function Prompt({
         name: skill.name,
         usage: skill.params.map((param) => `<${param.name}>`).join(' '),
         description: skill.description || (skill.builtin ? 'Built-in skill' : 'Macro'),
+        macro: !skill.builtin,
       })),
-    ].sort((a, b) => a.name.localeCompare(b.name))
+    ]
+    // The user's own macros lead, so a bare `/` shows them instead of burying them below the system commands.
+    return all.sort((a, b) => Number(!!b.macro) - Number(!!a.macro) || a.name.localeCompare(b.name))
   }, [skills, modelList, menu])
 
   // Pages from browsing history whose address starts with what's typed.
@@ -256,7 +261,7 @@ export function Prompt({
         visited.text === text ? visited.pages : [],
         text,
       ),
-      more: 0,
+      more: Math.max(0, (commandMatches(text, commands)?.length ?? 0) - SUGGESTION_LIMIT),
     }
   }, [text, history, commands, listHidden, recall, visited, mentionTargets, inMacro])
 
@@ -416,6 +421,8 @@ export function Prompt({
             },
           })
           setMessage(result.message ?? null)
+          // A command that didn't run keeps its text, so the user completes it instead of retyping.
+          if (result.message?.kind === 'error') setText(value)
           if (result.keyMode) setKeyMode(true)
           if (result.close) reset()
           return

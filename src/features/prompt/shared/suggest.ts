@@ -21,6 +21,8 @@ export interface SuggestCommand {
   options?: string[]
   /** Nested arguments (`/menu view zoom-in`), suggested level by level instead of `options`. */
   tree?: OptionNode[]
+  /** A macro the user saved; listed before the built-in commands. */
+  macro?: boolean
 }
 
 export interface Suggestion {
@@ -57,6 +59,13 @@ function rank<T>(items: T[], key: (item: T) => string[], needle: string): T[] {
     .map(({ item }) => item)
 }
 
+/** Commands and skills matching a bare `/name` being typed, best first; null once arguments start. */
+export function commandMatches(input: string, commands: SuggestCommand[]): SuggestCommand[] | null {
+  const text = input.trimStart()
+  if (!text.startsWith('/') || text.search(/\s/) !== -1) return null
+  return rank(commands, (command) => [command.name], text.slice(1))
+}
+
 /** Suggestions for what's typed so far: commands and skills after `/`, else past URLs and queries. */
 export function suggest(
   input: string,
@@ -70,8 +79,7 @@ export function suggest(
   if (text.startsWith('/')) {
     const space = text.search(/\s/)
     if (space === -1) {
-      const typed = text.slice(1)
-      return rank(commands, (command) => [command.name], typed)
+      return commandMatches(text, commands)!
         .slice(0, limit)
         .map((command) => ({
           kind: 'command',

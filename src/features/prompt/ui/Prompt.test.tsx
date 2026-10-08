@@ -279,6 +279,19 @@ describe('Prompt', () => {
     expect(api.agent.run).not.toHaveBeenCalled()
   })
 
+  it('keeps the text of a command that did not run, so it can be completed or corrected', async () => {
+    const { api, box } = await openPrompt({ skills: [...builtins, macro] })
+    type(box, '/open-in')
+    api.skills.run.mockResolvedValueOnce({ ok: false, error: 'Missing <url> <term>' } as never)
+    press(box, 'Enter')
+    expect((await screen.findByRole('alert')).textContent).toBe('Missing <url> <term>')
+    expect(box.value).toBe('/open-in')
+    type(box, '/relaod')
+    press(box, 'Enter')
+    await screen.findByText(/Unknown command/)
+    expect(box.value).toBe('/relaod')
+  })
+
   it('/key asks for the key in a password field and never records it', async () => {
     const { api, box } = await openPrompt()
     type(box, '/key')
@@ -402,6 +415,20 @@ describe('Prompt', () => {
     expect(first!.textContent).toContain('/dash <team>')
     press(box, 'Tab')
     expect(box.value).toBe('/dash ')
+  })
+
+  it('lists your macros first after a bare /, and says how many more commands match', async () => {
+    const extra = Array.from({ length: 10 }, (_, index) => ({
+      ...macro,
+      name: `zz-${index}`,
+    }))
+    const { box } = await openPrompt({ skills: [...builtins, ...extra, macro] })
+    type(box, '/')
+    const options = within(await screen.findByRole('listbox')).getAllByRole('option')
+    expect(options[0]!.textContent).toContain('/open-in')
+    expect(screen.getByText(/more – type to narrow/)).toBeTruthy()
+    type(box, '/open')
+    expect(screen.queryByText(/more – type to narrow/)).toBeNull()
   })
 
   const macro = {
