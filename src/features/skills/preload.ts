@@ -10,4 +10,10 @@ export const skillsBridge: SkillsApi = {
   },
   delete: (name) => ipcRenderer.invoke(channels.delete, name),
   run: (name, args) => ipcRenderer.invoke(channels.run, name, args),
+  requestConfig: () => ipcRenderer.invoke(channels.requestConfig),
+  onOpenConfig: (listener) => {
+    const wrapped = () => listener()
+    ipcRenderer.on(channels.openConfig, wrapped)
+    return () => ipcRenderer.off(channels.openConfig, wrapped)
+  },
 }

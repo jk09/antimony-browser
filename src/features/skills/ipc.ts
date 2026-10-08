@@ -2,8 +2,11 @@ export const channels = {
   list: 'skills:list',
   delete: 'skills:delete',
   run: 'skills:run',
+  // /config: the UI asks main to open the configuration page (main relays it, as for Recall).
+  requestConfig: 'skills:request-config',
   // main → UI
   listChanged: 'skills:list-changed',
+  openConfig: 'skills:open-config',
 } as const
 
 /** One tool call of a macro; string inputs may contain {{parameter}} placeholders. */
@@ -45,4 +48,7 @@ export interface SkillsApi {
   delete(name: string): Promise<void>
   /** Runs a skill; `args` is the rest of the prompt line after `/name`, `@` references resolved. */
   run(name: string, args: string): Promise<RunResult>
+  /** Opens the configuration page (/config); main answers with an `openConfig` event. */
+  requestConfig(): Promise<void>
+  onOpenConfig(listener: () => void): () => void
 }

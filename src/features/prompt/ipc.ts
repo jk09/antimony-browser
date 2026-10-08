@@ -70,6 +70,11 @@ export const promptCommands: CommandInfo[] = [
     usage: '',
     description: 'List macros (ask the assistant to make one: "… and store it as /name")',
   },
+  {
+    name: 'config',
+    usage: '',
+    description: 'Show all commands, skills and macros with their scripts',
+  },
   { name: 'forget', usage: '<macro>', description: 'Delete a macro' },
   { name: 'forget-history', usage: '', description: 'Clear the prompt history' },
   { name: 'history', usage: '<search>', description: 'Search the pages you visited' },
