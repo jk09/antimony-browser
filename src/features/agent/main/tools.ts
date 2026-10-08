@@ -19,7 +19,8 @@ export interface BrowserPort {
   forward(): void
   reload(): void
   stop(): void
-  waitForLoad(timeoutMs: number): Promise<void>
+  /** Why the page failed to load (e.g. `ERR_CONNECTION_REFUSED`), or null. */
+  waitForLoad(timeoutMs: number): Promise<string | null>
   /** False before the first page is loaded. */
   hasPage(): boolean
   run<A, R>(script: (args: A) => R, args: A): Promise<R>
@@ -751,7 +752,8 @@ export async function executeTool(
     case 'navigate': {
       const url = browser.load(String(input['url']))
       if (url === null) throw new ToolError(`Not a web address: ${String(input['url'])}`)
-      await browser.waitForLoad(LOAD_TIMEOUT)
+      const failure = await browser.waitForLoad(LOAD_TIMEOUT)
+      if (failure) throw new ToolError(`Could not load ${url}: ${failure}`)
       return { text: formatState(browser.state()) }
     }
     case 'go_back':

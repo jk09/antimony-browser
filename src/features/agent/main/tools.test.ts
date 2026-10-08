@@ -127,6 +127,14 @@ describe('executeTool', () => {
     )
   })
 
+  it('reports a page that fails to load, so a macro stops there', async () => {
+    const { browser } = fakeBrowser()
+    vi.mocked(browser.waitForLoad).mockResolvedValueOnce('ERR_CONNECTION_REFUSED')
+    await expect(
+      executeTool(browser, 'navigate', { url: 'https://down.example/' }),
+    ).rejects.toThrow('Could not load https://down.example/: ERR_CONNECTION_REFUSED')
+  })
+
   it('needs a loaded page for page tools', async () => {
     const { browser } = fakeBrowser()
     await expect(executeTool(browser, 'read_page', {})).rejects.toThrow('No page is loaded')

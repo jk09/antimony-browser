@@ -18,7 +18,8 @@ export interface PageControls {
   stop(): void
   state(): NavigationState
   /** Resolves when the page stops loading, or after `timeoutMs`. */
-  waitForLoad(timeoutMs: number): Promise<void>
+  /** Resolves when the page stops loading (or after `timeoutMs`): why the load failed, or null. */
+  waitForLoad(timeoutMs: number): Promise<string | null>
   /**
    * Hides or shows the active tab's page view without changing its size, so another feature can
    * draw over the page area (prompt's field of view). Stays in force across tab switches.
@@ -460,16 +461,29 @@ export function register({ window, browsingSession, ipc }: MainContext): void {
     state,
     waitForLoad(timeoutMs) {
       const tab = active
-      if (!live(tab) || !tab.contents.isLoading()) return Promise.resolve()
+      if (!live(tab) || !tab.contents.isLoading()) return Promise.resolve(null)
       const contents = tab.contents
       return new Promise((resolve) => {
+        let failure: string | null = null
+        const failed = (
+          _event: unknown,
+          code: number,
+          description: string,
+          _url: string,
+          isMainFrame: boolean,
+        ) => {
+          // -3 is a load another navigation replaced or the user stopped, not an error.
+          if (isMainFrame && code !== -3) failure = description || `error ${code}`
+        }
         const done = () => {
           clearTimeout(timer)
           contents.off('did-stop-loading', done)
-          resolve()
+          contents.off('did-fail-load', failed)
+          resolve(failure)
         }
         const timer = setTimeout(done, timeoutMs)
         contents.on('did-stop-loading', done)
+        contents.on('did-fail-load', failed)
       })
     },
     setHidden(value) {

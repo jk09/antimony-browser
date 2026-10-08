@@ -25,7 +25,7 @@ export function fakeBrowser(elements: Record<string, ElementInfo> = {}) {
     forward: vi.fn(),
     reload: vi.fn(),
     stop: vi.fn(),
-    waitForLoad: vi.fn(async () => {}),
+    waitForLoad: vi.fn(async (): Promise<string | null> => null),
     hasPage: () => state.url !== '',
     run: vi.fn(async (script: (args: never) => unknown, args: { selector?: string }) => {
       if (script.name === 'inspectElement') {

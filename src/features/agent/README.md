@@ -9,6 +9,7 @@ Lets Claude (through an Anthropic API key or the user's own Claude Code CLI logi
 - Shared: `shared/page-scripts.ts` – the fixed scripts run in the page's isolated world
 
 ## Invariants
+- `navigate` fails with `Could not load <url>: <reason>` when the page cannot load (connection refused, DNS, …) instead of reporting success, so a macro stops at that step – `main/tools.test.ts › reports a page that fails to load…`
 - Without page access only navigation tools, `search_history` and `recall_history` are offered and page tools are refused – `main/agent.test.ts › offers no page tools…`, `main/tools.test.ts › toolsFor`
 - With history access off (`/history-access off`) `search_history` and `recall_history` are neither offered nor run – `main/agent.test.ts › history search is neither offered…`, `main/tools.test.ts › leaves out history search and recall…`
 - History search and recall results are untrusted and, like reading a page, make leaving the site later in the run need approval – `main/tools.test.ts › search_history`, `› recall_history`, `main/agent.test.ts › also after a history search…`, `› recalls by an attached image…`
