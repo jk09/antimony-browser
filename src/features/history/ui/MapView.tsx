@@ -252,16 +252,24 @@ export function MapView() {
               {result.edges.map((edge) => {
                 const [a, b] = [placed.nodes.get(edge.from), placed.nodes.get(edge.to)]
                 if (!a || !b) return null
-                const start = border(a, centre(b))
-                const end = border(b, centre(a))
+                const [from, to] = [centre(a), centre(b)]
+                // A gentle curve, so edges between distant groups don't run straight through
+                // the pages in between; it bends to the right of its direction, so a pair of
+                // arrows in opposite directions doesn't overlap.
+                const bend = Math.hypot(to.x - from.x, to.y - from.y) * 0.12
+                const angle = Math.atan2(to.y - from.y, to.x - from.x) + Math.PI / 2
+                const control = {
+                  x: (from.x + to.x) / 2 + Math.cos(angle) * bend,
+                  y: (from.y + to.y) / 2 + Math.sin(angle) * bend,
+                }
+                const start = border(a, control)
+                const end = border(b, control)
                 return (
-                  <line
+                  <path
                     key={`${edge.kind}-${edge.from}-${edge.to}`}
                     className={`map-edge map-edge-${edge.kind}`}
-                    x1={start.x}
-                    y1={start.y}
-                    x2={end.x}
-                    y2={end.y}
+                    d={`M${start.x} ${start.y} Q${control.x} ${control.y} ${end.x} ${end.y}`}
+                    fill="none"
                     markerEnd={edge.kind === 'link' ? 'url(#map-arrow)' : undefined}
                   />
                 )

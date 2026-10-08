@@ -41,7 +41,7 @@ export function layoutMap(groups: MapLayoutGroup[]): MapLayout {
   const boxes = groups
     .filter((group) => group.nodes.length > 0)
     .map((group) => {
-      const columns = Math.max(1, Math.ceil(Math.sqrt(group.nodes.length * 1.6)))
+      const columns = Math.max(1, Math.ceil(Math.sqrt(group.nodes.length)))
       const cellWidth = Math.max(...group.nodes.map((node) => node.width)) + NODE_GAP
       const cellHeight = Math.max(...group.nodes.map((node) => node.height)) + NODE_GAP
       const rows = Math.ceil(group.nodes.length / columns)
@@ -60,7 +60,7 @@ export function layoutMap(groups: MapLayoutGroup[]): MapLayout {
     (sum, box) => sum + (box.width + GROUP_GAP) * (box.height + GROUP_GAP),
     0,
   )
-  const target = Math.max(...boxes.map((box) => box.width), Math.sqrt(area * 1.6))
+  const target = Math.max(...boxes.map((box) => box.width), Math.sqrt(area * 2.6))
   const placed: PlacedGroup[] = []
   let x = 0
   let y = 0
