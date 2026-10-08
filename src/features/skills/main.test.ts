@@ -58,7 +58,7 @@ describe('skills main', () => {
   it('lists the built-in skills and offers no way to save from the UI', () => {
     const { call } = setup()
     const names = (call(channels.list) as { name: string }[]).map((skill) => skill.name)
-    expect(names).toEqual(expect.arrayContaining(['reload', 'stop']))
+    expect(names).toEqual(expect.arrayContaining(['reload', 'stop', 'open']))
     expect(Object.values(channels)).toEqual([
       'skills:list',
       'skills:delete',
@@ -66,6 +66,15 @@ describe('skills main', () => {
       'skills:request-config',
       'skills:list-changed',
       'skills:open-config',
+    ])
+  })
+
+  it('runs the built-in /open as a new stack plus navigate, without the model', async () => {
+    const { call } = setup()
+    await call(channels.run, 'open', 'https://example.com/a')
+    expect(replay).toHaveBeenCalledWith('/open https://example.com/a', [
+      { tool: 'new_stack', input: {} },
+      { tool: 'navigate', input: { url: 'https://example.com/a' } },
     ])
   })
 

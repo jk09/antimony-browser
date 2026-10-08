@@ -1,6 +1,6 @@
 # skills
 
-Runs `/name` commands that replay browser tool calls without the model: macros the assistant stores when asked in the prompt ("open a new stack and store it as /ns", with `{{parameters}}` and a hint for each) and the built-in `/reload` and `/stop`; `/config` opens a configuration page listing every system command, built-in skill and macro with the steps it replays. Arguments are typed after the command, constants or `@stack` / `@stack/page` references (resolved to the page's URL by the prompt).
+Runs `/name` commands that replay browser tool calls without the model: macros the assistant stores when asked in the prompt ("open a new stack and store it as /ns", with `{{parameters}}` and a hint for each) and the built-in `/reload`, `/stop` and `/open <url>` (a new stack, then the URL); `/config` opens a configuration page listing every system command, built-in skill and macro with the steps it replays. Arguments are typed after the command, constants or `@stack` / `@stack/page` references (resolved to the page's URL by the prompt).
 
 ## Entry points
 - IPC: `skills:list|delete|run|request-config` (UI → main), `skills:list-changed|open-config` (main → UI) – `ipc.ts`; there is no channel to create or change a macro

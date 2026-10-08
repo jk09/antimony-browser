@@ -8,8 +8,18 @@ const builtin = (name: string, tool: string, description: string): Skill => ({
   builtin: true,
 })
 
-/** One-step skills shipped with the app; they replay like saved ones. */
+/** Skills shipped with the app (mostly one step); they replay like saved ones. */
 export const builtinSkills: Skill[] = [
   builtin('reload', 'reload', 'Reload the page'),
   builtin('stop', 'stop', 'Stop loading the page'),
+  {
+    name: 'open',
+    description: 'Open a URL in a new stack',
+    params: [{ name: 'url', hint: 'address to open' }],
+    steps: [
+      { tool: 'new_stack', input: {} },
+      { tool: 'navigate', input: { url: '{{url}}' } },
+    ],
+    builtin: true,
+  },
 ]
