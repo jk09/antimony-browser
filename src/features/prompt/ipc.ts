@@ -84,6 +84,11 @@ export const promptCommands: CommandInfo[] = [
     description: 'Show pages from history as a keyword or picture cloud (asks the selected model)',
   },
   {
+    name: 'history-map',
+    usage: '',
+    description: 'Show visited pages as a map of groups and relations',
+  },
+  {
     name: 'note',
     usage: '<text>',
     description: 'Note this page (makes it a bookmark); /note clear removes it',

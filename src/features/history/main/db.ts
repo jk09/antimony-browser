@@ -5,6 +5,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { HIGH_DWELL_MS, type HistoryPage, type VisitedSuggestion } from '../ipc'
 import { bareInput, bareUrl, domainOf, hostOf } from '../shared/canonical-url'
 import type { PageMeta } from '../shared/page-meta'
+import type { Follow, MapRow } from './map'
 
 export type Transition = 'typed' | 'link' | 'back_forward' | 'assistant' | 'reload' | 'in_page'
 
@@ -546,6 +547,57 @@ export class HistoryDb {
         },
       ]
     })
+  }
+
+  /** The most recently visited pages since `since` matching `text` (title, address, keywords). */
+  mapPages(since: number | null, text: string, limit: number): { rows: MapRow[]; total: number } {
+    const like = `%${text.replace(/[\\%_]/g, (char) => `\\${char}`)}%`
+    const where = `(? IS NULL OR last_visit_at >= ?) AND
+      (? = '' OR title LIKE ? ESCAPE '\\' OR url LIKE ? ESCAPE '\\' OR keywords LIKE ? ESCAPE '\\')`
+    const params = [since, since, text, like, like, like]
+    const total = Number(
+      (this.db.prepare(`SELECT count(*) AS n FROM pages WHERE ${where}`).get(...params) as Row)[
+        'n'
+      ],
+    )
+    const rows = this.db
+      .prepare(
+        `SELECT id, url, title, domain, visit_count, last_visit_at, keywords FROM pages
+         WHERE ${where} ORDER BY last_visit_at DESC, id DESC LIMIT ?`,
+      )
+      .all(...params, limit) as Row[]
+    return {
+      total,
+      rows: rows.map((row) => ({
+        id: Number(row['id']),
+        url: String(row['url']),
+        title: String(row['title'] ?? ''),
+        domain: String(row['domain'] ?? ''),
+        visitCount: Number(row['visit_count']),
+        lastVisitAt: Number(row['last_visit_at']),
+        keywords: (row['keywords'] as string | null) ?? null,
+      })),
+    }
+  }
+
+  /** How often a visit to one of `ids` came from another page of `ids` (a followed link). */
+  follows(ids: number[]): Follow[] {
+    if (ids.length === 0) return []
+    const known = new Set(ids)
+    const rows = this.db
+      .prepare(
+        `SELECT referrer_page_id AS source, page_id AS target, count(*) AS n FROM visits
+         WHERE referrer_page_id IS NOT NULL AND page_id IN (${ids.map(() => '?').join(',')})
+         GROUP BY referrer_page_id, page_id ORDER BY referrer_page_id, page_id`,
+      )
+      .all(...ids) as Row[]
+    return rows
+      .filter((row) => known.has(Number(row['source'])))
+      .map((row) => ({
+        from: Number(row['source']),
+        to: Number(row['target']),
+        count: Number(row['n']),
+      }))
   }
 
   /** Pages by id, in the given order, optionally only noted ones. */

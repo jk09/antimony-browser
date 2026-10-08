@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MainContext } from '../../app/main/features'
 import type { HistoryPort } from '../agent/main'
 import type { PageEvent } from '../navigation/main'
+import type { MapResult } from './ipc'
 import type { PageMeta } from './shared/page-meta'
 
 let userData = ''
@@ -149,6 +150,10 @@ describe('history main', () => {
       [channels.recall, { query: 'a', sketch: null, view: 'words' }],
       [channels.recall, 'lions'],
       [channels.requestRecall, 42],
+      [channels.map, { range: 'year', text: '' }],
+      [channels.map, { range: '7d', text: 'x'.repeat(201) }],
+      [channels.map, { range: '7d', text: '', extra: 1 }],
+      [channels.map, '7d'],
     ]
     for (const [channel, ...args] of bad) {
       expect(() => call(channel, ...args), `${channel} ${JSON.stringify(args)}`).toThrow(TypeError)
@@ -556,6 +561,26 @@ describe('history main', () => {
     expect(ctx.ipc.send).toHaveBeenCalledWith(channels.openRecall, '')
     call(channels.requestRecall, 'lions')
     expect(ctx.ipc.send).toHaveBeenCalledWith(channels.openRecall, 'lions')
+  })
+
+  it('relays /history-map to the chrome UI and builds the map from history', () => {
+    const { ctx, call, page } = setup()
+    call(channels.requestMap)
+    expect(ctx.ipc.send).toHaveBeenCalledWith(channels.openMap, null)
+
+    page({ type: 'navigated', url: 'https://example.com/a', status: 200, transition: 'typed' })
+    page({ type: 'navigated', url: 'https://example.com/b', status: 200, transition: 'link' })
+    const map = call(channels.map, { range: '24h', text: '' }) as MapResult
+    expect(map.nodes.map((node) => node.url)).toEqual([
+      'https://example.com/b',
+      'https://example.com/a',
+    ])
+    expect(map.groups).toHaveLength(1)
+    expect(map.edges).toEqual([
+      { from: map.nodes[1]!.id, to: map.nodes[0]!.id, kind: 'link', weight: 1 },
+    ])
+    expect(map.total).toBe(2)
+    expect((call(channels.map, { range: '7d', text: 'nothing' }) as MapResult).nodes).toEqual([])
   })
 
   it('adds File → Note This Page… (Ctrl/Cmd+D), which opens the note editor', () => {

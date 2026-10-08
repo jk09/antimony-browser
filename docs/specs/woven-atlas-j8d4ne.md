@@ -11,7 +11,7 @@
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-08 12:15 +00:00 |
-| **Last updated** | 2026-10-08 12:19 +00:00 |
+| **Last updated** | 2026-10-08 12:25 +00:00 |
 | **Affected features** | history, prompt |
 | **Target release** | 0.1.0 |
 | **Related links** | specs ember-ledger-h3x8vq, drifting-nimbus-r8c3kw (Recall page, same layout); ember-console-k5w9tb (command registration) |
@@ -88,16 +88,16 @@
 
 ## 11. Acceptance Criteria
 
-- [ ] `/history-map` is a prompt command and calls `history.requestMap` – UI test (Prompt).
-- [ ] Main relays `history:request-map` to `history:open-map` – unit test.
-- [ ] A macro named `history-map` is rejected – unit test.
-- [ ] Grouping merges pages with keyword overlap ≥ 0.3 or the same domain, labels the group and leaves unrelated pages in "Other" – unit test (`map.ts`).
-- [ ] Link edges come from `referrer_page_id` (directed, once per pair); keyword edges join grouped pages sharing ≥ 2 keywords without a link edge – unit test.
-- [ ] The result is limited to 300 most recent pages and respects range and text filter; invalid range or over-long text is rejected – unit test.
-- [ ] The layout never overlaps nodes and is deterministic – unit test (`map-layout.test.ts`).
-- [ ] The page renders groups, nodes and both edge kinds with a legend; the filter narrows nodes; empty states show – UI test.
-- [ ] Clicking a node opens its page and closes the map; Escape and × close it – UI test.
-- [ ] The map refreshes on `history:pages-changed` – UI test.
+- [x] `/history-map` is a prompt command and calls `history.requestMap` – UI test (Prompt).
+- [x] Main relays `history:request-map` to `history:open-map` – unit test.
+- [x] A macro named `history-map` is rejected – unit test.
+- [x] Grouping merges pages with keyword overlap ≥ 0.3 or the same domain, labels the group and leaves unrelated pages in "Other" – unit test (`map.ts`).
+- [x] Link edges come from `referrer_page_id` (directed, once per pair); keyword edges join grouped pages sharing ≥ 2 keywords without a link edge – unit test.
+- [x] The result is limited to 300 most recent pages and respects range and text filter; invalid range or over-long text is rejected – unit test.
+- [x] The layout never overlaps nodes and is deterministic – unit test (`map-layout.test.ts`).
+- [x] The page renders groups, nodes and both edge kinds with a legend; the filter narrows nodes; empty states show – UI test.
+- [x] Clicking a node opens its page and closes the map; Escape and × close it – UI test.
+- [x] The map refreshes on `history:pages-changed` – UI test.
 
 ## 12. Testing / Verification
 
@@ -114,4 +114,5 @@
 
 Note any deviations from the original spec during implementation.
 
-- None yet.
+- End-to-end tests were not run in the cloud session (no Electron binary); CI runs them.
+- The group outline for keyboards and screen readers is a visually hidden list of buttons, and the SVG nodes are not focusable themselves.

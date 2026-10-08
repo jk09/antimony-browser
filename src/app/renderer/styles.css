@@ -1367,7 +1367,8 @@ textarea {
 
 /* Recall (history): a keyword or picture cloud over the page area, which shrinks to nothing. */
 
-.workspace:has(> .recall-view) > .acting-frame {
+.workspace:has(> .recall-view) > .acting-frame,
+.workspace:has(> .map-view) > .acting-frame {
   flex: 0 0 0;
   min-width: 0;
   padding: 0;
@@ -1851,4 +1852,86 @@ textarea {
   background: none;
   color: var(--focus);
   font-weight: 600;
+}
+
+/* History map: groups of pages, link arrows and keyword lines over the page area. */
+
+.map-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.map-controls input[type='search'] {
+  flex: 1;
+  min-width: 160px;
+}
+
+.map-legend {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted, inherit);
+}
+
+.map-canvas {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.map-group rect {
+  fill: none;
+  stroke: var(--border, currentColor);
+  stroke-opacity: 0.5;
+}
+
+.map-group text {
+  font-size: 12px;
+  font-weight: 600;
+  fill: currentColor;
+}
+
+.map-node rect {
+  fill: var(--toolbar-bg, canvas);
+  stroke: currentColor;
+  stroke-opacity: 0.6;
+}
+
+.map-node:hover rect {
+  stroke-opacity: 1;
+  stroke-width: 2;
+}
+
+.map-node text {
+  font-size: 11px;
+  fill: currentColor;
+  pointer-events: none;
+}
+
+.map-edge {
+  stroke: currentColor;
+  stroke-opacity: 0.55;
+  stroke-width: 1.2;
+}
+
+.map-edge-keyword {
+  stroke-dasharray: 4 3;
+  stroke-opacity: 0.35;
+}
+
+.map-arrow {
+  fill: currentColor;
+  fill-opacity: 0.55;
+}
+
+/* The outline is for keyboards and screen readers; the map above is the visual form. */
+.map-outline {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
 }
