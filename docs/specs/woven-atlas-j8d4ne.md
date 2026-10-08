@@ -11,7 +11,7 @@
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-08 12:15 +00:00 |
-| **Last updated** | 2026-10-08 14:00 +00:00 |
+| **Last updated** | 2026-10-08 14:09 +00:00 |
 | **Affected features** | history, prompt |
 | **Target release** | 0.1.0 |
 | **Related links** | specs ember-ledger-h3x8vq, drifting-nimbus-r8c3kw (Recall page, same layout); ember-console-k5w9tb (command registration) |
@@ -117,5 +117,5 @@ Note any deviations from the original spec during implementation.
 - End-to-end tests were not run in the cloud session (no Electron binary); CI runs them.
 - The group outline for keyboards and screen readers is a visually hidden list of buttons, and the SVG nodes are not focusable themselves.
 - Found by running the real app (Electron now installs in cloud sessions): the map takes keyboard focus on opening (the filter field) so Escape works after `/history-map`, and each page keeps at most 3 keyword edges (strongest first), because pages of one topic otherwise joined every pair (1,926 dashed lines for 300 pages).
-- Edge routing: groups are ordered by swapping to keep links from running through other groups, and edges are curves (follow-up PRs).
+- Edge routing (follow-up PRs): groups are ordered by swapping to keep links from running through other groups; links between groups are routed through the gaps between boxes (orthogonal search on a 4-unit grid, at most 150 routed, curves for the rest), and links within a group are curves.
 - The focused outline button's page shows a focus ring on its map node, so keyboard users can see where they are.
