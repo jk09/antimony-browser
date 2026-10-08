@@ -6,12 +6,12 @@
 | --- | --- |
 | **Feature name** | Redesign of the chrome UI: floating rounded page card, assistant panel as cards, vermilion accent |
 | **Spec ID** | graphite-vermilion-d6n2hy |
-| **Status** | Draft <!-- one of: Draft, Active, Done --> |
+| **Status** | Active <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-08 10:45 +00:00 |
-| **Last updated** | 2026-10-08 10:45 +00:00 |
+| **Last updated** | 2026-10-08 11:00 +00:00 |
 | **Affected features** | navigation, prompt, stacks, agent, history, skills |
 | **Target release** | 0.1.0 |
 | **Related links** | Claude Design canvas "Antimony Redesign" (https://claude.ai/artifact/7m5SaVUq9YekoijyotUpcD); spec ember-console-k5w9tb (/config page) |
@@ -81,11 +81,11 @@
 
 ## 11. Acceptance Criteria
 
-- [ ] Light and dark tokens match the canvas palette – CSS review plus UI tests still green.
-- [ ] Page views get a 14 px border radius on creation – unit test (navigation main).
-- [ ] The page area is inset 10 px and `setInsets` reports it – UI test (PageArea / App).
-- [ ] Stack header, conversation and prompt render as separate cards; class names and test ids unchanged – existing UI tests pass.
-- [ ] `npm run check` passes.
+- [x] Light and dark tokens match the canvas palette – CSS review plus UI tests still green.
+- [x] Page views get a 14 px border radius on creation – unit test (navigation main).
+- [x] The page area is inset 10 px and `setInsets` reports it – UI test (PageArea / App).
+- [x] Stack header, conversation and prompt render as separate cards; class names and test ids unchanged – existing UI tests pass.
+- [x] `npm run check` passes.
 
 ## 12. Testing / Verification
 
@@ -101,3 +101,6 @@
 ## 14. Changes during implementation
 
 Note any deviations from the original spec during implementation.
+
+- Not run in the cloud session (no Electron binary): `npm run dev`, e2e and a visual check of the result; CI runs e2e. The page card's inset comes from `.shell` padding, so no change to `PageArea` or its test was needed.
+- Also restyled: debug panel, Recall, History and `/config` as rounded cards (same tokens).

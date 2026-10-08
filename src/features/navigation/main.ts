@@ -5,6 +5,8 @@ import { channels, type NavigationState, type PageInsets } from './ipc'
 import { isWebUrl, toUrl } from './shared/to-url'
 
 const MAX_INSET = 4000
+/** Corner radius of the page card, in CSS pixels of the chrome UI (matches `.page-area`). */
+const PAGE_RADIUS = 14
 
 /** Controls for the active tab's page, for other features' main code (the agent, history). */
 export interface PageControls {
@@ -220,13 +222,18 @@ export function register({ window, browsingSession, ipc }: MainContext): void {
       height: Math.max(0, height - top - bottom),
     }
   }
+  /** Bounds and rounded corners (in window pixels) for a page view. */
+  const place = (view: WebContentsView, box: Electron.Rectangle) => {
+    view.setBounds(box)
+    view.setBorderRadius(Math.round(PAGE_RADIUS * window.webContents.getZoomFactor()))
+  }
   /** Sizes the shown view and the prepared ones, so they don't reflow when shown. */
   const layout = () => {
     const prepared = [...tabs.values()].filter((tab) => tab.held && tab !== attached)
     if (!attached && prepared.length === 0) return
     const box = bounds()
-    attached?.view.setBounds(box)
-    for (const tab of prepared) tab.view.setBounds(box)
+    if (attached) place(attached.view, box)
+    for (const tab of prepared) place(tab.view, box)
   }
   window.on('resize', layout)
 
@@ -520,7 +527,7 @@ export function register({ window, browsingSession, ipc }: MainContext): void {
       if (url === null) return null
       const tab = createTab()
       tab.held = []
-      tab.view.setBounds(bounds())
+      place(tab.view, bounds())
       open(tab, url, 'typed')
       return tab.id
     },
