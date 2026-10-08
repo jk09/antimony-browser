@@ -12,9 +12,12 @@ export const channels = {
   recall: 'history:recall',
   cancelRecall: 'history:cancel-recall',
   requestRecall: 'history:request-recall',
+  map: 'history:map',
+  requestMap: 'history:request-map',
   // Main → UI.
   open: 'history:open',
   openRecall: 'history:open-recall',
+  openMap: 'history:open-map',
   recallShown: 'history:recall-shown',
   changed: 'history:pages-changed',
   settingsChanged: 'history:settings-changed',
@@ -124,6 +127,54 @@ export interface RecallShown {
   byImage: boolean
 }
 
+/** How far back the history map reaches. */
+export const MAP_RANGES = ['24h', '7d', '30d', 'all'] as const
+export type MapRange = (typeof MAP_RANGES)[number]
+/** Most pages on the map; the most recently visited ones win. */
+export const MAP_LIMIT = 300
+export const MAX_MAP_TEXT = 200
+
+export interface MapRequest {
+  range: MapRange
+  /** Narrows the pages by title, address or keywords; '' keeps all. */
+  text: string
+}
+
+/** A page on the map. */
+export interface MapNode {
+  id: number
+  url: string
+  title: string
+  domain: string
+  visitCount: number
+  lastVisitAt: number
+  keywords: string[]
+  /** The group the page belongs to; null for pages that relate to no other page. */
+  group: number | null
+}
+
+/** `link`: `from` led to `to`, directed; `keyword`: the pages share keywords, undirected. */
+export interface MapEdge {
+  from: number
+  to: number
+  kind: 'link' | 'keyword'
+  weight: number
+}
+
+export interface MapGroup {
+  id: number
+  label: string
+  pageIds: number[]
+}
+
+export interface MapResult {
+  nodes: MapNode[]
+  edges: MapEdge[]
+  groups: MapGroup[]
+  /** Pages matching the request, before the limit. */
+  total: number
+}
+
 export interface HistoryApi {
   /** Visited pages whose URL (without scheme and www.) or domain starts with `text`. */
   suggest(text: string): Promise<VisitedSuggestion[]>
@@ -149,6 +200,11 @@ export interface HistoryApi {
   /** Opens the Recall page with `query` (from /recall); main answers with an `openRecall` event. */
   requestRecall(query: string): Promise<void>
   onOpenRecall(listener: (query: string) => void): () => void
+  /** The map of visited pages: groups, link-follows and shared keywords. */
+  map(request: MapRequest): Promise<MapResult>
+  /** Opens the History map page (from /history-map); main answers with an `openMap` event. */
+  requestMap(): Promise<void>
+  onOpenMap(listener: () => void): () => void
   /** The assistant recalled pages (recall_history); the Recall page opens with them. */
   onRecallShown(listener: (shown: RecallShown) => void): () => void
   /** History changed in a way an open view should show (note, delete, clear). */

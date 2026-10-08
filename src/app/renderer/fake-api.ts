@@ -10,6 +10,8 @@ import {
 import type {
   HistorySettings,
   OpenRequest,
+  MapRequest,
+  MapResult,
   RecallRequest,
   RecallResult,
   RecallShown,
@@ -84,6 +86,7 @@ export function fakeApi(
   const historySettings = channel<HistorySettings>()
   const recallOpen = channel<string>()
   const recallShown = channel<RecallShown>()
+  const mapOpen = channel<void>()
   const stacks = channel<StacksState>()
   const stackCommand = channel<StackCommand>()
   let home: string | null = null
@@ -129,6 +132,14 @@ export function fakeApi(
       cancelRecall: vi.fn(async () => {}),
       requestRecall: vi.fn(async (query: string) => recallOpen.emit(query)),
       onOpenRecall: recallOpen.subscribe,
+      map: vi.fn(async (_request: MapRequest): Promise<MapResult> => ({
+        nodes: [],
+        edges: [],
+        groups: [],
+        total: 0,
+      })),
+      requestMap: vi.fn(async () => mapOpen.emit()),
+      onOpenMap: mapOpen.subscribe,
       onRecallShown: recallShown.subscribe,
       onChanged: historyChanged.subscribe,
       onSettingsChanged: historySettings.subscribe,
@@ -203,6 +214,7 @@ export function fakeApi(
       historyOpen: historyOpen.emit,
       historyChanged: () => historyChanged.emit(),
       recallOpen: recallOpen.emit,
+      mapOpen: () => mapOpen.emit(),
       recallShown: recallShown.emit,
       stacks: stacks.emit,
       stackCommand: stackCommand.emit,

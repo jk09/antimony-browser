@@ -315,4 +315,36 @@ describe('HistoryDb on disk', () => {
     first.close()
     expect(() => new HistoryDb(file)).toThrow(/newer/)
   })
+
+  it('lists the most recent pages for the map, filtered by time and text, with followed links', () => {
+    const a = visit('https://example.com/lions', NOW - 2 * DAY)
+    const b = visit('https://example.com/zoo', NOW - DAY)
+    const c = visit('https://other.org/50%_off', NOW)
+    db.setMeta(a.pageId, meta({ title: 'Lions', keywords: 'lions, savanna' }), NOW)
+    db.startVisit({
+      url: 'https://example.com/zoo',
+      title: '',
+      transition: 'link',
+      at: NOW,
+      referrerPageId: a.pageId,
+    })
+
+    const all = db.mapPages(null, '', 10)
+    expect(all.total).toBe(3)
+    expect(all.rows.map((row) => row.id)).toEqual([c.pageId, b.pageId, a.pageId])
+    expect(all.rows[2]).toMatchObject({ domain: 'example.com', keywords: 'lions, savanna' })
+    expect(db.mapPages(NOW - 1.5 * DAY, '', 10).rows.map((row) => row.id)).toEqual([
+      c.pageId,
+      b.pageId,
+    ])
+    expect(db.mapPages(null, 'savanna', 10).rows.map((row) => row.id)).toEqual([a.pageId])
+    expect(db.mapPages(null, '50%_', 10).rows.map((row) => row.id)).toEqual([c.pageId])
+    expect(db.mapPages(null, '%', 10).total).toBe(1)
+    expect(db.mapPages(null, '', 2)).toMatchObject({ total: 3, rows: [{ id: c.pageId }, {}] })
+    expect(db.follows([a.pageId, b.pageId, c.pageId])).toEqual([
+      { from: a.pageId, to: b.pageId, count: 1 },
+    ])
+    expect(db.follows([b.pageId, c.pageId])).toEqual([])
+    expect(db.follows([])).toEqual([])
+  })
 })

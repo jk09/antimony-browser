@@ -3,13 +3,13 @@ Antimony is a minimal Chromium-based browser: Electron + TypeScript, chrome UI i
 ## Commands
 
 - `npm run dev` – run with hot reload · `npm run check` – lint, format, typecheck, unit tests · `npm run test:e2e` – build + Playwright end-to-end (Linux without a display: `xvfb-run -a npm run test:e2e`).
-- Cloud sessions install dependencies without the Electron binary, so `dev` and `test:e2e` don't run there; CI runs them.
+- Cloud sessions install dependencies and the Electron binary (SessionStart hook), so `test:e2e` runs there with `xvfb-run -a`; if the binary download is blocked, CI runs the e2e tests. Chromium's sandbox may need `kernel.apparmor_restrict_unprivileged_userns=0` (as in CI); it isn't needed in this container.
 
 ## Workflow
 
 - Non-trivial work starts from a spec in the [spec folder](./docs/specs/). No spec → use the [`spec`](.claude/skills/spec/) skill first.
 - Finish every task with the [`ship`](.claude/skills/ship/) skill. Don't commit ad hoc.
-- At the end of every agentic run, open a pull request for the branch (no need to ask first) and subscribe to its activity.
+- Pushed work always gets a PR: at the end of every agentic run, and after pushing a fix or follow-up (also when the branch's earlier PR was merged), open a PR for it and subscribe to its activity, without waiting to be asked.
 - Commits: [Conventional Commits](https://www.conventionalcommits.org/), scope = feature folder name, `Spec: <spec-id>` line when a spec drove the change. Format in the `ship` skill.
 
 ## Features
