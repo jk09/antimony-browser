@@ -24,7 +24,7 @@
 ## 2. Summary
 
 - **Problem statement:** The chrome UI is a flat toolbar-grey strip with a clay accent; the page, stack tree, conversation and prompt are not visually separated.
-- **Desired outcome:** A graphite window in which the page is a rounded card inset 10 px, and the assistant panel is three cards (stack tree, conversation, prompt) with one vermilion accent, in light and dark themes, with the `/config` page restyled to match. Styling only; no behaviour change.
+- **Desired outcome:** A graphite window in which the page fills all the room left of the assistant panel (no margins, square corners), and the assistant panel is three cards (stack tree, conversation, prompt) with one vermilion accent, in light and dark themes, with the `/config` page restyled to match. Styling only; no behaviour change.
 
 ## 3. Background and Context
 
@@ -35,7 +35,7 @@
 ## 4. Goals
 
 - Goal 1: New palette tokens (graphite ground, surfaces, vermilion accent) for light and dark, used by every feature's UI through the existing custom properties.
-- Goal 2: The page area is inset 10 px from the window edges and from the assistant panel, and the page view has rounded corners (14 px).
+- Goal 2: The page area gets as much room as possible: no margin around it, no gap to the assistant panel and square corners (changed from a 10 px inset with 14 px rounded corners, see section 14).
 - Goal 3: Assistant panel: stack header, conversation and prompt each render as a separate rounded card/area as in the canvas; approval card, tool-step lines and `/config` page restyled.
 
 ## 5. Non-Goals
@@ -53,37 +53,37 @@
 ## 7. Functional Requirements
 
 1. Custom properties in `:root` and the dark media query are updated to the canvas palette (light: ground `#dfe2e5`, panel `#f6f7f8`, ink `#16181b`, muted `#4f565d`, accent `#b8381a` on white; dark: ground `#0c0d0f`, panel `#17191c`, ink `#e8eaec`, muted `#9aa1a9`, accent `#ff7a52` on `#1a0d08`).
-2. `.shell` has 10 px padding and gap; the page area is inset accordingly and the main process applies a 14 px border radius to every page `WebContentsView`.
-3. `.assistant-panel` has no left border and no resize-edge regression: it keeps its width logic and resize handle; its children (stack header, conversation, prompt card) are rounded cards with a 1 px outline.
+2. `.shell` has no padding or gap; the page view meets the window edges and the assistant panel's left border, and no page view has a border radius.
+3. `.assistant-panel` has a 1 px left border and keeps its width logic and resize handle; its children (stack header, conversation, prompt card) stay separate areas with a 1 px outline and square corners.
 4. Approval card, user turn and tool-step lines, prompt card and send button follow the canvas; focus rings stay visible (`--focus`).
 5. Existing class names, DOM structure and test ids are unchanged except where a wrapper is needed for the card.
 
 ## 8. Non-Functional Requirements
 
 - Performance: no change.
-- Security: `secureWebPreferences` untouched; `setBorderRadius` is a visual-only call on the view.
+- Security: `secureWebPreferences` untouched; no change to web content.
 - Accessibility: text contrast ≥ 4.5:1 for the palette (muted `#4f565d` on `#f6f7f8` and `#9aa1a9` on `#17191c` checked); focus rings and `prefers-reduced-motion` handling kept.
-- Platforms: border radius on `WebContentsView` works on all three; if unsupported the page is simply square.
+- Platforms: no differences.
 
 ## 9. UX / UI Notes
 
 - User flow: unchanged.
 - Visual considerations: per the canvas; the acting frame (agent) keeps its accent ring around the page card.
-- Edge cases: Recall, history, debug panel and `/config` overlays must follow the page card's inset and radius; zoom of the chrome UI still reports correct insets.
+- Edge cases: Recall, history, debug panel and `/config` overlays fill the page area edge to edge; zoom of the chrome UI still reports correct insets.
 
 ## 10. Technical Notes
 
-- Proposed approach: restyle `styles.css`; add the inset in `.shell`/`.workspace`; in `navigation/main.ts` call `view.setBorderRadius(14 * zoom)` when creating a page view and when zoom changes; adjust only what tests assert.
-- Process split: CSS in the chrome UI; one visual call in navigation main. No IPC change.
-- Dependencies: Electron `WebContentsView.setBorderRadius` (Electron 44).
+- Proposed approach: restyle `styles.css` only; `--card-radius` is 0 and the shell has no padding.
+- Process split: CSS in the chrome UI. No main-process or IPC change.
+- Dependencies: none.
 - Risks / unknowns: bounds math in navigation tests assumes insets from the UI; the inset moves from CSS only, so reported insets change but not the logic.
 - Open questions: none.
 
 ## 11. Acceptance Criteria
 
 - [x] Light and dark tokens match the canvas palette – CSS review plus UI tests still green.
-- [x] Page views get a 14 px border radius on creation – unit test (navigation main).
-- [x] The page area is inset 10 px and `setInsets` reports it – UI test (PageArea / App).
+- [x] Page views have no border radius and no `setBorderRadius` call (superseded: was 14 px) – unit test (navigation main).
+- [x] The page view fills the window up to the assistant panel – e2e layout tests (`e2e/prompt.spec.ts`).
 - [x] Stack header, conversation and prompt render as separate cards; class names and test ids unchanged – existing UI tests pass.
 - [x] `npm run check` passes.
 
@@ -106,3 +106,4 @@ Note any deviations from the original spec during implementation.
 - Also restyled: debug panel, Recall, History and `/config` as rounded cards (same tokens).
 - The e2e layout assertions in `e2e/prompt.spec.ts` assumed an edge-to-edge page view; they now expect the 10 px frame (`FRAME`) around and between the page card and the panel.
 - The debugger e2e test now polls until the panel width (`400 + 3 * FRAME`) is reached before it measures, because a single read once saw an unsettled layout in CI (404 instead of 400).
+- Follow-up request (after #56 merged): maximise the page area by removing the rounded corners and margins. The 10 px inset, the 14 px page radius (`setBorderRadius` in navigation) and the rounded cards are gone; the `e2e/prompt.spec.ts` layout assertions are back to the edge-to-edge expectations. The palette, accent and card structure of the assistant panel stay.

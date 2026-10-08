@@ -55,7 +55,6 @@ class FakeView {
   }
   webContents = new FakeWebContents()
   setBounds = vi.fn()
-  setBorderRadius = vi.fn()
   setVisible = vi.fn()
   constructor(public options: unknown) {
     FakeView.all.push(this)
@@ -404,15 +403,6 @@ describe('navigation main', () => {
     setZoom(1.25)
     call(channels.setInsets, { top: 0, right: 400, bottom: 0, left: 3 })
     expect(page.setBounds).toHaveBeenLastCalledWith({ x: 4, y: 0, width: 496, height: 700 })
-  })
-
-  it('rounds the page view corners, scaled by the chrome UI zoom', () => {
-    const { go, page, call, setZoom } = setup()
-    go('example.com')
-    expect(page.setBorderRadius).toHaveBeenLastCalledWith(14)
-    setZoom(0.5)
-    call(channels.setInsets, { top: 0, right: 400, bottom: 0, left: 0 })
-    expect(page.setBorderRadius).toHaveBeenLastCalledWith(7)
   })
 
   it('rejects invalid insets', () => {
