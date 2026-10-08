@@ -22,6 +22,8 @@ export interface Follow {
 export const GROUP_OVERLAP = 0.3
 /** Pages sharing at least this many keywords are joined by a keyword edge. */
 export const EDGE_SHARED = 2
+/** Keyword edges per page; the pages that share the most keywords are joined first. */
+export const EDGE_DEGREE = 3
 const MAX_KEYWORDS = 12
 
 /** The keywords of a page's meta tag: lowercase, distinct, at most 12. */
@@ -114,16 +116,34 @@ export function buildMap(rows: MapRow[], follows: Follow[], total = rows.length)
     linked.add(key(from, to))
     edges.push({ from, to, kind: 'link', weight: count })
   }
+  // Pages of one topic all share keywords: joining every pair would hide the map under lines, so
+  // each page keeps its strongest few (deterministic: by shared keywords, then by id).
+  const candidates: MapEdge[] = []
   for (const group of groups) {
     for (let i = 0; i < group.pageIds.length; i++) {
       for (let j = i + 1; j < group.pageIds.length; j++) {
         const [a, b] = [group.pageIds[i]!, group.pageIds[j]!]
         const both = shared(sets.get(a)!, sets.get(b)!)
         if (both >= EDGE_SHARED && !linked.has(key(a, b))) {
-          edges.push({ from: Math.min(a, b), to: Math.max(a, b), kind: 'keyword', weight: both })
+          candidates.push({
+            from: Math.min(a, b),
+            to: Math.max(a, b),
+            kind: 'keyword',
+            weight: both,
+          })
         }
       }
     }
+  }
+  candidates.sort((x, y) => y.weight - x.weight || x.from - y.from || x.to - y.to)
+  const degree = new Map<number, number>()
+  for (const edge of candidates) {
+    if ((degree.get(edge.from) ?? 0) >= EDGE_DEGREE || (degree.get(edge.to) ?? 0) >= EDGE_DEGREE) {
+      continue
+    }
+    degree.set(edge.from, (degree.get(edge.from) ?? 0) + 1)
+    degree.set(edge.to, (degree.get(edge.to) ?? 0) + 1)
+    edges.push(edge)
   }
   return { nodes, edges, groups, total: Math.max(total, rows.length) }
 }

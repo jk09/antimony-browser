@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildMap, parseKeywords, type MapRow } from './map'
+import { buildMap, EDGE_DEGREE, parseKeywords, type MapRow } from './map'
 
 const row = (
   id: number,
@@ -94,6 +94,24 @@ describe('buildMap', () => {
       { from: 2, to: 3, kind: 'keyword', weight: 2 },
     ])
     expect(map.edges.filter((edge) => edge.kind === 'link')).toHaveLength(1)
+  })
+
+  it('keeps at most a few keyword edges per page, the strongest first', () => {
+    const rows = Array.from({ length: 10 }, (_, i) =>
+      row(i + 1, `d${i}.com`, 'lions, savanna, africa'),
+    )
+    // Page 1 shares one more keyword with 2 than with the others.
+    rows[0] = row(1, 'd0.com', 'lions, savanna, africa, wildlife')
+    rows[1] = row(2, 'd1.com', 'lions, savanna, africa, wildlife')
+    const edges = buildMap(rows, []).edges.filter((edge) => edge.kind === 'keyword')
+    const degree = new Map<number, number>()
+    for (const edge of edges) {
+      for (const id of [edge.from, edge.to]) degree.set(id, (degree.get(id) ?? 0) + 1)
+    }
+    expect(Math.max(...degree.values())).toBeLessThanOrEqual(EDGE_DEGREE)
+    expect(edges.length).toBeLessThan(45)
+    expect(edges[0]).toEqual({ from: 1, to: 2, kind: 'keyword', weight: 4 })
+    expect(buildMap(rows, []).edges).toEqual(buildMap(rows, []).edges)
   })
 
   it('reports the total beyond the pages given', () => {
