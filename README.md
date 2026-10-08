@@ -2,6 +2,25 @@
 
 A minimal Chromium-based web browser, built on [Electron](https://www.electronjs.org/) with TypeScript and React.
 
+## What it is
+
+Antimony is a desktop web browser organised around an AI assistant instead of a toolbar. Where mainstream browsers add AI as a side feature on top of tabs, menus and settings pages, Antimony has a single prompt: type a URL to open a page, `/command` to run a command, or plain language to ask the assistant to do something.
+
+**Who it is for:** people who spend their day in the browser and want to hand repetitive or multi-step web work to an assistant, without giving up control of what it does.
+
+**What it offers**
+
+- **One prompt for everything.** The location bar and the assistant are the same input, docked in a side panel so the page keeps its full size. Every application menu item is reachable from it too (`/menu`), so there is no menu bar to hunt through.
+- **An assistant that acts in the browser.** It can navigate, open tabs, read the page, click and type. Every page action needs your approval first.
+- **Your choice of model.** Use Claude through an Anthropic API key or your own Claude Code login, or keep everything on your machine with a local [Ollama](https://ollama.com/) model.
+- **Memory you can search.** Every page you visit is stored once in a local database. Find it again by address, by the words it contained or by what it was about, and turn any page into a bookmark by adding a note.
+- **Macros.** Ask the assistant to store a sequence of browser actions as a `/name` command, then replay it instantly, without calling the model.
+- **Tabs as a tree.** Each tab's navigation is shown as a branching tree of breadcrumbs, so you can go back to any earlier page and follow a different link without losing the path you were on.
+
+**Privacy and security:** browsing history and settings stay on your device. Web pages run in sandboxed views with no access to the browser's internals, and the assistant sends page content to a model only when you ask it to; with a local Ollama model nothing leaves your computer.
+
+**Status:** early-stage and under active development; see [docs/features.md](docs/features.md) for what exists today.
+
 ## Develop
 
 Requirements: Node.js 22 (`.nvmrc`) and git. Linux end-to-end tests without a display also need `xvfb-run`.
