@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { MAP_RANGES, MAX_MAP_TEXT, type MapNode, type MapRange, type MapResult } from '../ipc'
 import { layoutMap, type Box } from '../shared/map-layout'
+import { createRouter, roundedPath, type Point } from '../shared/map-routing'
 import { scaleSize } from '../shared/cloud-layout'
 
 const RANGE_LABELS: Record<MapRange, string> = {
@@ -12,6 +13,12 @@ const RANGE_LABELS: Record<MapRange, string> = {
 const NODE_WIDTH = [104, 176] as const
 const NODE_HEIGHT = 28
 const OTHER = 0
+/** Margin around the map, which routes may use too. */
+const PAD = 24
+/** Edges between groups routed through the gaps; a map with more draws the rest as curves. */
+const MAX_ROUTED = 150
+const edgeKey = (edge: { kind: string; from: number; to: number }) =>
+  `${edge.kind}-${edge.from}-${edge.to}`
 
 const bare = (url: string) => url.replace(/^https?:\/\/(www\.)?/i, '')
 const titleOf = (node: MapNode) => node.title || bare(node.url)
@@ -119,6 +126,34 @@ export function MapView() {
     return { groups, placed: layoutMap(groups, links) }
   }, [result])
 
+  // Edges between groups run through the gaps between boxes; the search is bounded, and an edge
+  // with no route (or beyond the limit) is drawn as a curve.
+  const routes = useMemo(() => {
+    const found = new Map<string, Point[]>()
+    if (!result || !layout) return found
+    const { placed } = layout
+    const groupOf = new Map(result.nodes.map((node) => [node.id, node.group ?? OTHER]))
+    const router = createRouter({
+      nodes: placed.nodes,
+      frames: new Map(placed.groups.map((box) => [box.id, box])),
+      groupOf,
+      area: {
+        x: placed.bounds.x - PAD,
+        y: placed.bounds.y - PAD,
+        width: placed.bounds.width + 2 * PAD,
+        height: placed.bounds.height + 2 * PAD,
+      },
+    })
+    let budget = MAX_ROUTED
+    for (const edge of result.edges) {
+      if (groupOf.get(edge.from) === groupOf.get(edge.to)) continue
+      if (budget-- <= 0) break
+      const route = router(edge.from, edge.to)
+      if (route) found.set(edgeKey(edge), route)
+    }
+    return found
+  }, [result, layout])
+
   if (!open) return null
 
   const close = () => {
@@ -146,7 +181,7 @@ export function MapView() {
 
   const nodes = new Map(result?.nodes.map((node) => [node.id, node]))
   const placed = layout?.placed
-  const pad = 24
+  const pad = PAD
   const bounds = placed?.bounds ?? { x: 0, y: 0, width: 0, height: 0 }
   const empty = result !== null && result.nodes.length === 0
   const label = (id: number) =>
@@ -266,6 +301,18 @@ export function MapView() {
               {result.edges.map((edge) => {
                 const [a, b] = [placed.nodes.get(edge.from), placed.nodes.get(edge.to)]
                 if (!a || !b) return null
+                const route = routes.get(edgeKey(edge))
+                if (route) {
+                  return (
+                    <path
+                      key={edgeKey(edge)}
+                      className={`map-edge map-edge-${edge.kind}`}
+                      d={roundedPath(route)}
+                      fill="none"
+                      markerEnd={edge.kind === 'link' ? 'url(#map-arrow)' : undefined}
+                    />
+                  )
+                }
                 const [from, to] = [centre(a), centre(b)]
                 // A gentle curve, so edges between distant groups don't run straight through
                 // the pages in between; it bends to the right of its direction, so a pair of
@@ -280,7 +327,7 @@ export function MapView() {
                 const end = border(b, control)
                 return (
                   <path
-                    key={`${edge.kind}-${edge.from}-${edge.to}`}
+                    key={edgeKey(edge)}
                     className={`map-edge map-edge-${edge.kind}`}
                     d={`M${start.x} ${start.y} Q${control.x} ${control.y} ${end.x} ${end.y}`}
                     fill="none"

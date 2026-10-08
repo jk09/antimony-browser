@@ -42,7 +42,8 @@ export interface MapLayout {
 export const GROUP_PAD = 12
 export const GROUP_HEADER = 26
 export const GROUP_GAP = 24
-const NODE_GAP = 10
+/** Space between pages; wide enough for an edge to pass between two of them. */
+const NODE_GAP = 14
 
 interface Sized {
   id: number

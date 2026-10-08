@@ -54,8 +54,8 @@ describe('layoutMap', () => {
   })
 
   it('orders groups so links between them avoid running through other groups', () => {
-    // A–C are linked; in the given order B sits between them on one shelf.
-    const three = [group(1, 4), group(2, 4), group(3, 4)]
+    // A–C are linked; in the given order B sits between them (the three stack in one column).
+    const three = [group(1, 2), group(2, 2), group(3, 2)]
     const links = [{ a: 1, b: 3, weight: 5 }]
     const naive = layoutMap(three)
     const smart = layoutMap(three, links)
@@ -70,7 +70,7 @@ describe('layoutMap', () => {
     expect(crossingScore(frames(smart), links)).toBeLessThan(crossingScore(frames(naive), links))
     expect(layoutMap(three, links)).toEqual(smart)
     // Still no overlaps, and every page is placed.
-    expect(smart.nodes.size).toBe(12)
+    expect(smart.nodes.size).toBe(6)
     smart.groups.forEach((a, i) =>
       smart.groups.slice(i + 1).forEach((b) => expect(overlap(a, b)).toBe(false)),
     )
