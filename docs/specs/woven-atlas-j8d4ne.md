@@ -116,3 +116,5 @@ Note any deviations from the original spec during implementation.
 
 - End-to-end tests were not run in the cloud session (no Electron binary); CI runs them.
 - The group outline for keyboards and screen readers is a visually hidden list of buttons, and the SVG nodes are not focusable themselves.
+- Found by running the real app (Electron now installs in cloud sessions): the map takes keyboard focus on opening (the filter field) so Escape works after `/history-map`, and each page keeps at most 3 keyword edges (strongest first), because pages of one topic otherwise joined every pair (1,926 dashed lines for 300 pages).
+- Edge routing: groups are ordered by swapping to keep links from running through other groups, and edges are curves (follow-up PRs).

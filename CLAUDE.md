@@ -9,6 +9,7 @@ Antimony is a minimal Chromium-based browser: Electron + TypeScript, chrome UI i
 
 - Non-trivial work starts from a spec in the [spec folder](./docs/specs/). No spec → use the [`spec`](.claude/skills/spec/) skill first.
 - Finish every task with the [`ship`](.claude/skills/ship/) skill. Don't commit ad hoc.
+- Pushed work always gets a PR: after pushing a fix or follow-up (also when the branch's earlier PR was merged), open a PR for it and watch it, without waiting to be asked.
 - Commits: [Conventional Commits](https://www.conventionalcommits.org/), scope = feature folder name, `Spec: <spec-id>` line when a spec drove the change. Format in the `ship` skill.
 
 ## Features

@@ -50,6 +50,7 @@ export function MapView() {
   const latest = useRef(0)
   const drag = useRef<{ x: number; y: number } | null>(null)
   const svg = useRef<SVGSVGElement>(null)
+  const field = useRef<HTMLInputElement>(null)
 
   const load = useCallback(
     (next: { range: MapRange; text: string }) => {
@@ -68,6 +69,11 @@ export function MapView() {
     },
     [api],
   )
+
+  // Keyboard focus goes into the page, so Escape closes it (as on the Recall page).
+  useEffect(() => {
+    if (open) field.current?.focus()
+  }, [open])
 
   useEffect(
     () =>
@@ -159,6 +165,7 @@ export function MapView() {
       </header>
       <div className="map-controls">
         <input
+          ref={field}
           type="search"
           aria-label="Filter pages"
           placeholder="Filter by title, address or keyword"
