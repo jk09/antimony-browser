@@ -124,7 +124,10 @@ test('links that open a new window open a new tab and stack', async () => {
     await location.press('Enter')
     await expect.poll(() => pageUrls(app)).toEqual([`${origin}/links`])
 
-    const page = app.windows().find((candidate) => candidate.url() === `${origin}/links`)!
+    // The tab's URL is known to main before Playwright has registered the page view's window.
+    const linksPage = () => app.windows().find((candidate) => candidate.url() === `${origin}/links`)
+    await expect.poll(linksPage).toBeTruthy()
+    const page = linksPage()!
     await page.getByRole('link', { name: 'New window' }).click()
 
     // The first tab keeps its page; the new one is shown instead. No window is created.
