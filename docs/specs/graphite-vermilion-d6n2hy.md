@@ -104,3 +104,4 @@ Note any deviations from the original spec during implementation.
 
 - Not run in the cloud session (no Electron binary): `npm run dev`, e2e and a visual check of the result; CI runs e2e. The page card's inset comes from `.shell` padding, so no change to `PageArea` or its test was needed.
 - Also restyled: debug panel, Recall, History and `/config` as rounded cards (same tokens).
+- The e2e layout assertions in `e2e/prompt.spec.ts` assumed an edge-to-edge page view; they now expect the 10 px frame (`FRAME`) around and between the page card and the panel.
