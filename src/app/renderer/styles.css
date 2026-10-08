@@ -1697,3 +1697,158 @@ textarea {
     animation: none;
   }
 }
+
+/* Configuration (skills): every /command, skill and macro with its script, over the page area. */
+
+.workspace:has(> .config-view) > .acting-frame {
+  flex: 0 0 0;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.config-view {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 8px 12px;
+  background: var(--toolbar-bg);
+}
+
+.config-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.config-header h2 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.config-filter {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--field-border);
+  border-radius: 6px;
+  background: var(--field-bg);
+  color: var(--text);
+}
+
+.config-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.config-body h3 {
+  margin: 12px 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.config-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.config-item {
+  padding: 8px 10px;
+  border: 1px solid var(--field-border);
+  border-radius: 6px;
+  background: var(--card-bg);
+}
+
+.config-item p {
+  margin: 4px 0 0;
+}
+
+.config-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.config-name code {
+  font-weight: 600;
+}
+
+.config-name button {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--field-border);
+  border-radius: 6px;
+  background: var(--field-bg);
+  color: var(--error);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.config-usage,
+.config-note,
+.config-notice {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.config-notice {
+  margin: 0;
+}
+
+.config-notice.error {
+  color: var(--error);
+}
+
+.config-params {
+  display: grid;
+  gap: 2px;
+  margin: 6px 0 0;
+  font-size: 12px;
+}
+
+.config-params div {
+  display: flex;
+  gap: 8px;
+}
+
+.config-params dt {
+  font-family: ui-monospace, monospace;
+}
+
+.config-params dd {
+  margin: 0;
+  color: var(--muted);
+}
+
+.config-script {
+  margin: 6px 0 0;
+  padding: 6px 6px 6px 28px;
+  border-radius: 4px;
+  background: var(--code-bg);
+  font-size: 12px;
+}
+
+.config-script code {
+  overflow-wrap: anywhere;
+}
+
+.config-tool {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.config-script mark {
+  background: none;
+  color: var(--focus);
+  font-weight: 600;
+}

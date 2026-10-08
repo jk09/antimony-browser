@@ -75,6 +75,7 @@ export function fakeApi(
   const state = channel<AgentState>()
   const settings = channel<AgentSettings>()
   const skills = channel<Skill[]>()
+  const openConfig = channel<void>()
   const debugEvent = channel<{ event: DebugEvent; label: string }>()
   const debugToggled = channel<void>()
   const navigation = channel<NavigationState>()
@@ -162,6 +163,8 @@ export function fakeApi(
       onListChanged: skills.subscribe,
       delete: vi.fn(async () => {}),
       run: vi.fn(async () => ({ ok: true })),
+      requestConfig: vi.fn(async () => {}),
+      onOpenConfig: openConfig.subscribe,
     },
     stacks: {
       state: vi.fn(async () => options.stacks ?? { current: null, stacks: [] }),
@@ -193,6 +196,7 @@ export function fakeApi(
       state: state.emit,
       settings: settings.emit,
       skills: skills.emit,
+      openConfig: () => openConfig.emit(),
       debugEvent: (event: DebugEvent, label: string) => debugEvent.emit({ event, label }),
       debugToggled: () => debugToggled.emit(),
       navigation: navigation.emit,

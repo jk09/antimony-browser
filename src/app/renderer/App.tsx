@@ -5,6 +5,7 @@ import { HistoryView } from '../../features/history/ui/HistoryView'
 import { RecallView } from '../../features/history/ui/RecallView'
 import { PageArea } from '../../features/navigation/ui/PageArea'
 import { AssistantPanel } from '../../features/prompt/ui/AssistantPanel'
+import { ConfigView } from '../../features/skills/ui/ConfigView'
 import { StackHeader } from '../../features/stacks/ui/StackHeader'
 
 /**
@@ -24,6 +25,7 @@ export function App() {
           </PageArea>
         </ActingFrame>
         <RecallView />
+        <ConfigView />
         <DebugPanel />
       </div>
       <AssistantPanel

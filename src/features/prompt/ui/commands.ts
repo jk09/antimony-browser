@@ -144,6 +144,9 @@ export async function runCommand(
               .join('\n'),
       )
     }
+    case 'config':
+      await api.skills.requestConfig()
+      return { close: true }
     case 'forget':
       if (!skills.some((skill) => skill.name === args && !skill.builtin)) {
         return error(`No macro /${args}.`)

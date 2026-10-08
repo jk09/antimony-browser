@@ -63,8 +63,17 @@ describe('skills main', () => {
       'skills:list',
       'skills:delete',
       'skills:run',
+      'skills:request-config',
       'skills:list-changed',
+      'skills:open-config',
     ])
+  })
+
+  it('relays /config to the chrome UI and reserves the name', () => {
+    const { ctx, call, macros } = setup()
+    call(channels.requestConfig)
+    expect(ctx.ipc.send).toHaveBeenCalledWith(channels.openConfig, null)
+    expect(() => macros.save({ ...macro, name: 'config' })).toThrow('built-in command')
   })
 
   it('saves macros from the assistant with parameters and hints, persists them and tells the UI', () => {
