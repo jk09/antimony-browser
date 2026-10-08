@@ -1884,8 +1884,7 @@ textarea {
 
 .map-group rect {
   fill: none;
-  stroke: var(--border, currentColor);
-  stroke-opacity: 0.5;
+  stroke: var(--field-border);
 }
 
 .map-group text {
