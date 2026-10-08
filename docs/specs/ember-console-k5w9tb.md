@@ -6,12 +6,12 @@
 | --- | --- |
 | **Feature name** | `/config` opens a configuration page with all system commands, built-in skills and macros, each with its steps |
 | **Spec ID** | ember-console-k5w9tb |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-08 09:00 +00:00 |
-| **Last updated** | 2026-10-08 10:00 +00:00 |
+| **Last updated** | 2026-10-08 12:19 +00:00 |
 | **Affected features** | skills, prompt |
 | **Target release** | 0.1.0 |
 | **Related links** | specs violet-harbinger-p7w3kd, still-meridian-r4v8nc (macros); ADRs 0004, 0013 |

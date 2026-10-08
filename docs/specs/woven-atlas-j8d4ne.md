@@ -6,12 +6,12 @@
 | --- | --- |
 | **Feature name** | `/history-map` opens a map of visited pages, grouped by semantic group and connected by link-follows and shared keywords |
 | **Spec ID** | woven-atlas-j8d4ne |
-| **Status** | Draft <!-- one of: Draft, Active, Done --> |
+| **Status** | Active <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-08 12:15 +00:00 |
-| **Last updated** | 2026-10-08 12:15 +00:00 |
+| **Last updated** | 2026-10-08 12:19 +00:00 |
 | **Affected features** | history, prompt |
 | **Target release** | 0.1.0 |
 | **Related links** | specs ember-ledger-h3x8vq, drifting-nimbus-r8c3kw (Recall page, same layout); ember-console-k5w9tb (command registration) |
