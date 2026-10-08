@@ -86,6 +86,13 @@ describe('MapView', () => {
     expect(screen.queryByRole('region', { name: 'History map' })).toBeNull()
   })
 
+  it('focuses the filter on opening, so Escape closes the map from the prompt', async () => {
+    await open()
+    expect(document.activeElement).toBe(screen.getByLabelText('Filter pages'))
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+    expect(screen.queryByRole('region', { name: 'History map' })).toBeNull()
+  })
+
   it('closes with × and Escape', async () => {
     await open()
     fireEvent.click(screen.getByRole('button', { name: 'Close history map' }))
