@@ -6,7 +6,7 @@
 | --- | --- |
 | **Feature name** | The assistant gets a `recall_history` tool: Recall's ranking with keywords and scores, by a request and/or an image the user attached, and shows the result as Recall's cloud |
 | **Spec ID** | amber-orbit-q7t3vn |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
