@@ -51,6 +51,8 @@ export function MapView() {
   const drag = useRef<{ x: number; y: number } | null>(null)
   const svg = useRef<SVGSVGElement>(null)
   const field = useRef<HTMLInputElement>(null)
+  /** The page whose outline button has keyboard focus; its node on the map shows a focus ring. */
+  const [focused, setFocused] = useState<number | null>(null)
 
   const load = useCallback(
     (next: { range: MapRange; text: string }) => {
@@ -292,7 +294,7 @@ export function MapView() {
                 return (
                   <g
                     key={node.id}
-                    className="map-node"
+                    className={focused === node.id ? 'map-node map-node-focus' : 'map-node'}
                     onClick={() => openPage(node)}
                     style={{ cursor: 'pointer' }}
                   >
@@ -316,7 +318,14 @@ export function MapView() {
                       const node = nodes.get(id)!
                       return (
                         <li key={id}>
-                          <button type="button" onClick={() => openPage(node)}>
+                          <button
+                            type="button"
+                            onClick={() => openPage(node)}
+                            onFocus={() => setFocused(id)}
+                            onBlur={() =>
+                              setFocused((current) => (current === id ? null : current))
+                            }
+                          >
                             {titleOf(node)}
                           </button>
                         </li>

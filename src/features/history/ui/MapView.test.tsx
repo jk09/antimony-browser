@@ -103,6 +103,18 @@ describe('MapView', () => {
     expect(screen.queryByRole('region', { name: 'History map' })).toBeNull()
   })
 
+  it('shows a focus ring on the map node of the outline button that has keyboard focus', async () => {
+    await open()
+    const nodes = () => [...document.querySelectorAll('.map-node-focus')]
+    expect(nodes()).toHaveLength(0)
+    const button = screen.getByRole('button', { name: 'Page 2' })
+    act(() => button.focus())
+    expect(nodes()).toHaveLength(1)
+    expect(nodes()[0]!.textContent).toContain('Page 2')
+    act(() => button.blur())
+    expect(nodes()).toHaveLength(0)
+  })
+
   it('refreshes when history changes while open', async () => {
     const { api, emit } = await open()
     api.history.map.mockClear()

@@ -1923,6 +1923,12 @@ textarea {
   stroke-width: 2;
 }
 
+.map-node-focus rect {
+  stroke: var(--focus);
+  stroke-opacity: 1;
+  stroke-width: 3;
+}
+
 .map-node text {
   font-size: 11px;
   fill: currentColor;
