@@ -11,9 +11,6 @@ import {
 import { newProfile } from './profile'
 
 // Chromium refuses to run as root with its sandbox on (e.g. in containers); CI runs as a normal user.
-/** The chrome UI's frame: the window's padding, and the gap between the page card and the panel. */
-const FRAME = 10
-
 const args = ['.', ...(process.getuid?.() === 0 ? ['--no-sandbox'] : [])]
 
 let pages: Server
@@ -175,9 +172,8 @@ test('zooming the chrome UI keeps the page view next to the assistant panel', as
       )
       const page = (await pageBounds(app))!
       const panel = (await window.getByRole('complementary', { name: 'Assistant' }).boundingBox())!
-      // The gap between them is the frame, in the chrome UI's CSS pixels.
       return {
-        page: page.x + page.width + Math.round(FRAME * factor),
+        page: page.x + page.width,
         panel: Math.round(panel.x * factor),
       }
     }
@@ -246,15 +242,14 @@ test('the menu bar is hidden; its shortcuts work and /menu runs its items', asyn
 
     // Alt shows the menu bar (Windows, Linux); the page view shrinks with the window's content.
     const layout = () =>
-      app.evaluate(({ BrowserWindow }, frame) => {
+      app.evaluate(({ BrowserWindow }) => {
         const window = BrowserWindow.getAllWindows()[0]!
         const [view] = window.contentView.children
-        const [, height = 0] = window.getContentSize()
         return {
           menuBar: window.isMenuBarVisible(),
-          fits: view!.getBounds().height === height - 2 * frame,
+          fits: view!.getBounds().height === window.getContentSize()[1],
         }
-      }, FRAME)
+      })
     if (process.platform !== 'darwin') {
       await pressInPage([{ keyCode: 'Alt' }])
       await expect.poll(layout).toEqual({ menuBar: true, fits: true })
@@ -328,7 +323,7 @@ test('Ctrl+B hides and shows the assistant, and the page view follows each time'
     // The page view fills the window's width when hidden, and ends where the panel starts when shown.
     const fullWidth = async () => {
       const page = (await pageBounds(app))!
-      return page.x === FRAME && page.width === page.windowWidth - 2 * FRAME
+      return page.x === 0 && page.width === page.windowWidth
     }
     const besidePanel = async () => {
       const page = (await pageBounds(app))!
@@ -336,7 +331,7 @@ test('Ctrl+B hides and shows the assistant, and the page view follows each time'
       return (
         panel !== null &&
         page.width < page.windowWidth &&
-        Math.abs(page.x + page.width + FRAME - Math.round(panel.x)) <= 1
+        Math.abs(page.x + page.width - Math.round(panel.x)) <= 1
       )
     }
     const hidden = async () => {
@@ -415,7 +410,7 @@ test('a question runs the assistant, which drives the browser and stores the act
     // The page sits left of the assistant panel and keeps its size while the conversation grows.
     await expect(window.getByRole('status')).toHaveCount(0)
     const before = (await pageBounds(app))!
-    expect(before).toMatchObject({ x: FRAME, y: FRAME })
+    expect(before).toMatchObject({ x: 0, y: 0 })
     expect(before.width).toBeLessThan(before.windowWidth - 250)
     await prompt.fill('open the test page again, please')
     await prompt.press('Enter')
@@ -529,7 +524,7 @@ test('the debugger shows requests, responses and tool calls', async () => {
         const [content = 0] = window.getContentSize()
         return { content, page: window.contentView.children[0]?.getBounds().width ?? 0 }
       })
-    // The assistant panel takes the right edge (400 px at start), inside the window's frame.
+    // The assistant panel takes the right edge (400 px at start).
     // Polled: the page view's bounds follow the chrome UI's reported insets, which can arrive a
     // moment after the conversation finishes (CI once measured 404 instead of 400 here).
     await expect
@@ -537,7 +532,7 @@ test('the debugger shows requests, responses and tool calls', async () => {
         const { content, page } = await widths()
         return content - page
       })
-      .toBe(400 + 3 * FRAME)
+      .toBe(400)
     const start = await widths()
     await app.evaluate(({ Menu }) =>
       Menu.getApplicationMenu()!.getMenuItemById('toggle-debugger')!.click(),
