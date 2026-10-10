@@ -6,6 +6,7 @@ import { navigationBridge } from '../../features/navigation/preload'
 import { promptBridge } from '../../features/prompt/preload'
 import { skillsBridge } from '../../features/skills/preload'
 import { stacksBridge } from '../../features/stacks/preload'
+import { welcomeBridge } from '../../features/welcome/preload'
 import type { AntimonyApi } from '../../shared/api'
 
 // Features add their bridge here, one key each (see src/features/CLAUDE.md).
@@ -18,6 +19,7 @@ const api: AntimonyApi = {
   prompt: promptBridge,
   skills: skillsBridge,
   stacks: stacksBridge,
+  welcome: welcomeBridge,
 }
 
 contextBridge.exposeInMainWorld('antimony', api)

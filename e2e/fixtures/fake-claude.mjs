@@ -2,6 +2,9 @@
 // A stand-in for the Claude Code CLI (CLAUDE_CLI_PATH) in tests: answers `auth status --json`, and
 // in print mode reads one stream-json user message, calls the MCP tools from --mcp-config like the
 // real CLI, and prints stream-json events. "open <url>" calls navigate; anything else is echoed.
+// With FAKE_CLAUDE_MODEL_URL it plays the model loop instead: it POSTs { model, hasApiKey, tools,
+// messages } there for each step, prints the returned { content }, calls the tools it names over
+// MCP and sends their results back, until a step calls no tools.
 // FAKE_CLAUDE_LOGGED_IN=0 plays a logged-out CLI; FAKE_CLAUDE_LOG appends each run's arguments.
 import { appendFileSync, readFileSync } from 'node:fs'
 
@@ -64,8 +67,59 @@ print({ type: 'system', subtype: 'init', session_id: sessionId, tools, model: fl
 
 const assistant = (blocks) =>
   print({ type: 'assistant', parent_tool_use_id: null, message: { content: blocks } })
+const modelUrl = process.env.FAKE_CLAUDE_MODEL_URL
 const url = /\bopen (\S+)/.exec(text)?.[1]
-if (url) {
+const prefix = 'mcp__antimony__'
+if (modelUrl && configPath) {
+  const messages = [{ role: 'user', content }]
+  let answer = ''
+  for (;;) {
+    const response = await fetch(modelUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: flag('--model'),
+        hasApiKey: 'ANTHROPIC_API_KEY' in process.env,
+        tools: tools.map((name) => ({ name: name.slice(prefix.length) })),
+        messages,
+      }),
+    })
+    const step = (await response.json()).content
+    messages.push({ role: 'assistant', content: step })
+    assistant(
+      step.map((block) =>
+        block.type === 'tool_use' ? { ...block, name: `${prefix}${block.name}` } : block,
+      ),
+    )
+    const uses = step.filter((block) => block.type === 'tool_use')
+    if (uses.length === 0) {
+      answer = step
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text)
+        .join('')
+      break
+    }
+    const results = []
+    for (const use of uses) {
+      const output = await call(use.name, use.input)
+      results.push({
+        type: 'tool_result',
+        tool_use_id: use.id,
+        ...(output.isError && { is_error: true }),
+        content: output.content.map((item) =>
+          item.type === 'image'
+            ? {
+                type: 'image',
+                source: { type: 'base64', media_type: item.mimeType, data: item.data },
+              }
+            : item,
+        ),
+      })
+    }
+    messages.push({ role: 'user', content: results })
+  }
+  result({ result: answer })
+} else if (url) {
   assistant([{ type: 'tool_use', id: 'toolu_1', name: 'mcp__antimony__navigate', input: { url } }])
   const output = await call('navigate', { url })
   const said = output.content.find((block) => block.type === 'text')?.text ?? ''

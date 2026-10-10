@@ -1,4 +1,4 @@
-import { createServer, type IncomingMessage, type Server } from 'node:http'
+import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { resolve } from 'node:path'
 import {
@@ -15,11 +15,15 @@ const args = ['.', ...(process.getuid?.() === 0 ? ['--no-sandbox'] : [])]
 
 let pages: Server
 let origin: string
-let anthropic: Server
-/** Requests the fake Anthropic API received: headers and parsed body. */
+let model: Server
+/** The model steps the fake Claude Code CLI asked for (FAKE_CLAUDE_MODEL_URL). */
 let requests: {
-  headers: IncomingMessage['headers']
-  body: { messages: { content: Block[] }[]; tools: { name: string }[] }
+  body: {
+    model: string
+    hasApiKey: boolean
+    messages: { content: Block[] }[]
+    tools: { name: string }[]
+  }
 }[]
 
 type Block = { type: string; [key: string]: unknown }
@@ -55,34 +59,18 @@ test.beforeAll(async () => {
   await new Promise<void>((resolve) => pages.listen(0, '127.0.0.1', resolve))
   origin = `http://127.0.0.1:${(pages.address() as AddressInfo).port}`
 
-  // Also plays a local Ollama: its model list, and the same /v1/messages API.
-  anthropic = createServer((request, response) => {
-    if (request.method === 'GET' && request.url === '/api/tags') {
-      response.writeHead(200, { 'content-type': 'application/json' })
-      response.end(JSON.stringify({ models: [{ name: 'qwen3:8b', model: 'qwen3:8b' }] }))
-      return
-    }
+  // The model behind the fake Claude Code CLI: each step's content, from the test's script.
+  model = createServer((request, response) => {
     let raw = ''
     request.on('data', (chunk) => (raw += chunk))
     request.on('end', () => {
       const body = JSON.parse(raw)
-      requests.push({ headers: request.headers, body })
-      const content = script(body.messages, requests.length)
+      requests.push({ body })
       response.writeHead(200, { 'content-type': 'application/json' })
-      response.end(
-        JSON.stringify({
-          id: `msg_${requests.length}`,
-          type: 'message',
-          role: 'assistant',
-          model: body.model,
-          stop_reason: content.some((block) => block.type === 'tool_use') ? 'tool_use' : 'end_turn',
-          usage: { input_tokens: 10, output_tokens: 5 },
-          content,
-        }),
-      )
+      response.end(JSON.stringify({ content: script(body.messages, requests.length) }))
     })
   })
-  await new Promise<void>((resolve) => anthropic.listen(0, '127.0.0.1', resolve))
+  await new Promise<void>((resolve) => model.listen(0, '127.0.0.1', resolve))
 })
 
 test.beforeEach(() => {
@@ -92,20 +80,20 @@ test.beforeEach(() => {
 
 test.afterAll(async () => {
   await Promise.all(
-    [pages, anthropic].map(
-      (server) => new Promise<void>((resolve) => server.close(() => resolve())),
-    ),
+    [pages, model].map((server) => new Promise<void>((resolve) => server.close(() => resolve()))),
   )
 })
 
-// A fresh profile per launch: settings, history and skills don't leak between tests.
-const launch = (env: Record<string, string> = {}) =>
+// A fresh profile per launch: settings, history and skills don't leak between tests. The assistant
+// runs through the fake Claude Code CLI; an API key in the environment must never reach it.
+const launch = (env: Record<string, string> = {}, profile = newProfile()) =>
   electron.launch({
-    args: [...args, `--user-data-dir=${newProfile()}`],
+    args: [...args, `--user-data-dir=${profile}`],
     env: {
       ...process.env,
       ANTHROPIC_API_KEY: 'sk-ant-e2e-test',
-      ANTHROPIC_BASE_URL: `http://127.0.0.1:${(anthropic.address() as AddressInfo).port}`,
+      CLAUDE_CLI_PATH: resolve(import.meta.dirname, 'fixtures/fake-claude.mjs'),
+      FAKE_CLAUDE_MODEL_URL: `http://127.0.0.1:${(model.address() as AddressInfo).port}/`,
       ...env,
     },
   })
@@ -403,7 +391,8 @@ test('a question runs the assistant, which drives the browser and stores the act
     await expect(conversation).toContainText('Opened the test page.')
     await expect.poll(() => pageUrls(app)).toEqual([`${origin}/hello`])
     expect(requests).toHaveLength(2)
-    expect(requests[0]!.headers['x-api-key']).toBe('sk-ant-e2e-test')
+    // Through the CLI, with its own login: Antimony's environment key is stripped.
+    expect(requests[0]!.body.hasApiKey).toBe(false)
     // Page access is off by default: navigation tools only.
     expect(requests[0]!.body.tools.map((tool) => tool.name)).not.toContain('read_page')
 
@@ -457,53 +446,62 @@ test('a question runs the assistant, which drives the browser and stores the act
   }
 })
 
-test('an installed Ollama model runs the assistant without an API key', async () => {
-  const app = await launch({
-    ANTHROPIC_API_KEY: '',
-    OLLAMA_HOST: `127.0.0.1:${(anthropic.address() as AddressInfo).port}`,
-  })
+test('the model picker offers the Claude model strengths, all run through the CLI', async () => {
+  const app = await launch({ FAKE_CLAUDE_MODEL_URL: '' })
   try {
     const window = await app.firstWindow()
     const prompt = await openPrompt(app, window)
     const picker = window.getByRole('combobox', { name: 'Model' })
-    await expect(picker.getByRole('option', { name: 'qwen3:8b (Ollama)' })).toBeAttached()
-    await picker.selectOption('ollama:qwen3:8b')
-    await expect(picker).toHaveValue('ollama:qwen3:8b')
+    await expect(picker.getByRole('option')).toHaveText(['Haiku 4.5', 'Sonnet 5.5', 'Opus 5.5'])
+    await expect(picker).toHaveValue('claude-sonnet-5-5')
+    await picker.selectOption('claude-haiku-4-5')
+    await expect(picker).toHaveValue('claude-haiku-4-5')
 
-    await prompt.fill('open the test page')
-    await prompt.press('Enter')
-    const conversation = window.getByRole('region', { name: 'Conversation' })
-    await expect(conversation).toContainText('Opened the test page.')
-    await expect.poll(() => pageUrls(app)).toEqual([`${origin}/hello`])
-    expect(requests).toHaveLength(2)
-    expect(requests[0]!.headers['x-api-key']).toBeUndefined()
-    expect(requests[0]!.body).toMatchObject({ model: 'qwen3:8b' })
-    expect(requests[0]!.body).not.toHaveProperty('thinking')
-  } finally {
-    await app.close()
-  }
-})
-
-test('the Claude Code CLI runs the assistant with its own login and calls tools over MCP', async () => {
-  const app = await launch({
-    ANTHROPIC_API_KEY: '',
-    CLAUDE_CLI_PATH: resolve(import.meta.dirname, 'fixtures/fake-claude.mjs'),
-  })
-  try {
-    const window = await app.firstWindow()
-    const prompt = await openPrompt(app, window)
-    const picker = window.getByRole('combobox', { name: 'Model' })
-    await expect(picker.getByRole('option', { name: 'Haiku 4.5 (Claude Code)' })).toBeAttached()
-    await picker.selectOption('cli:claude-haiku-4-5')
-    await expect(picker).toHaveValue('cli:claude-haiku-4-5')
-
+    // The fake CLI without a model script: "open <url>" calls navigate over MCP.
     await prompt.fill(`open ${origin}/hello`)
     await prompt.press('Enter')
     const conversation = window.getByRole('region', { name: 'Conversation' })
     await expect(conversation).toContainText(`Opened ${origin}/hello`)
     await expect.poll(() => pageUrls(app)).toEqual([`${origin}/hello`])
-    // Nothing went to the Anthropic API.
+  } finally {
+    await app.close()
+  }
+})
+
+test('a fresh profile opens the welcome page, which tests the CLI and picks the model', async () => {
+  const app = await launch({}, newProfile({ welcome: true }))
+  try {
+    const window = await app.firstWindow()
+    const welcome = window.getByRole('region', { name: 'Welcome' })
+    await expect(welcome).toBeVisible()
+    // The page area is covered: the welcome page takes the place of the page view.
+    await welcome.getByRole('button', { name: 'No, not yet' }).click()
+    await expect(welcome).toContainText('npm install -g @anthropic-ai/claude-code')
+    await welcome.getByRole('button', { name: /installed it – test it/ }).click()
+    const checks = welcome.getByRole('status', { name: 'Claude Code CLI test' })
+    await expect(checks).toContainText(/Answers with Sonnet 5\.5 in \d+\.\d s/)
+    await expect(checks.getByRole('listitem')).toHaveCount(3)
+    for (const line of await checks.getByRole('listitem').all()) {
+      await expect(line).toHaveAttribute('data-state', 'ok')
+    }
+    // The test request had no browsing data and no tools.
     expect(requests).toHaveLength(0)
+
+    await welcome.getByRole('button', { name: 'Next' }).click()
+    await welcome.getByRole('radio', { name: /Opus 5\.5/ }).check()
+    await expect(window.getByRole('combobox', { name: 'Model' })).toHaveValue('claude-opus-5-5')
+    await welcome.getByRole('button', { name: 'Next' }).click()
+    await expect(welcome).toContainText('Using the prompt')
+    await welcome.getByRole('button', { name: 'Next' }).click()
+    await expect(welcome).toContainText('store it as /wiki')
+    await welcome.getByRole('button', { name: 'Start browsing' }).click()
+    await expect(welcome).toBeHidden()
+
+    // /welcome brings it back.
+    const prompt = await openPrompt(app, window)
+    await prompt.fill('/welcome')
+    await prompt.press('Enter')
+    await expect(welcome).toBeVisible()
   } finally {
     await app.close()
   }
@@ -544,7 +542,6 @@ test('the debugger shows requests, responses and tool calls', async () => {
         panel.locator('.debug-type', { hasText: new RegExp(`^${type}$`) }).first(),
       ).toBeVisible()
     }
-    await expect(panel).not.toContainText('sk-ant-e2e-test')
     // The page view narrows to make room for the debugger, next to the assistant panel.
     await expect.poll(async () => start.page - (await widths()).page).toBeGreaterThanOrEqual(280)
   } finally {

@@ -1,17 +1,32 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentState, DebugEvent, ModelId } from '../ipc'
 import { Agent, elideImages, MAX_STEPS, siteOf, type AgentDeps } from './agent'
-import type { ContentBlock, ModelRequest, ModelResponse } from './anthropic'
-import { CLI_NOT_FOUND, CliError, type CliOutcome, type CliTurn } from './claude-cli'
+import {
+  CLI_NOT_FOUND,
+  CliError,
+  type CliOutcome,
+  type CliResult,
+  type CliTurn,
+} from './claude-cli'
+import type { ApiTool, ContentBlock } from './content'
 import { fakeBrowser } from './fake-browser'
 import type { HistoryPort, MacroInfo, MacroPort, StackOpener } from './tools'
 
+/** What the scripted CLI's model saw at one step of a turn. */
+interface ModelRequest {
+  model: ModelId
+  tools: ApiTool[]
+  messages: { role: 'user' | 'assistant'; content: ContentBlock[] }[]
+}
+interface ModelResponse {
+  content: ContentBlock[]
+  stop_reason: string
+}
+type Reply = (request: ModelRequest, signal: AbortSignal) => Promise<ModelResponse>
+
 const response = (content: ContentBlock[], stop_reason = 'end_turn'): ModelResponse => ({
-  id: 'msg',
-  model: 'claude-sonnet-5-5',
   content,
   stop_reason,
-  usage: { input_tokens: 1, output_tokens: 1 },
 })
 const toolUse = (id: string, name: string, input: unknown): ContentBlock => ({
   type: 'tool_use',
@@ -20,11 +35,47 @@ const toolUse = (id: string, name: string, input: unknown): ContentBlock => ({
   input,
 })
 
+/**
+ * A Claude Code CLI turn played from `replies`, one per model step: like the real CLI it shows each
+ * assistant message, calls the tools back through the turn and stops at maxTurns.
+ */
+function scriptedCli(replies: Reply[], requests: ModelRequest[]) {
+  return async (turn: CliTurn): Promise<CliOutcome> => {
+    const messages: ModelRequest['messages'] = [{ role: 'user', content: turn.content }]
+    const finish = (result: Omit<CliResult, 'type'>): CliOutcome => {
+      const event: CliResult = { type: 'result', session_id: 'session-1', ...result }
+      turn.onEvent(event)
+      return { code: result.is_error ? 1 : 0, stderr: '', result: event, sessionId: 'session-1' }
+    }
+    for (let step = 0; ; step++) {
+      if (step >= turn.maxTurns) return finish({ subtype: 'error_max_turns', is_error: true })
+      const request = { model: turn.model, tools: turn.tools, messages: structuredClone(messages) }
+      requests.push(request)
+      const next = replies.shift()
+      if (!next) throw new Error('no more replies')
+      const { content, stop_reason } = await next(request, turn.signal)
+      messages.push({ role: 'assistant', content })
+      turn.onEvent({ type: 'assistant', parent_tool_use_id: null, message: { content } })
+      const calls = content.filter(
+        (block): block is { type: 'tool_use'; id: string; name: string; input: unknown } =>
+          block.type === 'tool_use',
+      )
+      if (calls.length === 0) {
+        return finish({ subtype: 'success', is_error: false, stop_reason, result: '' })
+      }
+      const results: ContentBlock[] = []
+      for (const call of calls) {
+        results.push({ ...(await turn.callTool(call.name, call.input)), tool_use_id: call.id })
+      }
+      messages.push({ role: 'user', content: results })
+    }
+  }
+}
+
 function setup(
-  replies: ((request: ModelRequest, signal: AbortSignal) => Promise<ModelResponse>)[],
+  replies: Reply[],
   options: {
     pageAccess?: boolean
-    missingSetup?: string
     elements?: Parameters<typeof fakeBrowser>[0]
     model?: ModelId
     cli?: (turn: CliTurn) => Promise<CliOutcome>
@@ -44,25 +95,17 @@ function setup(
     historyAccess: options.historyAccess ?? true,
   }
   const turns: CliTurn[] = []
+  const scripted = scriptedCli(replies, requests)
   const deps: AgentDeps = {
-    callModel: vi.fn((request, signal) => {
-      // Snapshot: the agent keeps appending to the same array.
-      requests.push({ ...request, messages: structuredClone(request.messages) })
-      const next = replies.shift()
-      if (!next) throw new Error('no more replies')
-      return next(request, signal)
-    }),
     runCli: vi.fn((turn: CliTurn) => {
       turns.push(turn)
-      if (!options.cli) throw new Error('no CLI reply')
-      return options.cli(turn)
+      return (options.cli ?? scripted)(turn)
     }),
     browser: () => browser,
     history: () => options.history ?? null,
     macros: () => options.macros ?? null,
     stacks: () => options.stacks ?? null,
     settings: () => settings,
-    missingSetup: () => options.missingSetup ?? null,
     onState: (value) => states.push(structuredClone(value)),
     onDebug: (event) => events.push(event),
   }
@@ -246,26 +289,6 @@ describe('Agent.run', () => {
     expect(agent.state().items.at(-1)).toMatchObject({ text: 'hi again' })
   })
 
-  it('stop during an approval answers the pending tool call', async () => {
-    const { agent, browser, requests } = setup(
-      [
-        async () => response([toolUse('t1', 'click', { selector: '#a' })], 'tool_use'),
-        async () => response([{ type: 'text', text: 'ok' }]),
-      ],
-      { pageAccess: true, elements: { '#a': { found: true, tag: 'a', x: 1, y: 1 } } },
-    )
-    browser.load('example.com')
-    const running = agent.run(input('go'))
-    await waitFor(() => agent.state().status === 'awaiting-approval')
-    agent.stop()
-    await running
-    expect(browser.click).not.toHaveBeenCalled()
-    await agent.run(input('next'))
-    // The assistant's tool_use got a result before the new user turn.
-    const history = requests[1]!.messages
-    expect(history.at(-2)!.content[0]).toMatchObject({ type: 'tool_result', tool_use_id: 't1' })
-  })
-
   it('ends with an error after the step limit', async () => {
     const replies = Array.from(
       { length: MAX_STEPS },
@@ -275,21 +298,6 @@ describe('Agent.run', () => {
     await agent.run(input('loop'))
     expect(requests).toHaveLength(MAX_STEPS)
     expect(agent.state().items.at(-1)).toMatchObject({ kind: 'error' })
-  })
-
-  it('shows API errors and what setup is missing', async () => {
-    const noKey = setup([], { missingSetup: 'No Anthropic API key is set. Use /key to add one.' })
-    await noKey.agent.run(input('hi'))
-    expect(noKey.requests).toHaveLength(0)
-    expect(noKey.agent.state().items.at(-1)).toMatchObject({
-      kind: 'error',
-      message: expect.stringContaining('/key'),
-    })
-
-    const failing = setup([async () => Promise.reject(new TypeError('fetch failed'))])
-    await failing.agent.run(input('hi'))
-    expect(failing.agent.state().items.at(-1)).toMatchObject({ kind: 'error' })
-    expect(failing.events.at(-1)!.type).toBe('error')
   })
 
   it('rejects a second run while one is going', async () => {
@@ -313,7 +321,7 @@ describe('Agent.run', () => {
       'response',
       'tool-call',
       'tool-result',
-      'request',
+      'response',
       'response',
       'done',
     ])
@@ -617,7 +625,7 @@ describe('Agent.replay', () => {
     ])
     expect(result).toEqual({ ok: true })
     expect(browser.load).toHaveBeenCalledWith('news.example')
-    expect(deps.callModel).not.toHaveBeenCalled()
+    expect(deps.runCli).not.toHaveBeenCalled()
   })
 
   it('needs page access for page steps and one approval for the whole replay', async () => {
@@ -682,7 +690,7 @@ const assistant = (text: string) => ({
 describe('Agent.run with the Claude Code CLI', () => {
   it('runs the turn through the CLI, which calls the tools back, and shows its messages', async () => {
     const { agent, browser, turns, events } = setup([], {
-      model: 'cli:claude-opus-5-5',
+      model: 'claude-opus-5-5',
       cli: async (turn) => {
         turn.onEvent({ type: 'system', subtype: 'init', session_id: 'session-1', tools: [] })
         const result = await turn.callTool('navigate', { url: 'example.com' })
@@ -721,7 +729,7 @@ describe('Agent.run with the Claude Code CLI', () => {
 
   it('continues the CLI session on the next run, and /new starts a fresh one', async () => {
     const { agent, turns } = setup([], {
-      model: 'cli:claude-sonnet-5-5',
+      model: 'claude-sonnet-5-5',
       cli: async () => cliResult({ session_id: 'ignored' }),
     })
     await agent.run(input('one'))
@@ -734,7 +742,7 @@ describe('Agent.run with the Claude Code CLI', () => {
   it('page actions from the CLI wait for approval, and Deny reaches the CLI as an error', async () => {
     let denied: ContentBlock | null = null
     const { agent, browser } = setup([], {
-      model: 'cli:claude-sonnet-5-5',
+      model: 'claude-sonnet-5-5',
       pageAccess: true,
       elements: { '#buy': { found: true, tag: 'button', name: 'Buy', x: 5, y: 6 } },
       cli: async (turn) => {
@@ -754,7 +762,7 @@ describe('Agent.run with the Claude Code CLI', () => {
   it('refuses typing into sensitive fields from the CLI without asking', async () => {
     let refused: ContentBlock | null = null
     const { agent, browser } = setup([], {
-      model: 'cli:claude-sonnet-5-5',
+      model: 'claude-sonnet-5-5',
       pageAccess: true,
       elements: { '#pw': { found: true, tag: 'input', sensitive: true, x: 1, y: 1 } },
       cli: async (turn) => {
@@ -770,7 +778,7 @@ describe('Agent.run with the Claude Code CLI', () => {
 
   it('stop during an approval kills the CLI turn and ends the run', async () => {
     const { agent } = setup([], {
-      model: 'cli:claude-sonnet-5-5',
+      model: 'claude-sonnet-5-5',
       pageAccess: true,
       elements: { '#a': { found: true, tag: 'a', x: 1, y: 1 } },
       cli: (turn) =>
@@ -791,7 +799,7 @@ describe('Agent.run with the Claude Code CLI', () => {
 
   it('closes an approval the CLI left open when it exited', async () => {
     const { agent } = setup([], {
-      model: 'cli:claude-sonnet-5-5',
+      model: 'claude-sonnet-5-5',
       pageAccess: true,
       elements: { '#a': { found: true, tag: 'a', x: 1, y: 1 } },
       cli: async (turn) => {
@@ -818,7 +826,7 @@ describe('Agent.run with the Claude Code CLI', () => {
       async () => Promise.reject(new CliError(CLI_NOT_FOUND)),
     ]
     const { agent } = setup([], {
-      model: 'cli:claude-sonnet-5-5',
+      model: 'claude-sonnet-5-5',
       cli: () => outcomes.shift()!(),
     })
     for (let i = 0; i < 4; i++) await agent.run(input('hi'))
@@ -832,31 +840,6 @@ describe('Agent.run with the Claude Code CLI', () => {
       'Claude Code CLI error: Overloaded',
       "Claude Code isn't logged in. Run `claude` in a terminal and log in.",
       CLI_NOT_FOUND,
-    ])
-  })
-
-  it('starts fresh, with a notice, when the provider changes between the CLI and the API', async () => {
-    const { agent, settings, requests, turns } = setup(
-      [
-        async () => response([{ type: 'text', text: 'api 1' }]),
-        async () => response([{ type: 'text', text: 'api 2' }]),
-      ],
-      { cli: async () => cliResult() },
-    )
-    await agent.run(input('api one'))
-    settings.model = 'cli:claude-sonnet-5-5'
-    await agent.run(input('cli one'))
-    await agent.run(input('cli two'))
-    settings.model = 'ollama:qwen3:8b'
-    await agent.run(input('ollama one'))
-
-    expect(turns.map((turn) => turn.resume)).toEqual([null, 'session-1'])
-    // The Ollama run doesn't get the first API turn: the CLI held the conversation in between.
-    expect(requests[1]!.messages).toHaveLength(1)
-    const notices = agent.state().items.filter((item) => item.kind === 'notice')
-    expect(notices).toEqual([
-      { kind: 'notice', text: "The model doesn't see the earlier messages (provider changed)." },
-      { kind: 'notice', text: "The model doesn't see the earlier messages (provider changed)." },
     ])
   })
 })

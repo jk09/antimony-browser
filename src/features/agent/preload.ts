@@ -26,9 +26,8 @@ export const agentBridge: AgentApi = {
   onStateChanged: subscribe<AgentState>(channels.stateChanged),
   settings: () => ipcRenderer.invoke(channels.settings),
   updateSettings: (update) => ipcRenderer.invoke(channels.updateSettings, update),
-  setKey: (key) => ipcRenderer.invoke(channels.setKey, key),
   onSettingsChanged: subscribe<AgentSettings>(channels.settingsChanged),
-  models: () => ipcRenderer.invoke(channels.models),
+  checkCli: () => ipcRenderer.invoke(channels.checkCli),
   debugLog: () => ipcRenderer.invoke(channels.debugLog),
   onDebugEvent: (listener) =>
     subscribe<{ event: DebugEvent; label: string }>(channels.debugLogChanged)(({ event, label }) =>

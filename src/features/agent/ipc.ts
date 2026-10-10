@@ -6,8 +6,7 @@ export const channels = {
   state: 'agent:state',
   settings: 'agent:settings',
   updateSettings: 'agent:update-settings',
-  setKey: 'agent:set-key',
-  models: 'agent:models',
+  checkCli: 'agent:check-cli',
   debugLog: 'agent:debug-log',
   toggleDebug: 'agent:toggle-debug',
   // main → UI
@@ -18,70 +17,54 @@ export const channels = {
   debugToggled: 'agent:debug-toggled',
 } as const
 
+/** The Claude models the assistant runs through the user's Claude Code CLI, weakest first. */
 export const claudeModels = [
-  { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5' },
-  { id: 'claude-opus-5-5', label: 'Opus 5.5' },
-  { id: 'claude-haiku-4-5', label: 'Haiku 4.5' },
+  {
+    id: 'claude-haiku-4-5',
+    label: 'Haiku 4.5',
+    short: 'haiku',
+    description: 'Fastest, for light tasks',
+  },
+  {
+    id: 'claude-sonnet-5-5',
+    label: 'Sonnet 5.5',
+    short: 'sonnet',
+    description: 'Balanced speed and strength',
+  },
+  { id: 'claude-opus-5-5', label: 'Opus 5.5', short: 'opus', description: 'Strongest, slower' },
 ] as const
 
-export type ClaudeModelId = (typeof claudeModels)[number]['id']
-/** A Claude model run through the user's Claude Code CLI (its own login). */
-export type CliModelId = `cli:${ClaudeModelId}`
-/**
- * Claude through the Anthropic API (API key), `cli:<claude id>` through the Claude Code CLI, or
- * `ollama:<name>` for a model served by local Ollama.
- */
-export type ModelId = ClaudeModelId | CliModelId | `ollama:${string}`
-export type Provider = 'anthropic' | 'claude-cli' | 'ollama'
+/** A Claude model, run through the user's Claude Code CLI (its own login). */
+export type ModelId = (typeof claudeModels)[number]['id']
 
-const CLI_PREFIX = 'cli:'
-const OLLAMA_PREFIX = 'ollama:'
-const OLLAMA_NAME = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/
-
-export const isClaudeModel = (value: unknown): value is ClaudeModelId =>
-  claudeModels.some((model) => model.id === value)
-
-export const isCliModel = (value: unknown): value is CliModelId =>
-  typeof value === 'string' &&
-  value.startsWith(CLI_PREFIX) &&
-  isClaudeModel(value.slice(CLI_PREFIX.length))
-
-export const cliModelId = (model: ClaudeModelId): CliModelId => `${CLI_PREFIX}${model}`
-
-/** The Claude model a `cli:` id runs (what the CLI's --model gets). */
-export const cliClaudeModel = (model: CliModelId): ClaudeModelId =>
-  model.slice(CLI_PREFIX.length) as ClaudeModelId
-
-/** A well-formed `ollama:<name>` id (the model may not be installed). */
-export const isOllamaModel = (value: unknown): value is `ollama:${string}` =>
-  typeof value === 'string' &&
-  value.startsWith(OLLAMA_PREFIX) &&
-  OLLAMA_NAME.test(value.slice(OLLAMA_PREFIX.length))
+export const DEFAULT_MODEL: ModelId = 'claude-sonnet-5-5'
 
 export const isModelId = (value: unknown): value is ModelId =>
-  isClaudeModel(value) || isCliModel(value) || isOllamaModel(value)
+  claudeModels.some((model) => model.id === value)
 
-export const providerOf = (model: ModelId): Provider =>
-  isOllamaModel(model) ? 'ollama' : isCliModel(model) ? 'claude-cli' : 'anthropic'
-
-/** The Ollama model name without the `ollama:` prefix. */
-export const ollamaName = (model: `ollama:${string}`): string => model.slice(OLLAMA_PREFIX.length)
-
-export const ollamaId = (name: string): `ollama:${string}` => `${OLLAMA_PREFIX}${name}`
-
-export interface ModelInfo {
-  id: ModelId
-  label: string
+/** The model an id, label or short name (`opus`, `Opus 5.5`) names, case-insensitive. */
+export function findModel(name: string): (typeof claudeModels)[number] | undefined {
+  const wanted = name.trim().toLowerCase()
+  return claudeModels.find(
+    (model) =>
+      model.id === wanted || model.label.toLowerCase() === wanted || model.short === wanted,
+  )
 }
 
-/**
- * What the model picker offers: Claude models (API key), the same models through the Claude Code
- * CLI, and Ollama's installed models – or, for the CLI and Ollama, why there are none.
- */
-export interface ModelList {
-  claude: ModelInfo[]
-  cli: { models: ModelInfo[] } | { error: string }
-  ollama: { models: ModelInfo[] } | { error: string }
+/** One check of the Claude Code CLI on the welcome page. */
+export interface CliCheckStep {
+  ok: boolean
+  /** Why it failed, meant for the user. */
+  error?: string
+}
+
+/** The Claude Code CLI checked in order; a step after a failed one is null (not run). */
+export interface CliCheck {
+  /** The CLI started. */
+  found: CliCheckStep
+  loggedIn: CliCheckStep | null
+  /** It answered a one-line request with the selected model. */
+  answered: (CliCheckStep & { model: ModelId; ms?: number }) | null
 }
 
 export const imageTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const
@@ -137,15 +120,10 @@ export interface AgentState {
 
 export interface AgentSettings {
   model: ModelId
-  /** Derived from the model. Only 'anthropic' needs the API key; the CLI uses its own login. */
-  provider: Provider
   /** Edge-style opt-in: the model may read the page and act on it (with approval). */
   pageAccess: boolean
   /** The model may search browsing history (search_history); on by default. */
   historyAccess: boolean
-  hasKey: boolean
-  /** False when the key can't be encrypted on this system and lives in memory only. */
-  keyPersisted: boolean
 }
 
 export type SettingsUpdate = Partial<Pick<AgentSettings, 'model' | 'pageAccess' | 'historyAccess'>>
@@ -182,11 +160,9 @@ export interface AgentApi {
   onStateChanged(listener: (state: AgentState) => void): () => void
   settings(): Promise<AgentSettings>
   updateSettings(update: SettingsUpdate): Promise<AgentSettings>
-  /** Stores the Anthropic API key (encrypted), or removes it with null. */
-  setKey(key: string | null): Promise<AgentSettings>
   onSettingsChanged(listener: (settings: AgentSettings) => void): () => void
-  /** Claude models, the CLI's (asks the CLI if it's logged in) and Ollama's (asks Ollama each time). */
-  models(): Promise<ModelList>
+  /** Checks that the Claude Code CLI starts, is logged in and answers (the welcome page's test). */
+  checkCli(): Promise<CliCheck>
   debugLog(): Promise<DebugRun[]>
   onDebugEvent(listener: (event: DebugEvent, label: string) => void): () => void
   /** Shows or hides the debug panel (same as the menu item). */

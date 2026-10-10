@@ -9,6 +9,7 @@ import {
   CLI_NOT_FOUND,
   CLI_NOT_LOGGED_IN,
   CliError,
+  checkCli,
   cliCommand,
   cliComplete,
   cliEnv,
@@ -232,7 +233,10 @@ describe('runCliProcess', () => {
       env: process.env,
     }
     await expect(runCliProcess(cli, [], [], () => {})).rejects.toEqual(new CliError(CLI_NOT_FOUND))
-    expect(await cliStatus(cli)).toEqual({ error: CLI_NOT_FOUND })
+    expect(await cliStatus(cli)).toEqual({
+      found: { ok: false, error: CLI_NOT_FOUND },
+      loggedIn: null,
+    })
   })
 })
 
@@ -267,22 +271,98 @@ describe('describeCliFailure', () => {
 })
 
 describe('cliStatus', () => {
-  it('lists the CLI models when logged in, and says why not otherwise', async () => {
+  it('says whether the CLI is logged in, and why not otherwise', async () => {
     const answers = ['{"loggedIn":true,"authMethod":"claude.ai"}', '{"loggedIn":false}', 'garbage']
     const { cli, calls } = options((fake) => {
       fake.print(answers.shift()!)
       fake.exit(0)
     })
+    const found = { ok: true }
+    expect(await cliStatus(cli)).toEqual({ found, loggedIn: { ok: true } })
     expect(await cliStatus(cli)).toEqual({
-      models: [
-        { id: 'cli:claude-sonnet-5-5', label: 'Sonnet 5.5 (Claude Code)' },
-        { id: 'cli:claude-opus-5-5', label: 'Opus 5.5 (Claude Code)' },
-        { id: 'cli:claude-haiku-4-5', label: 'Haiku 4.5 (Claude Code)' },
-      ],
+      found,
+      loggedIn: { ok: false, error: CLI_NOT_LOGGED_IN },
     })
-    expect(await cliStatus(cli)).toEqual({ error: CLI_NOT_LOGGED_IN })
-    expect(await cliStatus(cli)).toEqual({ error: 'Unexpected answer from claude auth status.' })
+    expect(await cliStatus(cli)).toEqual({
+      found,
+      loggedIn: { ok: false, error: 'Unexpected answer from claude auth status.' },
+    })
     expect(calls[0]!.args).toEqual(['auth', 'status', '--json'])
+  })
+})
+
+describe('checkCli', () => {
+  it('checks that the CLI starts, is logged in and answers a fixed request, and times it', async () => {
+    const { cli, calls } = options((fake, args) => {
+      fake.print(args[0] === 'auth' ? '{"loggedIn":true}' : result({ result: 'OK' }))
+      fake.exit(0)
+    })
+    const check = await checkCli(cli, 'claude-opus-5-5')
+    expect(check).toEqual({
+      found: { ok: true },
+      loggedIn: { ok: true },
+      answered: { ok: true, model: 'claude-opus-5-5', ms: expect.any(Number) },
+    })
+    const ask = calls[1]!
+    expect(argAfter(ask.args, '--model')).toBe('claude-opus-5-5')
+    expect(ask.args).toContain('--no-session-persistence')
+    expect(argAfter(ask.args, '--tools')).toBe('')
+  })
+
+  it('stops at the first failing check and reports why', async () => {
+    const missing = await checkCli(
+      {
+        command: join(tmpdir(), 'no-such-claude-cli'),
+        cwd: join(tmpdir(), 'antimony-cli-test'),
+        env: process.env,
+      },
+      'claude-sonnet-5-5',
+    )
+    expect(missing).toEqual({
+      found: { ok: false, error: CLI_NOT_FOUND },
+      loggedIn: null,
+      answered: null,
+    })
+
+    const loggedOut = options((fake) => {
+      fake.print('{"loggedIn":false}')
+      fake.exit(1)
+    })
+    expect(await checkCli(loggedOut.cli, 'claude-sonnet-5-5')).toEqual({
+      found: { ok: true },
+      loggedIn: { ok: false, error: CLI_NOT_LOGGED_IN },
+      answered: null,
+    })
+    expect(loggedOut.calls).toHaveLength(1)
+
+    const failing = options((fake, args) => {
+      fake.print(
+        args[0] === 'auth'
+          ? '{"loggedIn":true}'
+          : result({ is_error: true, result: 'model not available on your plan' }),
+      )
+      fake.exit(0)
+    })
+    expect((await checkCli(failing.cli, 'claude-opus-5-5')).answered).toEqual({
+      ok: false,
+      model: 'claude-opus-5-5',
+      error: 'Claude Code CLI error: model not available on your plan',
+    })
+  })
+
+  it('gives up on a CLI that does not answer in time', async () => {
+    const { cli, calls } = options((fake, args) => {
+      if (args[0] === 'auth') {
+        fake.print('{"loggedIn":true}')
+        fake.exit(0)
+      }
+    })
+    expect((await checkCli(cli, 'claude-haiku-4-5', 50)).answered).toEqual({
+      ok: false,
+      model: 'claude-haiku-4-5',
+      error: 'No answer within 1 s.',
+    })
+    expect(calls).toHaveLength(2)
   })
 })
 

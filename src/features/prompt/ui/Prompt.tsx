@@ -7,19 +7,15 @@ import {
   useState,
   type ClipboardEvent,
   type DragEvent,
-  type FormEvent,
   type KeyboardEvent,
 } from 'react'
 import {
   claudeModels,
-  cliClaudeModel,
-  isCliModel,
+  DEFAULT_MODEL,
   limits,
   type AgentSettings,
   type AgentState,
   type Attachment,
-  type ModelInfo,
-  type ModelList,
 } from '../../agent/ipc'
 import type { VisitedSuggestion } from '../../history/ipc'
 import type { MenuEntry } from '../../menu/ipc'
@@ -102,7 +98,6 @@ export function Prompt({
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [preview, setPreview] = useState<number | null>(null)
   const [message, setMessage] = useState<Message | null>(null)
-  const [keyMode, setKeyMode] = useState(false)
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [selected, setSelected] = useState(-1)
   const [listHidden, setListHidden] = useState(false)
@@ -112,7 +107,6 @@ export function Prompt({
     pages: [],
   })
   const input = useRef<HTMLTextAreaElement>(null)
-  const keyInput = useRef<HTMLInputElement>(null)
   const files = useRef<HTMLInputElement>(null)
 
   const agent = useSubscription<AgentState>(api.agent.state, api.agent.onStateChanged)
@@ -130,19 +124,10 @@ export function Prompt({
     () => (pageCache.for !== null && pageCache.for === stackState ? pageCache.pages : null),
     [pageCache, stackState],
   )
-  const [modelList, setModelList] = useState<ModelList | null>(null)
   const [menu, setMenu] = useState<MenuEntry[]>([])
   const running = agent !== null && agent.status !== 'idle'
 
-  // Asks Ollama which models are installed; the picker shows the Claude models meanwhile.
-  const refreshModels = useCallback(() => {
-    api.agent
-      .models()
-      .then(setModelList)
-      .catch((reason: unknown) => console.error(reason))
-  }, [api])
-
-  // Load history and models, and focus, at start and on every request.
+  // Load history and the menu, and focus, at start and on every request.
   useEffect(() => {
     api.prompt
       .history()
@@ -152,10 +137,9 @@ export function Prompt({
       .items()
       .then(setMenu)
       .catch((reason: unknown) => console.error(reason))
-    refreshModels()
-    ;(keyMode ? keyInput : input).current?.focus()
+    input.current?.focus()
     input.current?.select()
-  }, [api, focusRequest, keyMode, refreshModels])
+  }, [api, focusRequest])
 
   // Grow the text area with its content, up to a limit.
   useEffect(() => {
@@ -173,18 +157,7 @@ export function Prompt({
           ? { ...command, options: saved }
           : command.name === 'menu'
             ? { ...command, tree: menuOptions(menu) }
-            : command.name === 'model' && modelList
-              ? {
-                  ...command,
-                  options: [
-                    ...(command.options ?? []),
-                    ...('models' in modelList.cli ? modelList.cli.models.map((m) => m.id) : []),
-                    ...('models' in modelList.ollama
-                      ? modelList.ollama.models.map((m) => m.id)
-                      : []),
-                  ],
-                }
-              : command,
+            : command,
       ),
       ...skills.map((skill) => ({
         name: skill.name,
@@ -195,7 +168,7 @@ export function Prompt({
     ]
     // The user's own macros lead, so a bare `/` shows them instead of burying them below the system commands.
     return all.sort((a, b) => Number(!!b.macro) - Number(!!a.macro) || a.name.localeCompare(b.name))
-  }, [skills, modelList, menu])
+  }, [skills, menu])
 
   // Pages from browsing history whose address starts with what's typed.
   useEffect(() => {
@@ -282,7 +255,6 @@ export function Prompt({
 
   /** Clears what's left of the last input once it has been handled. */
   const reset = () => {
-    setKeyMode(false)
     setMessage(null)
     setPreview(null)
     setSelected(-1)
@@ -385,13 +357,6 @@ export function Prompt({
             setMessage({ kind: 'error', text: 'Stop the current run first (Esc).' })
             return
           }
-          if ((settings?.provider ?? 'anthropic') === 'anthropic' && !settings?.hasKey) {
-            setMessage({
-              kind: 'error',
-              text: 'No Anthropic API key yet. Type /key to add one, or pick a Claude Code CLI or Ollama model.',
-            })
-            return
-          }
           const referenced = await stackAttachments(parsed.text)
           if (entered.length + referenced.length > limits.attachments) {
             setMessage({ kind: 'error', text: `At most ${limits.attachments} attachments.` })
@@ -423,7 +388,6 @@ export function Prompt({
           setMessage(result.message ?? null)
           // A command that didn't run keeps its text, so the user completes it instead of retyping.
           if (result.message?.kind === 'error') setText(value)
-          if (result.keyMode) setKeyMode(true)
           if (result.close) reset()
           return
         }
@@ -544,23 +508,6 @@ export function Prompt({
     )
   }
 
-  const submitKey = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const value = keyInput.current?.value ?? ''
-    api.agent
-      .setKey(value)
-      .then((saved) => {
-        setKeyMode(false)
-        setMessage({
-          kind: 'info',
-          text: saved.keyPersisted
-            ? 'API key saved (encrypted).'
-            : 'API key set for this session only (no system keyring).',
-        })
-      })
-      .catch(() => setMessage({ kind: 'error', text: 'That does not look like an API key.' }))
-  }
-
   const status = running ? (
     <span className="prompt-status" role="status">
       <span className="prompt-status-dot" aria-hidden="true" />
@@ -630,7 +577,7 @@ export function Prompt({
           )}
         </div>
       )}
-      {suggestions.length > 0 && !keyMode && (
+      {suggestions.length > 0 && (
         <SuggestionList
           suggestions={suggestions}
           more={more}
@@ -638,49 +585,30 @@ export function Prompt({
           onPick={(suggestion) => accept(suggestion, true)}
         />
       )}
-      {keyMode ? (
-        <form className="prompt-key" onSubmit={submitKey}>
-          <input
-            ref={keyInput}
-            type="password"
-            aria-label="Anthropic API key"
-            placeholder="Paste your Anthropic API key and press Enter (Esc cancels)"
-            autoComplete="off"
-            spellCheck={false}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape') {
-                setKeyMode(false)
-                input.current?.focus()
-              }
-            }}
-          />
-        </form>
-      ) : (
-        <div className="prompt-input-wrap">
-          {hint && (
-            <div className="prompt-ghost" aria-hidden="true" data-testid="prompt-hint">
-              <span className="prompt-ghost-typed">{text}</span>
-              <span className="prompt-ghost-hint">{hint}</span>
-            </div>
-          )}
-          <textarea
-            ref={input}
-            className="prompt-input"
-            aria-label="Prompt"
-            aria-description={hint ? `Arguments: ${hint.trim()}` : undefined}
-            aria-autocomplete="list"
-            aria-controls={suggestions.length > 0 ? 'prompt-suggestions' : undefined}
-            aria-activedescendant={selected >= 0 ? suggestionId(selected) : undefined}
-            placeholder="Ask, type a URL, or / for skills"
-            rows={1}
-            spellCheck={false}
-            value={text}
-            onChange={(event) => edit(event.target.value)}
-            onKeyDown={onKeyDown}
-            onPaste={onPaste}
-          />
-        </div>
-      )}
+      <div className="prompt-input-wrap">
+        {hint && (
+          <div className="prompt-ghost" aria-hidden="true" data-testid="prompt-hint">
+            <span className="prompt-ghost-typed">{text}</span>
+            <span className="prompt-ghost-hint">{hint}</span>
+          </div>
+        )}
+        <textarea
+          ref={input}
+          className="prompt-input"
+          aria-label="Prompt"
+          aria-description={hint ? `Arguments: ${hint.trim()}` : undefined}
+          aria-autocomplete="list"
+          aria-controls={suggestions.length > 0 ? 'prompt-suggestions' : undefined}
+          aria-activedescendant={selected >= 0 ? suggestionId(selected) : undefined}
+          placeholder="Ask, type a URL, or / for skills"
+          rows={1}
+          spellCheck={false}
+          value={text}
+          onChange={(event) => edit(event.target.value)}
+          onKeyDown={onKeyDown}
+          onPaste={onPaste}
+        />
+      </div>
       <div className="prompt-row">
         <button
           type="button"
@@ -730,9 +658,7 @@ export function Prompt({
         </button>
         <span className="prompt-spacer" />
         <ModelPicker
-          value={settings?.model ?? claudeModels[0].id}
-          list={modelList}
-          onFocus={refreshModels}
+          value={settings?.model ?? DEFAULT_MODEL}
           onChange={(model) => void api.agent.updateSettings({ model })}
         />
         {running ? (
@@ -762,77 +688,27 @@ export function Prompt({
   )
 }
 
-/**
- * Claude (API key), Claude Code CLI and Ollama models in three groups; the selected model always
- * shows, even if not listed.
- */
+/** The Claude model strengths, all run through the user's Claude Code CLI. */
 function ModelPicker({
   value,
-  list,
-  onFocus,
   onChange,
 }: {
   value: AgentSettings['model']
-  list: ModelList | null
-  onFocus: () => void
   onChange: (model: AgentSettings['model']) => void
 }) {
-  const claude: ModelInfo[] = list?.claude ?? claudeModels.map(({ id, label }) => ({ id, label }))
-  const cli: ModelInfo[] = list && 'models' in list.cli ? [...list.cli.models] : []
-  const cliError = list && 'error' in list.cli ? list.cli.error : null
-  const ollama: ModelInfo[] = list && 'models' in list.ollama ? [...list.ollama.models] : []
-  const ollamaError = list && 'error' in list.ollama ? list.ollama.error : null
-  if (![...claude, ...cli, ...ollama].some((model) => model.id === value)) {
-    if (isCliModel(value)) {
-      const base = claudeModels.find((model) => model.id === cliClaudeModel(value))
-      cli.unshift({ id: value, label: `${base?.label ?? value} (Claude Code)` })
-    } else {
-      ollama.unshift({ id: value, label: `${value.replace(/^ollama:/, '')} (Ollama)` })
-    }
-  }
   return (
     <select
       className="prompt-model"
       aria-label="Model"
+      title="Model strength (runs through your Claude Code CLI)"
       value={value}
-      onFocus={onFocus}
       onChange={(event) => onChange(event.target.value as AgentSettings['model'])}
     >
-      <optgroup label="Claude (API key)">
-        {claude.map((model) => (
-          <option key={model.id} value={model.id}>
-            {model.label}
-          </option>
-        ))}
-      </optgroup>
-      {(cli.length > 0 || cliError) && (
-        <optgroup label="Claude Code CLI">
-          {cli.map((model) => (
-            <option key={model.id} value={model.id}>
-              {model.label}
-            </option>
-          ))}
-          {cliError && (
-            <option disabled value="">
-              {cliError}
-            </option>
-          )}
-        </optgroup>
-      )}
-      {(ollama.length > 0 || ollamaError) && (
-        <optgroup label="Ollama">
-          {ollama.map((model) => (
-            <option key={model.id} value={model.id}>
-              {model.label}
-            </option>
-          ))}
-          {ollamaError && (
-            <option disabled value="">
-              {ollamaError}
-            </option>
-          )}
-        </optgroup>
-      )}
+      {claudeModels.map((model) => (
+        <option key={model.id} value={model.id} title={model.description}>
+          {model.label}
+        </option>
+      ))}
     </select>
   )
 }

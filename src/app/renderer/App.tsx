@@ -8,6 +8,7 @@ import { PageArea } from '../../features/navigation/ui/PageArea'
 import { AssistantPanel } from '../../features/prompt/ui/AssistantPanel'
 import { ConfigView } from '../../features/skills/ui/ConfigView'
 import { StackHeader } from '../../features/stacks/ui/StackHeader'
+import { WelcomeView } from '../../features/welcome/ui/WelcomeView'
 
 /**
  * The chrome UI: page area on the left (the page view is laid over it), then the debugger, then
@@ -28,6 +29,7 @@ export function App() {
         <RecallView />
         <MapView />
         <ConfigView />
+        <WelcomeView />
         <DebugPanel />
       </div>
       <AssistantPanel

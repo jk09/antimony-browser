@@ -1,6 +1,6 @@
 # 0005. Run the assistant on local Ollama models through its Anthropic-compatible API
 
-- Status: Accepted
+- Status: Superseded by 0015
 - Date: 2026-10-01
 - Features: agent, prompt
 - Spec: copper-lantern-o7l4ma

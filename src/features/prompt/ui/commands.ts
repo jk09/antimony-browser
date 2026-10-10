@@ -1,4 +1,4 @@
-import { isOllamaModel, ollamaId, type AgentSettings, type ModelInfo } from '../../agent/ipc'
+import { claudeModels, findModel, type AgentSettings } from '../../agent/ipc'
 import type { Skill } from '../../skills/ipc'
 import { paramLabel } from '../../skills/shared/params'
 import { DEFAULT_HOME } from '../../stacks/ipc'
@@ -7,8 +7,6 @@ import { promptCommands } from '../ipc'
 export interface CommandResult {
   /** Shown under the prompt. */
   message?: { kind: 'error' | 'info'; text: string }
-  /** Ask for the API key in a password field. */
-  keyMode?: boolean
   /** Clear the message and key field (navigation commands). */
   close?: boolean
 }
@@ -43,43 +41,20 @@ export async function runCommand(
     case 'debug':
       await api.agent.toggleDebug()
       return {}
-    case 'key':
-      if (args === 'clear') {
-        await api.agent.setKey(null)
-        return info('API key removed.')
-      }
-      if (args) {
-        const saved = await api.agent.setKey(args)
-        return info(
-          saved.keyPersisted
-            ? 'API key saved.'
-            : 'API key set for this session only (no system keyring).',
+    case 'model': {
+      const model = findModel(args)
+      if (!model) {
+        const current = claudeModels.find((m) => m.id === settings?.model)
+        return (args ? error : info)(
+          `${args ? `No model ${args}. ` : current ? `Using ${current.label}. ` : ''}Choose one of: ${claudeModels.map((m) => m.short).join(', ')}.`,
         )
       }
-      return { keyMode: true }
-    case 'model': {
-      const list = await api.agent.models()
-      const available: ModelInfo[] = [
-        ...list.claude,
-        ...('models' in list.cli ? list.cli.models : []),
-        ...('models' in list.ollama ? list.ollama.models : []),
-      ]
-      const wanted = args.toLowerCase()
-      const model = available.find(
-        (m) =>
-          m.id === args ||
-          m.label.toLowerCase() === wanted ||
-          (isOllamaModel(m.id) && m.id === ollamaId(args)),
-      )
-      if (!model) {
-        const unavailable = [list.cli, list.ollama]
-          .flatMap((group) => ('error' in group ? [` ${group.error}`] : []))
-          .join('')
-        return error(`Choose one of: ${available.map((m) => m.id).join(', ')}.${unavailable}`)
-      }
       await api.agent.updateSettings({ model: model.id })
-      return info(`Using ${model.label}.`)
+      return info(`Using ${model.label} through your Claude Code CLI.`)
     }
+    case 'welcome':
+      await api.welcome.requestOpen()
+      return { close: true }
     case 'page-access':
       if (args !== 'on' && args !== 'off') {
         return info(

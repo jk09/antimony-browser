@@ -5,6 +5,7 @@ import type { NavigationApi } from '../features/navigation/ipc'
 import type { PromptApi } from '../features/prompt/ipc'
 import type { SkillsApi } from '../features/skills/ipc'
 import type { StacksApi } from '../features/stacks/ipc'
+import type { WelcomeApi } from '../features/welcome/ipc'
 
 /**
  * The API the preload script exposes to the chrome UI as `window.antimony`.
@@ -20,4 +21,5 @@ export interface AntimonyApi {
   prompt: PromptApi
   skills: SkillsApi
   stacks: StacksApi
+  welcome: WelcomeApi
 }
