@@ -119,9 +119,34 @@ export interface MacroPort {
   delete(name: string): void
 }
 
-/** Opens a new stack (like Ctrl/Cmd+N), provided by the stacks feature (provideStackOpener). */
-export interface StackOpener {
+/** A page of a stack, as the stacks feature lists it for the agent. */
+export interface StackPageInfo {
+  title: string
+  url: string
+  /** Depth in the stack's tree (0 = root). */
+  depth: number
+  /** `@stack/ref` names the page in the prompt. */
+  ref: string
+  active: boolean
+}
+
+/** A stack (the browser's tab) as the stacks feature lists it for the agent. */
+export interface StackInfo {
+  /** '' for a stack without a name yet ("New tab"). */
+  name: string
+  rootTitle: string
+  current: boolean
+  imported: boolean
+  /** Its pages in tree order (depth first). */
+  pages: StackPageInfo[]
+}
+
+/** The stacks, provided by the stacks feature (provideStacks in main.ts). */
+export interface StackPort {
+  /** Opens a new stack, like Ctrl/Cmd+N. */
   open(): void
+  /** Every stack, most recently used first. */
+  list(): StackInfo[]
 }
 
 /** History's search, provided by the history feature (provideHistorySearch in main.ts). */
@@ -146,7 +171,7 @@ export interface ImportPort {
 
 /**
  * navigation: like the address bar, never needs approval.
- * history: reads the browsing history; no page access or approval, but like reading a page it
+ * history: reads the browsing history or the open stacks; no page access or approval, but like reading a page it
  * makes a later cross-site navigation in the run ask first.
  * macro: saves, lists or deletes macros; no page access, approval only after page or history
  * content was read in the run.
@@ -230,6 +255,16 @@ export const toolDefinitions: ToolDefinition[] = [
     description:
       'Open a new stack (the browser\'s tabs; like Ctrl/Cmd+N, "open a new window/tab") at the home page, or at url if given, and make it the current page.',
     input_schema: schema({ url: { type: 'string' } }),
+  },
+  {
+    name: 'list_stacks',
+    kind: 'history',
+    replayable: false,
+    description:
+      "List the user's open stacks (the browser's tabs), most recently used first, with their root page and number of pages; with stack, list that stack's pages as an outline with their URLs. Use it to count stacks or find which stack holds a page.",
+    input_schema: schema({
+      stack: { type: 'string', description: 'A stack name, with or without the @.' },
+    }),
   },
   {
     name: 'get_page_state',
@@ -479,6 +514,10 @@ export function describeCall(name: string, input: Input, element?: ElementInfo):
       return input['url'] ? `Open a new stack at ${String(input['url'])}` : 'Open a new stack'
     case 'get_page_state':
       return 'Check the page state'
+    case 'list_stacks':
+      return input['stack']
+        ? `List the pages of @${String(input['stack']).replace(/^@/, '')}`
+        : 'List stacks'
     case 'save_macro': {
       const steps = Array.isArray(input['steps']) ? input['steps'].length : 0
       return `Save macro /${String(input['name'])} (${steps} step${steps === 1 ? '' : 's'})`
@@ -752,11 +791,62 @@ async function importBrowsingData(
   }
 }
 
-/** What the tools reach besides the page: history's search, the macro store, new stacks. */
+export const MAX_LISTED_PAGES = 200
+
+const stackLabel = (stack: Pick<StackInfo, 'name'>) => (stack.name ? `@${stack.name}` : 'New tab')
+
+/** `<browser_state>`'s stacks line: how many are open and which is current. */
+export function formatStackCount(stacks: StackInfo[]): string {
+  const current = stacks.find((stack) => stack.current)
+  return `Open stacks: ${stacks.length}${current ? ` (current: ${stackLabel(current)})` : ''}`
+}
+
+/** All stacks, one line each (list_stacks without a stack). Titles are untrusted. */
+export function formatStackList(stacks: StackInfo[]): string {
+  if (stacks.length === 0) return 'No stacks are open.'
+  const lines = stacks.map((stack) =>
+    [
+      stackLabel(stack),
+      stack.rootTitle,
+      `${stack.pages.length} ${stack.pages.length === 1 ? 'page' : 'pages'}`,
+      ...(stack.current ? ['current'] : []),
+      ...(stack.imported ? ['imported'] : []),
+    ].join(' – '),
+  )
+  return `${stacks.length} open ${stacks.length === 1 ? 'stack' : 'stacks'} (most recently used first):\n${untrusted(lines.join('\n'))}`
+}
+
+/** One stack's pages as an outline (list_stacks with a stack). Titles and URLs are untrusted. */
+export function formatStackPages(stack: StackInfo): string {
+  const shown = stack.pages.slice(0, MAX_LISTED_PAGES)
+  const lines = shown.map(
+    (page) =>
+      `${'  '.repeat(page.depth)}- ${page.title || '(untitled)'} – ${page.url} (@${stack.name}/${page.ref})${page.active ? ' ← current page' : ''}`,
+  )
+  const more = stack.pages.length - shown.length
+  return [
+    `${stackLabel(stack)}: ${stack.pages.length} ${stack.pages.length === 1 ? 'page' : 'pages'}${stack.current ? ', the current stack' : ''}`,
+    untrusted(lines.join('\n') + (more > 0 ? `\n… ${more} more` : '')),
+  ].join('\n')
+}
+
+function listStacks(stacks: StackPort | null, input: Input): ToolOutput {
+  if (!stacks) throw new ToolError('Stacks are not available.')
+  const all = stacks.list()
+  if (typeof input['stack'] !== 'string' || !input['stack'].trim()) {
+    return { text: formatStackList(all) }
+  }
+  const name = input['stack'].trim().replace(/^@/, '')
+  const stack = all.find((s) => s.name === name)
+  if (!stack) throw new ToolError(`No stack is named @${name}. Call list_stacks to see them.`)
+  return { text: formatStackPages(stack) }
+}
+
+/** What the tools reach besides the page: history's search, the macro store, the stacks. */
 export interface ToolPorts {
   history?: HistoryPort | null
   macros?: MacroPort | null
-  stacks?: StackOpener | null
+  stacks?: StackPort | null
   importer?: ImportPort | null
   /** Images attached to the current request (recall_history). */
   images?: AttachedImage[]
@@ -776,6 +866,7 @@ export async function executeTool(
 ): Promise<ToolOutput> {
   if (name === 'search_history') return searchHistory(ports.history ?? null, input)
   if (name === 'recall_history') return recallHistory(ports, input)
+  if (name === 'list_stacks') return listStacks(ports.stacks ?? null, input)
   if (name === 'import_browsing_data')
     return importBrowsingData(ports.importer ?? null, input, ports.signal)
   if (toolNamed(name)?.kind === 'macro') return runMacroTool(ports.macros ?? null, name, input)

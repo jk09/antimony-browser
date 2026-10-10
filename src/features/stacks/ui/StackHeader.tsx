@@ -9,14 +9,23 @@ import {
 } from 'react'
 import type { AgentState } from '../../agent/ipc'
 import type { NavigationState } from '../../navigation/ipc'
-import type { StackCommand, StackRow, StacksState, StackSummary } from '../ipc'
+import type {
+  StackCommand,
+  StackPageRow,
+  StackPages,
+  StackRow,
+  StacksState,
+  StackSummary,
+} from '../ipc'
 import { shortcutLabel } from '../shared/keys'
 import { collapse, type CollapsedItem } from '../shared/tree'
-import { matchRanges, searchPages, urlPrefixLength } from '../shared/search'
+import { matchRanges, queryWords, searchPages, urlPrefixLength } from '../shared/search'
 
 export const MAX_ROWS = 8
 export const MAX_HEIGHT_SHARE = 0.35
 export const ROW_HEIGHT = 22
+/** Pages of all stacks the stack list's search shows at most. */
+export const MAX_PAGE_HITS = 50
 const INDENT_PX = 12
 const MAX_INDENT_DEPTH = 8
 
@@ -409,6 +418,12 @@ export function StackHeader() {
   const refocusTree = useRef(false)
   const overlay = useRef<HTMLDivElement>(null)
   const list = useRef<HTMLDivElement>(null)
+  const switcher = useRef<HTMLButtonElement>(null)
+  const listSearch = useRef<HTMLInputElement>(null)
+  const listId = useId()
+  const [listQuery, setListQuery] = useState('')
+  const [listSelected, setListSelected] = useState(0)
+  const [allPages, setAllPages] = useState<StackPages[]>([])
   const height = useWindowHeight()
 
   useEffect(() => api.navigation.onStateChanged(setNavigation), [api])
@@ -574,19 +589,110 @@ export function StackHeader() {
   )
   const target = cycle ? cycle.order[cycle.index] : undefined
 
+  // The stack list's search: stacks whose name or root title has every word, then pages of any
+  // stack (title or URL). Opened by click it takes focus; opened by Ctrl+Tab focus stays put.
+  const listWords = queryWords(listQuery)
+  const allStacks = stacks?.stacks ?? []
+  const shownStacks =
+    listWords.length === 0 || cycle
+      ? allStacks
+      : allStacks.filter((stack) => {
+          const text = `@${stack.name}\n${stack.rootTitle}`.toLowerCase()
+          return listWords.every((word) => text.includes(word))
+        })
+  const pageHits = useMemo(() => {
+    const hits: { stack: StackPages; row: StackPageRow }[] = []
+    if (listQuery.trim() === '' || cycle) return hits
+    for (const stack of allPages) {
+      for (const index of searchPages(stack.rows, listQuery)) {
+        if (hits.length === MAX_PAGE_HITS) return hits
+        hits.push({ stack, row: stack.rows[index]! })
+      }
+    }
+    return hits
+  }, [allPages, listQuery, cycle])
+  const listCount = shownStacks.length + pageHits.length
+  const listIndex = listCount === 0 ? -1 : Math.min(listSelected, listCount - 1)
+  const listOptionId = (index: number) => `${listId}-${index}`
+  const openList = () => {
+    setListQuery('')
+    setListSelected(0)
+    setListOpen(true)
+    api.stacks.pages().then(setAllPages).catch(report)
+  }
+  const closeList = () => {
+    setListOpen(false)
+    switcher.current?.focus()
+  }
+  const switchStack = (stack: StackSummary) => {
+    if (running) return
+    setListOpen(false)
+    api.stacks.switch(stack.id).catch(report)
+  }
+  const openStackPage = (stackId: string, row: StackPageRow) => {
+    if (running) return
+    setListOpen(false)
+    api.stacks.openPage(stackId, row.id).catch(report)
+  }
+  const onListSearchKey = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.nativeEvent.isComposing) return
+    const step = { ArrowDown: 1, ArrowUp: -1 }[event.key]
+    if (step !== undefined) {
+      event.preventDefault()
+      if (listCount > 0) setListSelected((listIndex + step + listCount) % listCount)
+    } else if (event.key === 'Enter') {
+      event.preventDefault()
+      if (listIndex < 0) return
+      if (listIndex < shownStacks.length) switchStack(shownStacks[listIndex]!)
+      else {
+        const hit = pageHits[listIndex - shownStacks.length]!
+        openStackPage(hit.stack.id, hit.row)
+      }
+    } else if (event.key === 'Escape') {
+      event.preventDefault()
+      event.stopPropagation()
+      if (listQuery !== '') {
+        setListQuery('')
+        setListSelected(0)
+      } else closeList()
+    }
+  }
+
+  // The stack list opened by click or key takes focus in its search box (not during Ctrl+Tab).
+  useEffect(() => {
+    if (listOpen && !cycleRef.current) listSearch.current?.focus()
+  }, [listOpen])
+  useEffect(() => {
+    list.current
+      ?.querySelector<HTMLElement>('.stack-list .selected')
+      ?.scrollIntoView?.({ block: 'nearest' })
+  }, [listIndex])
+
   return (
     <div className="stack-header" ref={panel}>
       <div className="stack-switcher" ref={list}>
         <button
+          ref={switcher}
           type="button"
           className="stack-name"
           aria-haspopup="dialog"
           aria-expanded={listOpen}
-          title={blocked ?? 'Switch stack (Ctrl+Tab)'}
+          title={
+            blocked ?? `All stacks (${allStacks.length}): click to switch or search (Ctrl+Tab)`
+          }
           aria-keyshortcuts="Control+Tab"
-          onClick={() => setListOpen((open) => !open)}
+          onClick={() => (listOpen ? setListOpen(false) : openList())}
         >
-          {name ? `@${name}` : 'New tab'} <span aria-hidden="true">▾</span>
+          <span className="stack-name-text">{name ? `@${name}` : 'New tab'}</span>
+          <span className="stack-count">
+            {allStacks.length}
+            <span className="visually-hidden">
+              {` ${allStacks.length === 1 ? 'stack' : 'stacks'}`}
+            </span>
+          </span>
+          <span className="stack-chevron" aria-hidden="true">
+            ▾
+          </span>
         </button>
         {currentSummary && (
           <AudioButton stack={currentSummary} label={name ? `@${name}` : 'New tab'} />
@@ -650,36 +756,78 @@ export function StackHeader() {
             role="dialog"
             aria-label="Stacks"
             onKeyDown={(event) => {
-              if (event.key === 'Escape') setListOpen(false)
+              if (event.key === 'Escape') closeList()
             }}
           >
+            <input
+              ref={listSearch}
+              className="stack-list-search"
+              type="text"
+              role="combobox"
+              aria-label="Search stacks and pages"
+              aria-autocomplete="list"
+              aria-expanded={listCount > 0}
+              aria-controls={`${listId}-options`}
+              aria-activedescendant={
+                listWords.length > 0 && listIndex >= 0 ? listOptionId(listIndex) : undefined
+              }
+              placeholder="Search stacks and pages"
+              spellCheck={false}
+              autoComplete="off"
+              value={listQuery}
+              onChange={(event) => {
+                setListQuery(event.target.value)
+                setListSelected(0)
+              }}
+              onKeyDown={onListSearchKey}
+            />
             {blocked && <p className="stack-list-note">{blocked}</p>}
-            <ul>
-              {(stacks?.stacks ?? []).map((stack) => (
+            <span className="visually-hidden" role="status">
+              {listWords.length > 0 &&
+                `${shownStacks.length} ${shownStacks.length === 1 ? 'stack' : 'stacks'}, ${pageHits.length} ${pageHits.length === 1 ? 'page' : 'pages'}`}
+            </span>
+            {listWords.length > 0 && listCount === 0 && (
+              <p className="stack-list-note">No matching stacks or pages</p>
+            )}
+            <ul id={`${listId}-options`}>
+              {shownStacks.map((stack, n) => (
                 <li
                   key={stack.id}
+                  id={listOptionId(n)}
                   className={
-                    [stack.id === current?.id && 'current', stack.id === target && 'target']
+                    [
+                      stack.id === current?.id && 'current',
+                      stack.id === target && 'target',
+                      listWords.length > 0 && n === listIndex && 'selected',
+                    ]
                       .filter(Boolean)
                       .join(' ') || undefined
                   }
-                  aria-selected={target === undefined ? undefined : stack.id === target}
+                  aria-selected={
+                    target !== undefined
+                      ? stack.id === target
+                      : listWords.length > 0
+                        ? n === listIndex
+                        : undefined
+                  }
+                  onMouseMove={() => listWords.length > 0 && n !== listIndex && setListSelected(n)}
                 >
                   <button
                     type="button"
                     className="stack-list-item"
                     aria-current={stack.id === current?.id ? 'true' : undefined}
                     disabled={running}
-                    onClick={() => {
-                      setListOpen(false)
-                      api.stacks.switch(stack.id).catch(report)
-                    }}
+                    onClick={() => switchStack(stack)}
                   >
                     <span className="stack-list-name">
-                      {stack.name ? `@${stack.name}` : 'New tab'}
+                      <Highlight
+                        text={stack.name ? `@${stack.name}` : 'New tab'}
+                        query={listQuery}
+                      />
                     </span>
                     <span className="stack-list-detail">
-                      {stack.rootTitle} · {stack.pages} {stack.pages === 1 ? 'page' : 'pages'}
+                      <Highlight text={stack.rootTitle} query={listQuery} /> · {stack.pages}{' '}
+                      {stack.pages === 1 ? 'page' : 'pages'}
                     </span>
                   </button>
                   <AudioButton stack={stack} label={stack.name ? `@${stack.name}` : 'New tab'} />
@@ -695,6 +843,44 @@ export function StackHeader() {
                 </li>
               ))}
             </ul>
+            {pageHits.length > 0 && (
+              <>
+                <p className="stack-list-heading">Pages</p>
+                <ul aria-label="Matching pages">
+                  {pageHits.map(({ stack, row }, i) => {
+                    const n = shownStacks.length + i
+                    return (
+                      <li
+                        key={`${stack.id}-${row.id}`}
+                        id={listOptionId(n)}
+                        className={n === listIndex ? 'selected' : undefined}
+                        aria-selected={n === listIndex}
+                        onMouseMove={() => n !== listIndex && setListSelected(n)}
+                      >
+                        <button
+                          type="button"
+                          className="stack-list-item"
+                          title={row.url}
+                          disabled={running}
+                          onClick={() => openStackPage(stack.id, row)}
+                        >
+                          <span className="stack-list-name">
+                            <Highlight text={row.title || row.url} query={listQuery} />
+                          </span>
+                          <span className="stack-list-detail">
+                            @{stack.name} · {row.url.slice(0, urlPrefixLength(row.url))}
+                            <Highlight
+                              text={row.url.slice(urlPrefixLength(row.url))}
+                              query={listQuery}
+                            />
+                          </span>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </>
+            )}
             <button type="button" className="stack-list-new" disabled={running} onClick={newStack}>
               + New stack
             </button>

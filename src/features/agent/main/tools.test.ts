@@ -5,6 +5,8 @@ import {
   executeTool,
   formatState,
   toolNamed,
+  formatStackCount,
+  MAX_LISTED_PAGES,
   toolsFor,
   ToolError,
   untrusted,
@@ -12,6 +14,7 @@ import {
   type HistoryHit,
   type HistoryPort,
   type HistoryRecall,
+  type StackInfo,
 } from './tools'
 
 describe('import_browsing_data', () => {
@@ -67,6 +70,7 @@ describe('toolsFor', () => {
       'reload',
       'stop',
       'new_stack',
+      'list_stacks',
       'get_page_state',
       'search_history',
       'recall_history',
@@ -96,6 +100,86 @@ describe('toolsFor', () => {
     const names = toolsFor({ pageAccess: true, historyAccess: false }).map((tool) => tool.name)
     expect(names).not.toContain('search_history')
     expect(names).not.toContain('recall_history')
+    expect(names).not.toContain('list_stacks')
+  })
+})
+
+describe('list_stacks', () => {
+  const stacks: StackInfo[] = [
+    {
+      name: 'docs',
+      rootTitle: 'Docs <b>',
+      current: true,
+      imported: false,
+      pages: [
+        { title: 'Docs', url: 'https://docs.example/', depth: 0, ref: 'docs', active: false },
+        { title: '', url: 'https://docs.example/a', depth: 1, ref: 'docs-example', active: true },
+      ],
+    },
+    { name: '', rootTitle: 'Bing', current: false, imported: false, pages: [] },
+    {
+      name: 'news',
+      rootTitle: 'News',
+      current: false,
+      imported: true,
+      pages: [{ title: 'News', url: 'https://news.example/', depth: 0, ref: 'news', active: true }],
+    },
+  ]
+  const port = { open: () => {}, list: () => stacks }
+
+  it('is a history tool that needs no page and is not replayable', () => {
+    expect(toolNamed('list_stacks')).toMatchObject({ kind: 'history', replayable: false })
+    expect(describeCall('list_stacks', {})).toBe('List stacks')
+    expect(describeCall('list_stacks', { stack: '@docs' })).toBe('List the pages of @docs')
+  })
+
+  it('lists all stacks, most recently used first, as untrusted content', async () => {
+    const { text } = await executeTool(null, 'list_stacks', {}, { stacks: port })
+    expect(text).toBe(
+      `3 open stacks (most recently used first):\n${untrusted(
+        [
+          '@docs – Docs <b> – 2 pages – current',
+          'New tab – Bing – 0 pages',
+          '@news – News – 1 page – imported',
+        ].join('\n'),
+      )}`,
+    )
+  })
+
+  it("lists one stack's pages as an outline; an unknown stack is an error", async () => {
+    const { text } = await executeTool(null, 'list_stacks', { stack: '@docs' }, { stacks: port })
+    expect(text).toBe(
+      `@docs: 2 pages, the current stack\n${untrusted(
+        [
+          '- Docs – https://docs.example/ (@docs/docs)',
+          '  - (untitled) – https://docs.example/a (@docs/docs-example) ← current page',
+        ].join('\n'),
+      )}`,
+    )
+    await expect(
+      executeTool(null, 'list_stacks', { stack: 'nope' }, { stacks: port }),
+    ).rejects.toThrow('No stack is named @nope')
+    await expect(executeTool(null, 'list_stacks', {})).rejects.toThrow('Stacks are not available')
+  })
+
+  it('clips long stacks and counts them for browser state', async () => {
+    const pages = Array.from({ length: MAX_LISTED_PAGES + 5 }, (_, i) => ({
+      title: `P${i}`,
+      url: `https://a.example/${i}`,
+      depth: 0,
+      ref: `p${i}`,
+      active: false,
+    }))
+    const big = { ...stacks[0]!, pages }
+    const { text } = await executeTool(
+      null,
+      'list_stacks',
+      { stack: 'docs' },
+      { stacks: { open: () => {}, list: () => [big] } },
+    )
+    expect(text).toContain('… 5 more')
+    expect(formatStackCount(stacks)).toBe('Open stacks: 3 (current: @docs)')
+    expect(formatStackCount([])).toBe('Open stacks: 0')
   })
 })
 

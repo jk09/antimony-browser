@@ -21,7 +21,7 @@ import {
   type HistoryPort,
   type ImportPort,
   type MacroPort,
-  type StackOpener,
+  type StackPort,
 } from './main/tools'
 import { defaultSettings, parseSettings, parseUpdate } from './main/settings'
 import { parseDecision, parseRunInput } from './main/validate'
@@ -37,13 +37,15 @@ export type {
   ImportPort,
   MacroInfo,
   MacroPort,
-  StackOpener,
+  StackInfo,
+  StackPageInfo,
+  StackPort,
 } from './main/tools'
 
 let agent: Agent | null = null
 let historySearch: HistoryPort | null = null
 let macroStore: MacroPort | null = null
-let stackOpener: StackOpener | null = null
+let stackPort: StackPort | null = null
 let importer: ImportPort | null = null
 let completer: ((request: CompletionRequest) => Promise<Completion>) | null = null
 
@@ -89,9 +91,9 @@ export function provideMacros(port: MacroPort): void {
   macroStore = port
 }
 
-/** Lets the assistant open new stacks (new_stack); called by the stacks feature. */
-export function provideStackOpener(opener: StackOpener): void {
-  stackOpener = opener
+/** Lets the assistant open and list stacks (new_stack, list_stacks); called by the stacks feature. */
+export function provideStacks(port: StackPort): void {
+  stackPort = port
 }
 
 /** Lets the assistant and skills import a browsing-data export (import_browsing_data); called by the import feature. */
@@ -155,7 +157,7 @@ export function register({ ipc, fileMenu }: MainContext): void {
     },
     history: () => historySearch,
     macros: () => macroStore,
-    stacks: () => stackOpener,
+    stacks: () => stackPort,
     importer: () => importer,
     settings: () => store.get(),
     onState: (state) => ipc.send(channels.stateChanged, state),

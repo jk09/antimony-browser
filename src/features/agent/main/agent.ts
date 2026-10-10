@@ -27,7 +27,8 @@ import {
   type HistoryPort,
   type MacroPort,
   type ImportPort,
-  type StackOpener,
+  formatStackCount,
+  type StackPort,
   type ToolOutput,
 } from './tools'
 import type { ContentBlock } from './content'
@@ -35,8 +36,8 @@ import type { ContentBlock } from './content'
 export const SYSTEM_PROMPT = `You are the assistant built into Antimony, a web browser. The user drives the browser by typing into its prompt; you carry out their requests with the browser tools, right away, and answer briefly.
 
 Browser
-- Each user message starts with a <browser_state> block: the current page, page and history access, and the saved macros.
-- The browser's tabs are called stacks. new_stack opens one (also for "open a new window/tab"), optionally at a URL; navigate loads a page in the current stack.
+- Each user message starts with a <browser_state> block: the current page, how many stacks are open, page and history access, and the saved macros.
+- The browser's tabs are called stacks. new_stack opens one (also for "open a new window/tab"), optionally at a URL; navigate loads a page in the current stack. list_stacks lists all open stacks, or one stack's pages, for questions about stacks other than the current page (it needs history access).
 - For pages the user visited before ("that article I read last week", "search my history for …"), use search_history; it works without page access but not while history access is off (/history-access on). To find a page by a picture the user attached ("a page with an image like this"), or to show the user what they read about a topic as a cloud, use recall_history.
 - With page access on, read_page shows the page text and its interactive elements with CSS selectors for click and type_text; find_in_page, scroll and screenshot help too. Without page access you only know the URL and title; if the request needs the page content, tell the user to turn page access on (/page-access on).
 - When the user asks to import the file Edge's "Export browsing data" created, call import_browsing_data with the path they gave, or without a path to let them choose the file in a dialog; they approve it. Never import a file they didn't name.
@@ -75,7 +76,7 @@ export interface AgentDeps {
   /** The macro store, once the skills feature provided it. */
   macros(): MacroPort | null
   /** Opens new stacks, once the stacks feature provided it. */
-  stacks(): StackOpener | null
+  stacks(): StackPort | null
   /** Imports browsing-data exports, once the import feature provided it. */
   importer(): ImportPort | null
   settings(): { model: ModelId; pageAccess: boolean; historyAccess: boolean }
@@ -411,10 +412,11 @@ export class Agent {
     const { pageAccess, historyAccess } = this.deps.settings()
     const state = browser ? formatState(browser.state()) : 'No page is loaded.'
     const macros = formatMacroList(this.deps.macros()?.list() ?? [])
+    const stacks = this.deps.stacks()
     const blocks: ContentBlock[] = [
       {
         type: 'text',
-        text: `<browser_state>\n${state}\nPage access: ${pageAccess ? 'on' : 'off'}\nHistory access: ${historyAccess ? 'on' : 'off'}\nSaved macros:${macros ? `\n${macros}` : ' none'}\n</browser_state>`,
+        text: `<browser_state>\n${state}\n${stacks ? `${formatStackCount(stacks.list())}\n` : ''}Page access: ${pageAccess ? 'on' : 'off'}\nHistory access: ${historyAccess ? 'on' : 'off'}\nSaved macros:${macros ? `\n${macros}` : ' none'}\n</browser_state>`,
       },
     ]
     for (const attachment of input.attachments) {

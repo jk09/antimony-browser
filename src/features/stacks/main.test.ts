@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MenuItemConstructorOptions } from 'electron'
 import type { MainContext } from '../../app/main/features'
 import type { HistoryResolver, PageEvent, TabControls } from '../navigation/main'
+import type { StackPort } from '../agent/main'
 import type { StackPages, StacksState } from './ipc'
 
 let userData = ''
@@ -90,10 +91,10 @@ vi.mock('../navigation/main', () => ({
     resolver = value
   },
 }))
-let stackOpener: { open(): void } | null = null
+let stackPort: StackPort | null = null
 vi.mock('../agent/main', () => ({
-  provideStackOpener: (opener: { open(): void }) => {
-    stackOpener = opener
+  provideStacks: (port: StackPort) => {
+    stackPort = port
   },
 }))
 
@@ -304,8 +305,41 @@ describe('stacks main', () => {
 
   it('lets the assistant open a new stack like Ctrl/Cmd+N', () => {
     setup()
-    stackOpener!.open()
+    stackPort!.open()
     expect(tabs.calls).toEqual(['create 1 active'])
+  })
+
+  it('lists every stack with its pages for the assistant, most recently used first', () => {
+    const { visit } = setup()
+    tabs.open.add(1)
+    tabs.activeId = 1
+    visit(1, 'Home')
+    visit(1, 'Page')
+    fire({ tabId: 2, type: 'opened', openerId: 1, active: true })
+    tabs.open.add(2)
+    tabs.activate(2)
+    visit(2, 'Docs')
+    expect(stackPort!.list()).toEqual([
+      {
+        name: 'docs',
+        rootTitle: 'Docs',
+        current: true,
+        imported: false,
+        pages: [
+          { title: 'Docs', url: 'https://site.example/Docs', depth: 0, ref: 'docs', active: true },
+        ],
+      },
+      {
+        name: 'home',
+        rootTitle: 'Home',
+        current: false,
+        imported: false,
+        pages: [
+          { title: 'Home', url: 'https://site.example/Home', depth: 0, ref: 'home', active: false },
+          { title: 'Page', url: 'https://site.example/Page', depth: 1, ref: 'page', active: true },
+        ],
+      },
+    ])
   })
 
   it('closes a page with its branch; the root closes the stack', () => {
