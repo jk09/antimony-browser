@@ -6,15 +6,15 @@
 | --- | --- |
 | **Feature name** | A welcome page walks new users through setup (Claude Code CLI installed? does it answer? model strength, how to use the prompt and skills); the API-key and Ollama backends are removed, so the assistant runs only through the Claude Code CLI |
 | **Spec ID** | first-light-w5k8rd |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-10 09:00 +00:00 |
-| **Last updated** | 2026-10-10 10:00 +00:00 |
+| **Last updated** | 2026-10-10 09:40 +00:00 |
 | **Affected features** | welcome (new), agent, prompt, skills |
 | **Target release** | 0.1.0 |
-| **Related links** | ADRs 0004, 0005, 0009; specs quartz-relay-c8m2vt (Claude Code CLI), copper-lantern-o7l4ma (Ollama) |
+| **Related links** | PR jk09/antimony-browser#63; ADRs 0004, 0005, 0009, 0015; specs quartz-relay-c8m2vt (Claude Code CLI), copper-lantern-o7l4ma (Ollama) |
 
 **Status definitions:**
 - **Draft:** The spec is being written or reviewed. The scope may still change.
