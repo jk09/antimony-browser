@@ -6,15 +6,15 @@
 | --- | --- |
 | **Feature name** | The user describes the theme they need ("a light theme suitable for astigmatism"); the model proposes candidates guided by WCAG and usability research, Antimony checks and repairs their contrast, shows each as a real screenshot of the browser, and applies the one picked. Available as a welcome-page step and through `/settings`, which also changes the other welcome choices |
 | **Spec ID** | fitting-palette-t7q3mw |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-10 13:30 +00:00 |
-| **Last updated** | 2026-10-10 14:30 +00:00 |
+| **Last updated** | 2026-10-10 14:00 +00:00 |
 | **Affected features** | appearance (new), welcome, prompt, agent (only its `complete` and settings, unchanged) |
 | **Target release** | 0.1.0 |
-| **Related links** | spec first-light-w5k8rd (welcome page); ADRs 0006, 0015 |
+| **Related links** | PR jk09/antimony-browser#66; spec first-light-w5k8rd (welcome page); ADRs 0006, 0015, 0016 |
 
 **Status definitions:**
 - **Draft:** The spec is being written or reviewed. The scope may still change.
