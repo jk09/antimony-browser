@@ -3,8 +3,8 @@
 Lets you describe the theme you need in your own words ("a light theme suitable for astigmatism") and pick one from real screenshots of the browser: the selected model proposes 3–4 themes using built-in usability guidance (WCAG 2.2, astigmatism, light sensitivity, low vision, dyslexia, colour-vision deficiency), Antimony repairs any colour below WCAG 2.2 AA contrast, applies each candidate in turn to capture the window, and applies the one you pick to the browser's own UI. Reached from the welcome page's Theme step, `/settings theme` and File → Appearance….
 
 ## Entry points
-- UI: `ui/ThemeApplier.tsx` (in `App.tsx`; applies the stored theme as inline custom properties and `color-scheme` on the root element), `ui/ThemePicker.tsx` (description, need chips, generation, capture loop over a sample scene, gallery; the welcome page's Theme step slot in `App.tsx`), `ui/AppearanceView.tsx` (the picker over the page area, the page view hidden; × or Escape closes), `ui/apply.ts`
-- IPC: `appearance:get|set|generate|capture|request-open` (UI → main), `appearance:changed|open` (main → UI) – `ipc.ts`; `themeNeeds` (the suggested needs) for the welcome step and `/settings theme`
+- UI: `ui/ThemeApplier.tsx` (in `App.tsx`; applies the stored theme as inline custom properties and `color-scheme` on the root element), `ui/ThemePicker.tsx` (description, need chips, generation with a moving progress bar, the seconds so far and Cancel, capture loop over a sample scene with a screenshot-count bar, gallery; the welcome page's Theme step slot in `App.tsx`), `ui/AppearanceView.tsx` (the picker over the page area, the page view hidden; × or Escape closes), `ui/apply.ts`
+- IPC: `appearance:get|set|generate|cancel|capture|request-open` (UI → main), `appearance:changed|open` (main → UI) – `ipc.ts`; `themeNeeds` (the suggested needs) for the welcome step and `/settings theme`
 - Main: `register` in `main.ts` – theme store, File → Appearance…; `main/generate.ts` (system prompt with the usability guidance, request text, answer parsing, one retry)
 - Shared: `shared/contrast.ts` (WCAG relative luminance and contrast ratio, hue-keeping lightness repair), `shared/theme.ts` (tokens, parsing, the contrast rules, `checkTheme`, `themeProperties`), `shared/sample-theme.ts` (test fixture)
 
@@ -12,6 +12,7 @@ Lets you describe the theme you need in your own words ("a light theme suitable 
 - Contrast follows WCAG 2.2: text tokens ≥ 4.5:1 on every background, button text ≥ 4.5:1 on the accent, focus ring, field borders and cloud colours ≥ 3:1; failing colours are repaired (lightness only) or the theme dropped – `shared/contrast.test.ts`, `shared/theme.test.ts`
 - Model output is data: only `#rrggbb` values for known tokens are accepted, never CSS text; `set` and the stored file are checked again in main – `shared/theme.test.ts › parseTheme`, `main.test.ts › rejects malformed…`, `› ignores a stored theme…`
 - Only the description and the token names go to the model – `main/generate.test.ts`, `main.test.ts › generates themes…`
+- While the model works the picker shows a progress bar, the elapsed seconds and Cancel; Cancel aborts the model request in main and drops a late answer – `ui/ThemePicker.test.tsx › shows progress while the model works…`, `main.test.ts › Cancel stops…`
 - After capturing, the window is back in the stored theme, also when capturing fails – `ui/ThemePicker.test.tsx`, `e2e/prompt.spec.ts › the welcome page picks a theme…`
 - The chosen theme persists across restarts; the system default removes every themed property – `ui/ThemePicker.test.tsx › applyTheme…`, `e2e/prompt.spec.ts › the welcome page picks a theme…`
 

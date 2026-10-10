@@ -45,6 +45,8 @@ export function register({ ipc, window, fileMenu }: MainContext): void {
   })
   app.on('will-quit', () => store.flush())
   const open = (request: OpenRequest) => ipc.send(channels.open, request)
+  // The running model request; a new one or Cancel stops it.
+  let generating: AbortController | null = null
 
   ipc.handle(channels.get, () => store.get().theme)
   ipc.handle(channels.set, (value) => {
@@ -53,9 +55,25 @@ export function register({ ipc, window, fileMenu }: MainContext): void {
     ipc.send(channels.changed, theme)
     return theme
   })
-  ipc.handle(channels.generate, (value) =>
-    generateThemes(complete, parseDescription(value), AbortSignal.timeout(MODEL_TIMEOUT_MS)),
-  )
+  ipc.handle(channels.generate, async (value) => {
+    const description = parseDescription(value)
+    generating?.abort()
+    const controller = new AbortController()
+    generating = controller
+    try {
+      return await generateThemes(
+        complete,
+        description,
+        AbortSignal.any([controller.signal, AbortSignal.timeout(MODEL_TIMEOUT_MS)]),
+      )
+    } finally {
+      if (generating === controller) generating = null
+    }
+  })
+  ipc.handle(channels.cancel, () => {
+    generating?.abort()
+    generating = null
+  })
   // The chrome UI's own pixels: page views are hidden while the appearance picker shows.
   ipc.handle(channels.capture, async () => {
     const image = await window.webContents.capturePage()

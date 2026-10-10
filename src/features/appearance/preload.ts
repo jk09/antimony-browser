@@ -17,6 +17,7 @@ export const appearanceBridge: AppearanceApi = {
   onChanged: subscribe<Theme | null>(channels.changed),
   generate: (description) => ipcRenderer.invoke(channels.generate, description),
   capture: () => ipcRenderer.invoke(channels.capture),
+  cancel: () => ipcRenderer.invoke(channels.cancel),
   requestOpen: (request) => ipcRenderer.invoke(channels.requestOpen, request),
   onOpen: subscribe<OpenRequest>(channels.open),
 }
