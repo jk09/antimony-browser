@@ -5,7 +5,8 @@ import { homedir } from 'node:os'
 import { isAbsolute, join, extname } from 'node:path'
 import { describeResult, MAX_FILE_BYTES, MAX_PATH, MAX_ROWS, type ImportResult } from '../ipc'
 import { ImportFileError, parseEdgeCsv } from '../shared/edge-csv'
-import { groupSessions } from '../shared/sessions'
+import { chainOrder, groupByAddress, pagesOf, placeLeftovers } from '../shared/grouping'
+import { refineByTopics, type Complete } from './topics'
 
 export { ImportFileError }
 
@@ -20,13 +21,14 @@ export interface ImportPorts {
   }
   /** Stacks' `importStacks`. */
   importStacks(
-    sessions: {
-      startedAt: number
-      endedAt: number
-      pages: { url: string; title: string; at: number }[]
-    }[],
+    stacks: { name: string; lastAt: number; pages: { url: string; title: string; at: number }[] }[],
   ): { created: number; skipped: number }
+  /** One request to the selected model (agent's `complete`); without it only addresses group. */
+  complete?: Complete
 }
+
+/** The model gets this long to group by topic. */
+const TOPICS_TIMEOUT_MS = 60_000
 
 /**
  * The absolute path a typed or chosen path names: surrounding quotes dropped, `~/` expanded.
@@ -56,6 +58,7 @@ export async function runImport(
   rawPath: string,
   ports: ImportPorts,
   now: number = Date.now(),
+  signal?: AbortSignal,
 ): Promise<ImportResult> {
   const path = resolveExportPath(rawPath)
   let size: number
@@ -74,17 +77,36 @@ export async function runImport(
     throw new ImportFileError(`The file has more than ${MAX_ROWS.toLocaleString('en-US')} rows.`)
   }
 
-  // Sessions first (pure), so nothing is written if grouping fails.
-  const sessions = groupSessions(parsed.rows)
-    .filter((session) => session.pages.length >= 2)
-    .map((session) => ({
-      startedAt: session.startedAt,
-      endedAt: session.endedAt,
-      pages: session.pages.map(({ url, title, firstAt }) => ({ url, title, at: firstAt })),
-    }))
+  // Grouping first, so nothing is written if it fails. By address, then by topic when the model
+  // can tell; a model that can't never fails the import.
+  const pages = pagesOf(parsed.rows)
+  let { groups, leftovers } = groupByAddress(pages)
+  let grouping: ImportResult['grouping'] = 'addresses'
+  let topicsError: string | undefined
+  if (ports.complete && groups.length + leftovers.length > 0) {
+    try {
+      const timeout = AbortSignal.timeout(TOPICS_TIMEOUT_MS)
+      ;({ groups, leftovers } = await refineByTopics(
+        ports.complete,
+        groups,
+        leftovers,
+        signal ? AbortSignal.any([signal, timeout]) : timeout,
+      ))
+      grouping = 'topics'
+    } catch (error) {
+      if (signal?.aborted) throw error
+      topicsError = error instanceof Error ? error.message : String(error)
+    }
+  }
+  placeLeftovers(groups, leftovers, pages)
+  const stackGroups = groups.map((group) => ({
+    name: group.label,
+    lastAt: Math.max(...group.pages.map((page) => page.lastAt)),
+    pages: chainOrder(group.pages).map(({ url, title, firstAt }) => ({ url, title, at: firstAt })),
+  }))
 
   const history = ports.importVisits(parsed.rows)
-  const stacks = ports.importStacks(sessions)
+  const stacks = ports.importStacks(stackGroups)
   return {
     rows: parsed.total,
     visitsImported: history.visitsImported,
@@ -94,6 +116,8 @@ export async function runImport(
     skipped: { invalid: parsed.invalid + history.invalid, unsupported: parsed.unsupported },
     stacksCreated: stacks.created,
     stacksSkipped: stacks.skipped,
+    grouping,
+    ...(topicsError && { topicsError }),
   }
 }
 

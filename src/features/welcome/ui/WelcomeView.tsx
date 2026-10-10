@@ -373,10 +373,12 @@ export function WelcomeView({
             <h3 id="welcome-import">Bring your history from Edge</h3>
             <p>
               In Edge open <em>Settings → Profiles → Export browsing data</em> and save the file,
-              then choose it here. Its pages are added to your history, and pages you visited
-              together (less than 30 minutes apart) become stacks. Nothing leaves this computer, and
-              importing the same file again adds nothing. You can skip this and do it later with{' '}
-              <code>/import-edge</code> and the path of the file.
+              then choose it here. Its pages are added to your history and grouped into at most 30
+              stacks by site and, when the assistant can tell, by topic. For the topics the titles
+              and addresses (without query strings) of up to about 330 pages are sent once to the
+              assistant; the rest stays on this computer. Importing the same file again adds
+              nothing. You can skip this and do it later with <code>/import-edge</code>, which opens
+              a file dialog, or <code>/import-edge</code> and the path of the file.
             </p>
             {importStep}
             {nav()}

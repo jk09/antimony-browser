@@ -1,5 +1,6 @@
 // Test helper: a fake window.antimony whose events tests can fire.
 import { vi } from 'vitest'
+import type { ImportResult } from '../../features/import/ipc'
 import type { AgentSettings, AgentState, CliCheck, DebugEvent } from '../../features/agent/ipc'
 import type {
   CheckedTheme,
@@ -225,7 +226,7 @@ export function fakeApi(
     },
     import: {
       choose: vi.fn(async (): Promise<string | null> => null),
-      run: vi.fn(async (_path: string) => ({
+      run: vi.fn(async (_path: string): Promise<ImportResult> => ({
         rows: 0,
         visitsImported: 0,
         pagesCreated: 0,
@@ -234,6 +235,7 @@ export function fakeApi(
         skipped: { invalid: 0, unsupported: 0 },
         stacksCreated: 0,
         stacksSkipped: 0,
+        grouping: 'addresses',
       })),
     },
     welcome: {

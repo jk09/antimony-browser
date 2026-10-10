@@ -22,8 +22,12 @@ export interface ImportResult {
   duplicates: number
   skipped: { invalid: number; unsupported: number }
   stacksCreated: number
-  /** Sessions that could have been stacks but weren't (already imported, or no room left). */
+  /** Groups that could have been stacks but weren't (already imported, or no room left). */
   stacksSkipped: number
+  /** How pages were grouped: by what the assistant made of them, or by address alone. */
+  grouping: 'topics' | 'addresses'
+  /** Why the assistant's grouping wasn't used, when it was tried. */
+  topicsError?: string
 }
 
 export interface ImportApi {
@@ -39,14 +43,18 @@ const count = (n: number, one: string, many = `${one}s`) =>
 /** One sentence for the result, e.g. "Imported 1,204 visits (310 new pages) into history …". */
 export function describeResult(result: ImportResult): string {
   const skipped = result.skipped.invalid + result.skipped.unsupported
+  const how =
+    result.grouping === 'topics'
+      ? 'grouped by topic'
+      : `grouped by address${result.topicsError ? " (the assistant wasn't available)" : ''}`
   const parts = [
-    `Imported ${count(result.visitsImported, 'visit')} (${count(result.pagesCreated, 'new page')}) into history and ${count(result.stacksCreated, 'stack')}`,
+    `Imported ${count(result.visitsImported, 'visit')} (${count(result.pagesCreated, 'new page')}) into history and ${count(result.stacksCreated, 'stack')}, ${how}`,
   ]
   const notes: string[] = []
   if (skipped > 0) notes.push(`skipped ${count(skipped, 'row')}`)
   if (result.duplicates > 0) notes.push(`${count(result.duplicates, 'row')} already in history`)
   if (result.stacksSkipped > 0) {
-    notes.push(`${count(result.stacksSkipped, 'session')} not made into stacks`)
+    notes.push(`${count(result.stacksSkipped, 'group')} not made into stacks`)
   }
   return `${parts[0]}${notes.length > 0 ? `; ${notes.join('; ')}` : ''}.`
 }

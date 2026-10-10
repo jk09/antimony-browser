@@ -5,7 +5,8 @@
 // With FAKE_CLAUDE_MODEL_URL it plays the model loop instead: it POSTs { model, hasApiKey, tools,
 // messages } there for each step, prints the returned { content }, calls the tools it names over
 // MCP and sends their results back, until a step calls no tools.
-// Asked for colour themes (appearance), it answers with two fixed candidates.
+// Asked for colour themes (appearance), it answers with two fixed candidates. Asked to organise
+// imported browsing history into stacks (import), it puts every group and page in one stack, "bread".
 // FAKE_CLAUDE_LOGGED_IN=0 plays a logged-out CLI; FAKE_CLAUDE_LOG appends each run's arguments.
 import { appendFileSync, readFileSync } from 'node:fs'
 
@@ -149,6 +150,12 @@ if (modelUrl && configPath) {
   const answer = JSON.stringify({
     candidates: [theme('Soft daylight', '#f7f5f0'), theme('Warm paper', '#f6efe0')],
   })
+  assistant([{ type: 'text', text: answer }])
+  result({ result: answer })
+} else if ((flag('--system-prompt') ?? '').startsWith('You organise a person')) {
+  const ids = (letter) =>
+    [...text.matchAll(new RegExp(`^(${letter}\\d+) \\|`, 'gm'))].map((m) => m[1])
+  const answer = JSON.stringify({ stacks: [{ name: 'bread', groups: ids('g'), pages: ids('p') }] })
   assistant([{ type: 'text', text: answer }])
   result({ result: answer })
 } else if (url) {

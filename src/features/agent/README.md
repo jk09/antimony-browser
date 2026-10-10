@@ -37,7 +37,7 @@ Lets Claude, through the user's own Claude Code CLI and its login, carry out req
 ## Security surface
 - IPC: the chrome UI can start runs, answer approvals, change model, page access and history access, and run `checkCli` (step results and messages only; it can't change the CLI path or any CLI argument).
 - Main: `complete` lets other features' main code send text and JPEGs to the selected model; they decide what may be sent (history: ADR 0006, 0010).
-- Import: `import_browsing_data` (kind `import`, replayable) reads a `.csv` path the user gave into history and stacks; it needs no page access, the model-called form is approved every time ("Allow for this run" doesn't cover it) and the typed `/import-edge` skill isn't, and the model sees only a result line (ADR 0017).
+- Import: `import_browsing_data` (kind `import`, replayable) reads a `.csv` path the user gave (or none: a file dialog) into history and stacks, grouped by site and topic; it needs no page access, the model-called form is approved every time ("Allow for this run" doesn't cover it) and the typed `/import-edge` skill isn't, and the model sees only a result line (ADR 0017).
 - Macros: the model can save, list and delete macros (ADR 0013); their signatures go to the model with every request.
 - History: unless history access is off (default on), in any run, also with page access off, the model can search browsing history and sees up to 20 matching pages' titles, URLs, notes and summaries (ADR 0012), or recall pages with scores and keywords; with an image the user attached, that image and up to 16 small history screenshots go to the model (ADR 0014).
 - Web content: with page access on, the model reads page text, element lists and screenshots (sent to Anthropic through the CLI) and, after approval, clicks and types via trusted input events. Navigation needs no approval until the run has read a page; then leaving the site needs approval too (ADR 0004).
@@ -47,4 +47,4 @@ Lets Claude, through the user's own Claude Code CLI and its login, carry out req
 |---|---|---|---|
 | – | | | |
 
-Spec: violet-harbinger-p7w3kd, copper-lantern-o7l4ma, still-meridian-r4v8nc, ember-ledger-h3x8vq, quartz-relay-c8m2vt, drifting-nimbus-r8c3kw, patient-archive-h6q2wn, quiet-ledger-t9m4rx, spoken-macro-m4q7zt, amber-orbit-q7t3vn, first-light-w5k8rd, gentle-ferry-m3x7bq · ADRs: 0004, 0006, 0009, 0010, 0012, 0013, 0014, 0015, 0017
+Spec: violet-harbinger-p7w3kd, copper-lantern-o7l4ma, still-meridian-r4v8nc, ember-ledger-h3x8vq, quartz-relay-c8m2vt, drifting-nimbus-r8c3kw, patient-archive-h6q2wn, quiet-ledger-t9m4rx, spoken-macro-m4q7zt, amber-orbit-q7t3vn, first-light-w5k8rd, gentle-ferry-m3x7bq, tidy-compass-k7r2vb · ADRs: 0004, 0006, 0009, 0010, 0012, 0013, 0014, 0015, 0017, 0018

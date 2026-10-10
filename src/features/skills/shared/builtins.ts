@@ -13,8 +13,14 @@ export const builtinSkills: Skill[] = [
   {
     name: 'import-edge',
     description:
-      'Import the browsing data exported from Edge (a .csv file) into history, with related pages in stacks',
-    params: [{ name: 'file', hint: 'path to the Edge export (.csv)' }],
+      'Import the browsing data exported from Edge (a .csv file; no path opens a file dialog) into history, with related pages in stacks',
+    params: [
+      {
+        name: 'file',
+        hint: 'path to the Edge export (.csv); empty opens a dialog',
+        optional: true,
+      },
+    ],
     steps: [{ tool: 'import_browsing_data', input: { path: '{{file}}' } }],
     builtin: true,
   },

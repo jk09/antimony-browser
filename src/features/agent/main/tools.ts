@@ -137,8 +137,11 @@ export interface HistoryPort {
 
 /** Imports another browser's export, provided by the import feature (provideImporter in main.ts). */
 export interface ImportPort {
-  /** Imports the file at `path`; resolves with a one-line result, rejects with a readable error. */
-  run(path: string): Promise<string>
+  /**
+   * Imports the file at `path` (an empty path opens a file dialog); resolves with a one-line
+   * result, rejects with a readable error.
+   */
+  run(path: string, signal?: AbortSignal): Promise<string>
 }
 
 /**
@@ -327,11 +330,14 @@ export const toolDefinitions: ToolDefinition[] = [
     kind: 'import',
     replayable: true,
     description:
-      'Import the file Edge\'s "Export browsing data" created (a .csv) into the user\'s history and stacks: pages visited close together become one stack. Only call it when the user asked to import a file in this request, with the path they gave. The user is asked to approve it.',
-    input_schema: schema(
-      { path: { type: 'string', description: 'Path of the exported .csv file on this computer.' } },
-      ['path'],
-    ),
+      'Import the file Edge\'s "Export browsing data" created (a .csv) into the user\'s history and stacks: pages are grouped into stacks by site and, when the assistant can tell, by topic. Only call it when the user asked to import a file in this request. Give the path they gave, or no path to open a file dialog where the user chooses. The user is asked to approve it.',
+    input_schema: schema({
+      path: {
+        type: 'string',
+        description:
+          'Path of the exported .csv file on this computer; omit to let the user choose it in a dialog.',
+      },
+    }),
   },
   {
     name: 'read_page',
@@ -489,7 +495,9 @@ export function describeCall(name: string, input: Input, element?: ElementInfo):
       return `Recall history for ${[query, image].filter(Boolean).join(' by ')}`
     }
     case 'import_browsing_data':
-      return `Import browsing data from ${String(input['path'])}`
+      return typeof input['path'] === 'string' && input['path'].trim()
+        ? `Import browsing data from ${input['path']}`
+        : 'Import browsing data (you choose the file)'
     case 'read_page':
       return 'Read the page'
     case 'find_in_page':
@@ -731,10 +739,14 @@ function runMacroTool(macros: MacroPort | null, name: string, input: Input): Too
   }
 }
 
-async function importBrowsingData(importer: ImportPort | null, input: Input): Promise<ToolOutput> {
+async function importBrowsingData(
+  importer: ImportPort | null,
+  input: Input,
+  signal?: AbortSignal,
+): Promise<ToolOutput> {
   if (!importer) throw new ToolError('Importing is not available.')
   try {
-    return { text: await importer.run(String(input['path'])) }
+    return { text: await importer.run(String(input['path'] ?? ''), signal) }
   } catch (error) {
     throw new ToolError(error instanceof Error ? error.message : String(error))
   }
@@ -764,7 +776,8 @@ export async function executeTool(
 ): Promise<ToolOutput> {
   if (name === 'search_history') return searchHistory(ports.history ?? null, input)
   if (name === 'recall_history') return recallHistory(ports, input)
-  if (name === 'import_browsing_data') return importBrowsingData(ports.importer ?? null, input)
+  if (name === 'import_browsing_data')
+    return importBrowsingData(ports.importer ?? null, input, ports.signal)
   if (toolNamed(name)?.kind === 'macro') return runMacroTool(ports.macros ?? null, name, input)
   if (!browser) throw new ToolError('The browser page is not available.')
   if (name === 'new_stack') {

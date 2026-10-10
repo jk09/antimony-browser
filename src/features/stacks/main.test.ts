@@ -725,13 +725,13 @@ describe('stacks main', () => {
   })
 
   describe('importStacks', () => {
-    const session = (startedAt: number, titles: string[]) => ({
-      startedAt,
-      endedAt: startedAt + titles.length * 1000,
+    const group = (name: string, lastAt: number, titles: string[]) => ({
+      name,
+      lastAt,
       pages: titles.map((title, n) => ({
-        url: `https://${title.toLowerCase()}.example/${startedAt}`,
+        url: `https://${title.toLowerCase()}.example/${name}`,
         title,
-        at: startedAt + n * 1000,
+        at: lastAt - (titles.length - n) * 1000,
       })),
     })
 
@@ -745,17 +745,17 @@ describe('stacks main', () => {
 
       expect(
         importStacks([
-          session(1000, ['Alpha', 'Beta']),
-          session(9000, ['Gamma', 'Delta']),
-          session(50, ['Solo']),
+          group('Alpha Beta', 1000, ['Alpha', 'Beta']),
+          group('gamma', 9000, ['Gamma', 'Delta']),
+          group('solo', 50, ['Solo']),
         ]),
-      ).toEqual({
-        created: 2,
-        skipped: 1,
-      })
+      ).toEqual({ created: 2, skipped: 1 })
       expect(tabs.calls).toHaveLength(before)
-      const names = state().stacks.map((stack) => stack.name)
-      expect(names.slice(1)).toEqual(['gamma', 'alpha'])
+      expect(
+        state()
+          .stacks.map((stack) => stack.name)
+          .slice(1),
+      ).toEqual(['gamma', 'alpha-beta'])
       expect(state().current!.id).toBe(state().stacks[0]!.id)
       expect(state().stacks.map((stack) => stack.pages)).toEqual([1, 2, 2])
 
@@ -764,23 +764,30 @@ describe('stacks main', () => {
       expect(saved.stacks.filter((stack: { imported?: number }) => stack.imported)).toHaveLength(2)
     })
 
-    it('skips sessions it already imported and opens an imported stack at its last page', () => {
+    it('skips groups mostly imported before, adds a partly new one, and opens an imported stack at its last page', () => {
       const { state, call } = setup()
-      importStacks([session(1000, ['Alpha', 'Beta'])])
-      expect(importStacks([session(1000, ['Alpha', 'Beta'])])).toEqual({ created: 0, skipped: 1 })
+      importStacks([group('alpha', 5000, ['Alpha', 'Beta'])])
+      expect(importStacks([group('alpha', 5000, ['Alpha', 'Beta'])])).toEqual({
+        created: 0,
+        skipped: 1,
+      })
+      expect(importStacks([group('alpha', 5000, ['Alpha', 'Beta', 'Gamma', 'Delta'])])).toEqual({
+        created: 1,
+        skipped: 0,
+      })
       const id = state().stacks.find((stack) => stack.name === 'alpha')!.id
       call(channels.switch, id)
-      expect(tabs.calls).toContain('create 1 https://beta.example/1000 active')
+      expect(tabs.calls).toContain('create 1 https://beta.example/alpha active')
       expect(state().current!.rows.map((row) => row.title)).toEqual(['Alpha', 'Beta'])
     })
 
     it('stops at 50 stacks without closing the user’s own', () => {
       const { state } = setup()
-      const many = Array.from({ length: 60 }, (_, n) => session(1000 * (n + 1), ['One', 'Two']))
+      const many = Array.from({ length: 60 }, (_, n) =>
+        group(`g${n}`, 1000 * (n + 1), [`T${n}a`, `T${n}b`]),
+      )
       expect(importStacks(many)).toEqual({ created: 50, skipped: 10 })
       expect(state().stacks).toHaveLength(50)
-      // The newest sessions are the ones that fit.
-      expect(state().stacks[0]!.pages).toBe(2)
     })
   })
 })

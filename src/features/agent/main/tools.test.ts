@@ -18,7 +18,14 @@ describe('import_browsing_data', () => {
   it('is replayable, needs no page and reports the importer result or its error', async () => {
     expect(toolNamed('import_browsing_data')).toMatchObject({ kind: 'import', replayable: true })
     expect(validateInput('import_browsing_data', { path: '/a.csv' })).toEqual({ path: '/a.csv' })
-    expect(() => validateInput('import_browsing_data', {})).toThrow('missing argument path')
+    // The path is optional: without one the import opens a file dialog.
+    expect(validateInput('import_browsing_data', {})).toEqual({})
+    expect(() => validateInput('import_browsing_data', { path: 3 })).toThrow(
+      'path must be a string',
+    )
+    expect(describeCall('import_browsing_data', {})).toBe(
+      'Import browsing data (you choose the file)',
+    )
     expect(describeCall('import_browsing_data', { path: '/a.csv' })).toBe(
       'Import browsing data from /a.csv',
     )

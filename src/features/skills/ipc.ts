@@ -20,6 +20,8 @@ export interface SkillParam {
   name: string
   /** Shown faintly while the macro is typed; '' for none. */
   hint: string
+  /** May be left out (its value is ''); only built-in skills have these, and only at the end. */
+  optional?: boolean
 }
 
 /**

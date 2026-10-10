@@ -46,36 +46,36 @@ export function parseArgs(line: string): string[] {
 
 /** Maps arguments to parameters; the last parameter takes the rest of the line. */
 export function bindArgs(
-  params: string[],
+  params: Skill['params'],
   line: string,
 ): { values: Record<string, string> } | { error: string } {
   const args = parseArgs(line)
   if (params.length === 0) {
     return args.length === 0 ? { values: {} } : { error: 'This macro takes no arguments' }
   }
-  if (args.length < params.length) {
-    return {
-      error: `Missing ${params
-        .slice(args.length)
-        .map((p) => `<${p}>`)
-        .join(' ')}`,
-    }
-  }
+  const missing = params.slice(args.length).filter((param) => !param.optional)
+  if (missing.length > 0) return { error: `Missing ${missing.map((p) => `<${p.name}>`).join(' ')}` }
   const values: Record<string, string> = {}
   params.forEach((param, index) => {
-    values[param] = index === params.length - 1 ? args.slice(index).join(' ') : (args[index] ?? '')
+    values[param.name] =
+      index === params.length - 1 ? args.slice(index).join(' ') : (args[index] ?? '')
   })
   return { values }
 }
 
 /** `/name <param> …` */
 export function signature(skill: Pick<Skill, 'name' | 'params'>): string {
-  return [`/${skill.name}`, ...skill.params.map((param) => `<${param.name}>`)].join(' ')
+  return [
+    `/${skill.name}`,
+    ...skill.params.map((param) => (param.optional ? `[${param.name}]` : `<${param.name}>`)),
+  ].join(' ')
 }
 
-/** `<name: hint>`, or `<name>` without a hint. */
-export const paramLabel = (param: Skill['params'][number]) =>
-  `<${param.name}${param.hint ? `: ${param.hint}` : ''}>`
+/** `<name: hint>`, or `<name>` without a hint; `[name: hint]` for an optional parameter. */
+export const paramLabel = (param: Skill['params'][number]) => {
+  const inside = `${param.name}${param.hint ? `: ${param.hint}` : ''}`
+  return param.optional ? `[${inside}]` : `<${inside}>`
+}
 
 /**
  * The faint hint shown after `/name …` while a macro is typed: the parameters not yet started,
