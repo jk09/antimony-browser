@@ -491,6 +491,9 @@ test('a fresh profile opens the welcome page, which tests the CLI and picks the 
     await welcome.getByRole('radio', { name: /Opus 5\.5/ }).check()
     await expect(window.getByRole('combobox', { name: 'Model' })).toHaveValue('claude-opus-5-5')
     await welcome.getByRole('button', { name: 'Next' }).click()
+    // The Theme step can be skipped; the system look stays.
+    await expect(welcome).toContainText('What should the browser look like for you?')
+    await welcome.getByRole('button', { name: 'Next' }).click()
     await expect(welcome).toContainText('Using the prompt')
     await welcome.getByRole('button', { name: 'Next' }).click()
     await expect(welcome).toContainText('store it as /wiki')
@@ -502,6 +505,44 @@ test('a fresh profile opens the welcome page, which tests the CLI and picks the 
     await prompt.fill('/welcome')
     await prompt.press('Enter')
     await expect(welcome).toBeVisible()
+  } finally {
+    await app.close()
+  }
+})
+
+test('the welcome page picks a theme from screenshots; it persists and /settings resets it', async () => {
+  const profile = newProfile({ welcome: true })
+  const panelBg = (window: Page) =>
+    window.evaluate(() => document.documentElement.style.getPropertyValue('--panel-bg'))
+  let app = await launch({ FAKE_CLAUDE_MODEL_URL: '' }, profile)
+  try {
+    const window = await app.firstWindow()
+    const welcome = window.getByRole('region', { name: 'Welcome' })
+    await welcome.getByRole('button', { name: '4 · Theme' }).click()
+    await welcome.getByRole('button', { name: 'Light, for astigmatism' }).click()
+    const gallery = welcome.getByRole('radiogroup', { name: 'Themes' })
+    await expect(gallery.getByRole('radio')).toHaveCount(2)
+    // Real captures of the window, and the window is back to the system look afterwards.
+    for (const image of await gallery.locator('img').all()) {
+      await expect(image).toHaveAttribute('src', /^data:image\/jpeg;base64,/)
+      expect(await image.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(100)
+    }
+    expect(await panelBg(window)).toBe('')
+    await gallery.getByRole('radio', { name: /Warm paper/ }).click()
+    await expect.poll(() => panelBg(window)).toBe('#f6efe0')
+    await welcome.getByRole('button', { name: 'Close welcome page' }).click()
+  } finally {
+    await app.close()
+  }
+
+  app = await launch({ FAKE_CLAUDE_MODEL_URL: '' }, profile)
+  try {
+    const window = await app.firstWindow()
+    await expect.poll(() => panelBg(window)).toBe('#f6efe0')
+    const prompt = await openPrompt(app, window)
+    await prompt.fill('/settings theme default')
+    await prompt.press('Enter')
+    await expect.poll(() => panelBg(window)).toBe('')
   } finally {
     await app.close()
   }

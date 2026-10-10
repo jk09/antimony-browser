@@ -629,6 +629,67 @@ describe('Prompt', () => {
     expect(api.agent.updateSettings).toHaveBeenCalledTimes(2)
   })
 
+  it('/settings shows the current settings and suggests each setting, then its values', async () => {
+    const { api, box } = await openPrompt({ settings: { model: 'claude-opus-5-5' } })
+    type(box, '/settings')
+    press(box, 'Enter')
+    const status = (await screen.findByRole('status')).textContent!
+    expect(status).toContain('Theme: system default')
+    expect(status).toContain('Model: Opus 5.5')
+    expect(status).toContain('Page access: off')
+    expect(status).toContain('History access: on')
+    expect(api.appearance.get).toHaveBeenCalled()
+
+    type(box, '/settings ')
+    const settings = within(await screen.findByRole('listbox')).getAllByRole('option')
+    expect(settings.map((o) => o.textContent).join(' ')).toMatch(
+      /Theme.*Model.*Page access.*History access/,
+    )
+    type(box, '/settings theme ')
+    const needs = within(await screen.findByRole('listbox')).getAllByRole('option')
+    expect(needs.map((o) => o.textContent).join(' ')).toContain('Light, for astigmatism')
+    type(box, '/settings model ')
+    const models = within(await screen.findByRole('listbox')).getAllByRole('option')
+    expect(models.map((o) => o.textContent).join(' ')).toContain('Haiku 4.5')
+  })
+
+  it('/settings theme opens the theme picker for a need, a typed description or nothing; default resets', async () => {
+    const { api, box } = await openPrompt()
+    type(box, '/settings theme astigmatism')
+    press(box, 'Enter')
+    await waitFor(() =>
+      expect(api.appearance.requestOpen).toHaveBeenCalledWith({
+        description: 'a light theme suitable for astigmatism',
+      }),
+    )
+    type(box, '/settings theme warm and calm for reading at night')
+    press(box, 'Enter')
+    await waitFor(() =>
+      expect(api.appearance.requestOpen).toHaveBeenLastCalledWith({
+        description: 'warm and calm for reading at night',
+      }),
+    )
+    type(box, '/settings theme default')
+    press(box, 'Enter')
+    await waitFor(() => expect(api.appearance.set).toHaveBeenCalledWith(null))
+    expect((await screen.findByRole('status')).textContent).toContain('system default')
+  })
+
+  it('/settings model and access settings work like their own commands', async () => {
+    const { api, box } = await openPrompt()
+    type(box, '/settings model haiku')
+    press(box, 'Enter')
+    await waitFor(() =>
+      expect(api.agent.updateSettings).toHaveBeenCalledWith({ model: 'claude-haiku-4-5' }),
+    )
+    type(box, '/settings page-access on')
+    press(box, 'Enter')
+    await waitFor(() => expect(api.agent.updateSettings).toHaveBeenCalledWith({ pageAccess: true }))
+    type(box, '/settings colour red')
+    press(box, 'Enter')
+    expect((await screen.findByRole('alert')).textContent).toContain('No setting colour')
+  })
+
   it('/welcome opens the welcome page', async () => {
     const { api, box } = await openPrompt()
     type(box, '/welcome')

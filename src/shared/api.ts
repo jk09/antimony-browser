@@ -1,4 +1,5 @@
 import type { AgentApi } from '../features/agent/ipc'
+import type { AppearanceApi } from '../features/appearance/ipc'
 import type { HistoryApi } from '../features/history/ipc'
 import type { MenuApi } from '../features/menu/ipc'
 import type { NavigationApi } from '../features/navigation/ipc'
@@ -15,6 +16,7 @@ export interface AntimonyApi {
   /** Versions of the embedded runtimes. */
   versions: { chrome: string; electron: string }
   agent: AgentApi
+  appearance: AppearanceApi
   history: HistoryApi
   menu: MenuApi
   navigation: NavigationApi

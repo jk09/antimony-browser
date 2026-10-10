@@ -121,4 +121,27 @@ describe('WelcomeView', () => {
     expect(screen.queryByRole('region', { name: 'Welcome' })).toBeNull()
     expect(api.welcome.setDone).toHaveBeenCalledTimes(2)
   })
+
+  it('has a Theme step after Model when App provides one, and it can be skipped', async () => {
+    fakeApi({ welcomeDone: false })
+    render(<WelcomeView themeStep={<p>Theme picker here</p>} />)
+    await screen.findByRole('region', { name: 'Welcome' })
+    expect(
+      within(screen.getByRole('list', { name: 'Steps' }))
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual([
+      '1 · Claude Code CLI',
+      '2 · Test',
+      '3 · Model',
+      '4 · Theme',
+      '5 · Prompt',
+      '6 · Skills',
+    ])
+    click('4 · Theme')
+    expect(within(page()).getByText('What should the browser look like for you?')).toBeTruthy()
+    expect(within(page()).getByText('Theme picker here')).toBeTruthy()
+    click('Next')
+    expect(within(page()).getByText('Using the prompt')).toBeTruthy()
+  })
 })

@@ -1,4 +1,5 @@
 import { claudeModels, findModel, type AgentSettings } from '../../agent/ipc'
+import { themeNeeds } from '../../appearance/ipc'
 import type { Skill } from '../../skills/ipc'
 import { paramLabel } from '../../skills/shared/params'
 import { DEFAULT_HOME } from '../../stacks/ipc'
@@ -96,6 +97,41 @@ export async function runCommand(
       if (!url) return error(`${args} is not a web address.`)
       await api.stacks.setHome(url)
       return info(`New stacks open at ${url}.`)
+    }
+    case 'settings': {
+      const [what = '', ...rest] = args.split(/\s+/)
+      const value = rest.join(' ')
+      switch (what) {
+        case '': {
+          const theme = await api.appearance.get()
+          const model = claudeModels.find((m) => m.id === settings?.model)
+          return info(
+            [
+              `Theme: ${theme ? theme.name : 'system default'} – /settings theme <need>`,
+              `Model: ${model?.label ?? 'unknown'} – /settings model haiku|sonnet|opus`,
+              `Page access: ${settings?.pageAccess ? 'on' : 'off'} – /settings page-access on|off`,
+              `History access: ${settings?.historyAccess === false ? 'off' : 'on'} – /settings history-access on|off`,
+            ].join('\n'),
+          )
+        }
+        case 'theme': {
+          if (value === 'default') {
+            await api.appearance.set(null)
+            return info('Theme: system default.')
+          }
+          const need = themeNeeds.find((n) => n.name === value)
+          await api.appearance.requestOpen({ description: need?.description ?? value })
+          return { close: true }
+        }
+        case 'model':
+        case 'page-access':
+        case 'history-access':
+          return runCommand(what, value, { skills, settings, resolveArgs })
+        default:
+          return error(
+            `No setting ${what}. Use /settings theme, model, page-access or history-access.`,
+          )
+      }
     }
     case 'menu': {
       if (!args) {

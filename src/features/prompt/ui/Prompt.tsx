@@ -17,6 +17,7 @@ import {
   type AgentState,
   type Attachment,
 } from '../../agent/ipc'
+import { themeNeeds } from '../../appearance/ipc'
 import type { VisitedSuggestion } from '../../history/ipc'
 import type { MenuEntry } from '../../menu/ipc'
 import type { Skill } from '../../skills/ipc'
@@ -59,6 +60,34 @@ const menuOptions = (entries: MenuEntry[]): OptionNode[] =>
     }),
     ...(entry.children && { children: menuOptions(entry.children) }),
   }))
+
+const onOff: OptionNode[] = [
+  { name: 'on', label: 'On' },
+  { name: 'off', label: 'Off' },
+]
+
+/** /settings: each setting, then its values (theme: usability needs, or any typed text). */
+const settingsOptions: OptionNode[] = [
+  {
+    name: 'theme',
+    label: 'Theme',
+    children: [
+      ...themeNeeds.map((need) => ({ name: need.name, label: need.label, detail: 'Show themes' })),
+      { name: 'default', label: 'System default', detail: 'Follow the system light or dark look' },
+    ],
+  },
+  {
+    name: 'model',
+    label: 'Model',
+    children: claudeModels.map((model) => ({
+      name: model.short,
+      label: model.label,
+      detail: model.description,
+    })),
+  },
+  { name: 'page-access', label: 'Page access', children: onOff },
+  { name: 'history-access', label: 'History access', children: onOff },
+]
 
 /** How long a handed-over entry stays visible in the prompt before it runs: just long enough to see. */
 export const HANDOFF_MS = 140
@@ -157,7 +186,9 @@ export function Prompt({
           ? { ...command, options: saved }
           : command.name === 'menu'
             ? { ...command, tree: menuOptions(menu) }
-            : command,
+            : command.name === 'settings'
+              ? { ...command, tree: settingsOptions }
+              : command,
       ),
       ...skills.map((skill) => ({
         name: skill.name,

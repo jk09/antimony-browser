@@ -45,6 +45,11 @@ export const promptCommands: CommandInfo[] = [
     options: ['haiku', 'sonnet', 'opus'],
   },
   {
+    name: 'settings',
+    usage: '<setting> <value>',
+    description: 'Show or change the theme, model, page access and history access',
+  },
+  {
     name: 'welcome',
     usage: '',
     description: 'Open the welcome page: set up the Claude Code CLI, learn the prompt and skills',
