@@ -1,6 +1,6 @@
 # 0016. Generate themes from a usability need with the model, check their contrast in code, and show real window captures
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-10
 - Features: appearance, welcome, prompt
 - Spec: fitting-palette-t7q3mw
