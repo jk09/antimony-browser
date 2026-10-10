@@ -594,7 +594,7 @@ describe('macros', () => {
   })
 
   it('opens a new stack, optionally at a URL', async () => {
-    const stacks = { open: vi.fn(), list: vi.fn(() => []) }
+    const stacks = { open: vi.fn(), list: vi.fn(() => []), switch: vi.fn(), close: vi.fn() }
     const { agent, browser } = setup(
       [
         async () => response([toolUse('t1', 'new_stack', {})], 'tool_use'),
@@ -624,7 +624,7 @@ describe('macros', () => {
       },
       { name: 'news', rootTitle: 'News', current: false, imported: true, pages: [] },
     ]
-    const stacks = { open: vi.fn(), list: vi.fn(() => listed) }
+    const stacks = { open: vi.fn(), list: vi.fn(() => listed), switch: vi.fn(), close: vi.fn() }
     const { agent, requests } = setup(
       [
         async () => response([toolUse('t1', 'list_stacks', {})], 'tool_use'),
@@ -646,7 +646,7 @@ describe('macros', () => {
   })
 
   it('offers no list_stacks while history access is off', async () => {
-    const stacks = { open: vi.fn(), list: vi.fn(() => []) }
+    const stacks = { open: vi.fn(), list: vi.fn(() => []), switch: vi.fn(), close: vi.fn() }
     const { agent, requests } = setup([async () => response([{ type: 'text', text: 'ok' }])], {
       stacks,
       historyAccess: false,
@@ -656,8 +656,70 @@ describe('macros', () => {
     expect(JSON.stringify(requests[0]!.messages[0])).toContain('Open stacks: 0')
   })
 
+  it('switches stacks without approval and closes them only after approval', async () => {
+    const info = (name: string, current = false): StackInfo => ({
+      name,
+      rootTitle: name,
+      current,
+      imported: false,
+      pages: [],
+    })
+    let open = [info('docs', true), info('news'), info('bing'), info('old')]
+    const stacks: StackPort = {
+      open: vi.fn(),
+      list: vi.fn(() => open),
+      switch: vi.fn(() => true),
+      close: vi.fn((name: string) => {
+        open = open.filter((stack) => stack.name !== name)
+        return true
+      }),
+    }
+    const { agent } = setup(
+      [
+        async () => response([toolUse('t1', 'switch_stack', { stack: '@news' })], 'tool_use'),
+        async () => response([toolUse('t2', 'close_stack', { stack: 'bing' })], 'tool_use'),
+        async () => response([toolUse('t3', 'close_stack', { stack: 'old' })], 'tool_use'),
+        async () => response([toolUse('t4', 'close_stack', { stack: 'docs' })], 'tool_use'),
+        async () => response([{ type: 'text', text: 'ok' }]),
+      ],
+      // Neither page nor history access is needed.
+      { stacks, historyAccess: false },
+    )
+    const running = agent.run(input('go to news, close bing, old and docs'))
+    await waitFor(() => agent.state().status === 'awaiting-approval')
+    expect(stacks.switch).toHaveBeenCalledWith('news')
+    expect(agent.state().approval!.description).toBe('Close stack @bing')
+    agent.approve('deny')
+    await waitFor(() => agent.state().approval?.description === 'Close stack @old')
+    expect(stacks.close).not.toHaveBeenCalled()
+    agent.approve('allow-run')
+    await running
+    // Allow for this run covered the next close.
+    expect(stacks.close).toHaveBeenCalledWith('old')
+    expect(stacks.close).toHaveBeenCalledWith('docs')
+    expect(agent.state().items).toContainEqual(
+      expect.objectContaining({ summary: 'Close stack @bing', status: 'denied' }),
+    )
+  })
+
+  it('replays switch_stack steps', async () => {
+    const stacks: StackPort = {
+      open: vi.fn(),
+      list: vi.fn(() => [
+        { name: 'news', rootTitle: 'News', current: false, imported: false, pages: [] },
+      ]),
+      switch: vi.fn(() => true),
+      close: vi.fn(() => true),
+    }
+    const { agent } = setup([], { stacks })
+    expect(await agent.replay('/n', [{ tool: 'switch_stack', input: { stack: 'news' } }])).toEqual({
+      ok: true,
+    })
+    expect(stacks.switch).toHaveBeenCalledWith('news')
+  })
+
   it('replays new_stack steps', async () => {
-    const stacks = { open: vi.fn(), list: vi.fn(() => []) }
+    const stacks = { open: vi.fn(), list: vi.fn(() => []), switch: vi.fn(), close: vi.fn() }
     const { agent } = setup([], { stacks })
     expect(await agent.replay('/ns', [{ tool: 'new_stack', input: {} }])).toEqual({ ok: true })
     expect(stacks.open).toHaveBeenCalled()
