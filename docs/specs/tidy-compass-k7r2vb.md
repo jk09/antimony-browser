@@ -6,7 +6,7 @@
 | --- | --- |
 | **Feature name** | Imported Edge pages are assigned to a manageable number of stacks by how related their URLs are, refined by topic with the assistant; `/import-edge` without a path opens a system file dialog |
 | **Spec ID** | tidy-compass-k7r2vb |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
