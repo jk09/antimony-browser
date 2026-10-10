@@ -6,7 +6,7 @@
 | --- | --- |
 | **Feature name** | Import the file Edge's "Export browsing data" creates into Antimony's history, grouping related pages into stacks – from the welcome page and from a deterministic `/import-edge` skill |
 | **Spec ID** | gentle-ferry-m3x7bq |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
@@ -118,5 +118,5 @@
 - Parsing and the history write run in one go (a single transaction) rather than in 2 000-row chunks: chunking would have to span an open transaction. The visit-count column is not read (each row is one visit).
 - Stacks: imported sessions never evict the user's own stacks – they fill only the room left under 50 stacks (newest sessions first); `Stack.imported` (session start) keeps a re-import from duplicating a stack, so a stack the user closed returns on the next import of the same file.
 - The Edge column names are unverified; the parser is header-driven (see section 10) and should be re-checked against a real export.
-- ADR 0017 is Proposed, awaiting acceptance.
+- ADR 0017 accepted.
 - `npm run test:e2e` not run in the cloud session (no Electron binary); CI runs it.
