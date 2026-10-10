@@ -147,6 +147,10 @@ export interface StackPort {
   open(): void
   /** Every stack, most recently used first. */
   list(): StackInfo[]
+  /** Makes the named stack current and focuses its page; false if no open stack has that name. */
+  switch(name: string): boolean
+  /** Closes the named stack (the current one: the most recent becomes current); false if none. */
+  close(name: string): boolean
 }
 
 /** History's search, provided by the history feature (provideHistorySearch in main.ts). */
@@ -177,9 +181,10 @@ export interface ImportPort {
  * content was read in the run.
  * import: reads a file on the user's computer into history and stacks; no page access, needs no
  * browser; the user approves it when the model calls it (a typed skill is the user's own request).
+ * stack: switches or closes stacks by name; no page access; closing asks the user (like an action).
  * read: needs page access. action: needs page access and the user's approval.
  */
-export type ToolKind = 'navigation' | 'history' | 'macro' | 'import' | 'read' | 'action'
+export type ToolKind = 'navigation' | 'history' | 'macro' | 'import' | 'stack' | 'read' | 'action'
 
 /** Read and action tools work on the page and need page access. */
 export function needsPageAccess(tool: ToolDefinition): boolean {
@@ -205,6 +210,10 @@ const schema = (properties: Record<string, unknown> = {}, required: string[] = [
 const macroName = {
   type: 'string',
   description: 'Macro name without the slash: lowercase letters, digits and -, up to 32.',
+}
+const stackName = {
+  type: 'string',
+  description: 'The stack name, with or without the @ (e.g. @news).',
 }
 const selector = {
   type: 'string',
@@ -267,6 +276,22 @@ export const toolDefinitions: ToolDefinition[] = [
     }),
   },
   {
+    name: 'switch_stack',
+    kind: 'stack',
+    replayable: true,
+    description:
+      'Make an open stack (a browser tab) the current one, by its name from list_stacks or <browser_state>; the page tools then act on its page.',
+    input_schema: schema({ stack: stackName }, ['stack']),
+  },
+  {
+    name: 'close_stack',
+    kind: 'stack',
+    replayable: false,
+    description:
+      'Close an open stack (a browser tab) with all its pages, by its name. Only when the user asked to close it; the user is asked to approve. Closing the current stack makes the most recently used one current.',
+    input_schema: schema({ stack: stackName }, ['stack']),
+  },
+  {
     name: 'get_page_state',
     kind: 'navigation',
     replayable: false,
@@ -313,7 +338,7 @@ export const toolDefinitions: ToolDefinition[] = [
     kind: 'macro',
     replayable: false,
     description:
-      "Store a macro the user can run later by typing /name in the prompt, without you. Its steps are browser tool calls replayed in order; only navigate, go_back, go_forward, reload, stop, new_stack, click, type_text, press_key and scroll can be steps, with the same inputs as those tools. A string input may contain {{param}} placeholders, filled from the arguments typed after /name (in order; the last parameter takes the rest of the line; an @stack or @stack/page argument becomes that page's URL). Declare every placeholder in params with a short hint of what to type. Replaces a macro with the same name.",
+      "Store a macro the user can run later by typing /name in the prompt, without you. Its steps are browser tool calls replayed in order; only navigate, go_back, go_forward, reload, stop, new_stack, switch_stack, click, type_text, press_key and scroll can be steps, with the same inputs as those tools. A string input may contain {{param}} placeholders, filled from the arguments typed after /name (in order; the last parameter takes the rest of the line; an @stack or @stack/page argument becomes that page's URL). Declare every placeholder in params with a short hint of what to type. Replaces a macro with the same name.",
     input_schema: schema(
       {
         name: macroName,
@@ -514,6 +539,10 @@ export function describeCall(name: string, input: Input, element?: ElementInfo):
       return input['url'] ? `Open a new stack at ${String(input['url'])}` : 'Open a new stack'
     case 'get_page_state':
       return 'Check the page state'
+    case 'switch_stack':
+      return `Switch to @${String(input['stack']).replace(/^@/, '')}`
+    case 'close_stack':
+      return `Close stack @${String(input['stack']).replace(/^@/, '')}`
     case 'list_stacks':
       return input['stack']
         ? `List the pages of @${String(input['stack']).replace(/^@/, '')}`
@@ -842,6 +871,30 @@ function listStacks(stacks: StackPort | null, input: Input): ToolOutput {
   return { text: formatStackPages(stack) }
 }
 
+/** Switches to (switch_stack) or closes (close_stack) a stack by name. */
+function manageStack(
+  stacks: StackPort | null,
+  browser: BrowserPort | null,
+  name: string,
+  input: Input,
+): ToolOutput {
+  if (!stacks) throw new ToolError('Stacks are not available.')
+  const stack = String(input['stack']).trim().replace(/^@/, '')
+  const target = stacks.list().find((s) => s.name === stack)
+  if (!stack || !target) {
+    throw new ToolError(`No stack is named @${stack}. Call list_stacks to see them.`)
+  }
+  if (name === 'switch_stack') {
+    if (target.current) return { text: `@${stack} already is the current stack.` }
+    stacks.switch(stack)
+    const state = browser ? `\n${formatState(browser.state())}` : ''
+    return { text: `Switched to @${stack}.${state}` }
+  }
+  stacks.close(stack)
+  const left = stacks.list().length
+  return { text: `Closed @${stack}. ${left} ${left === 1 ? 'stack is' : 'stacks are'} open.` }
+}
+
 /** What the tools reach besides the page: history's search, the macro store, the stacks. */
 export interface ToolPorts {
   history?: HistoryPort | null
@@ -867,6 +920,9 @@ export async function executeTool(
   if (name === 'search_history') return searchHistory(ports.history ?? null, input)
   if (name === 'recall_history') return recallHistory(ports, input)
   if (name === 'list_stacks') return listStacks(ports.stacks ?? null, input)
+  if (name === 'switch_stack' || name === 'close_stack') {
+    return manageStack(ports.stacks ?? null, browser, name, input)
+  }
   if (name === 'import_browsing_data')
     return importBrowsingData(ports.importer ?? null, input, ports.signal)
   if (toolNamed(name)?.kind === 'macro') return runMacroTool(ports.macros ?? null, name, input)
