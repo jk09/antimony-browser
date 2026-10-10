@@ -637,8 +637,22 @@ describe('import_browsing_data', () => {
     agent.approve('allow')
     await running
     expect(importer.run).toHaveBeenCalledTimes(2)
-    expect(importer.run).toHaveBeenCalledWith('/home/me/edge.csv')
+    expect(importer.run).toHaveBeenCalledWith('/home/me/edge.csv', expect.any(AbortSignal))
     expect(browser.load).not.toHaveBeenCalled()
+  })
+
+  it('imports without a path, which lets the user choose the file', async () => {
+    const importer = { run: vi.fn(async () => 'Imported.') }
+    const { agent } = setup(
+      [async () => response([toolUse('t1', 'import_browsing_data', {})], 'tool_use'), done],
+      { importer },
+    )
+    const running = agent.run(input('import my Edge data'))
+    await waitFor(() => agent.state().status === 'awaiting-approval')
+    expect(agent.state().approval!.description).toBe('Import browsing data (you choose the file)')
+    agent.approve('allow')
+    await running
+    expect(importer.run).toHaveBeenCalledWith('', expect.any(AbortSignal))
   })
 
   it('imports nothing when the user denies it, and reports an unavailable importer', async () => {
@@ -667,7 +681,7 @@ describe('import_browsing_data', () => {
       { tool: 'import_browsing_data', input: { path: '/tmp/e.csv' } },
     ])
     expect(result).toEqual({ ok: true })
-    expect(importer.run).toHaveBeenCalledWith('/tmp/e.csv')
+    expect(importer.run).toHaveBeenCalledWith('/tmp/e.csv', expect.any(AbortSignal))
     expect(deps.runCli).not.toHaveBeenCalled()
   })
 

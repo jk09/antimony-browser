@@ -54,29 +54,32 @@ export interface Stack {
   lastUsedAt: number
   /** The root was opened as the home page: the stack is named after the root's first child. */
   startRoot?: boolean
-  /** Created by an import from the browsing session that began at this time (epoch milliseconds). */
+  /** Created by an import at this time (epoch milliseconds). */
   imported?: number
 }
 
-/** A page of a browsing session read from another browser's export. */
+/** A page read from another browser's export. */
 export interface ImportedPage {
   url: string
   title: string
-  /** Epoch milliseconds of the first visit in the session. */
+  /** Epoch milliseconds of its first visit. */
   at: number
 }
 
-/** Pages visited together, in the order they were first visited (at least two to make a stack). */
-export interface ImportedSession {
-  startedAt: number
-  endedAt: number
+/** Related pages from an import that make one stack (at least two to be made). */
+export interface ImportedStack {
+  /** What to name the stack; derived from its first page when empty. */
+  name: string
+  /** Epoch milliseconds of the latest visit to any of its pages. */
+  lastAt: number
+  /** Oldest first: the order of the stack's chain. */
   pages: ImportedPage[]
 }
 
 /** What `importStacks` (exported from `main.ts`) did. */
 export interface ImportedStacks {
   created: number
-  /** Sessions left out: already imported, too short, or no room (50 stacks at most). */
+  /** Groups left out: too short, already imported, or no room (50 stacks at most). */
   skipped: number
 }
 

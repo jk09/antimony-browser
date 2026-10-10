@@ -6,12 +6,12 @@
 | --- | --- |
 | **Feature name** | Imported Edge pages are assigned to a manageable number of stacks by how related their URLs are, refined by topic with the assistant; `/import-edge` without a path opens a system file dialog |
 | **Spec ID** | tidy-compass-k7r2vb |
-| **Status** | Draft <!-- one of: Draft, Active, Done --> |
+| **Status** | Active <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-10 12:00 +00:00 |
-| **Last updated** | 2026-10-10 12:00 +00:00 |
+| **Last updated** | 2026-10-10 14:00 +00:00 |
 | **Affected features** | import, stacks, skills, agent, welcome |
 | **Target release** | 0.1.0 |
 | **Related links** | spec gentle-ferry-m3x7bq (the import); ADRs 0017 (superseded in part by 0018), 0009, 0015; PR #69 |
@@ -88,16 +88,16 @@
 
 ## 11. Acceptance Criteria
 
-- [ ] Domain grouping merges subdomains, splits a domain over 60 pages by first path segment, keeps the 30 largest clusters and turns the rest into leftovers – `import/shared/grouping.test.ts`.
-- [ ] Leftovers join the cluster sharing ≥ 2 distinctive words, else stay out – `grouping.test.ts`.
-- [ ] The topic answer is validated (unknown/duplicate ids, > 30 stacks, tiny stacks, bad JSON) and merges clusters, places leftovers and names stacks – `import/main/topics.test.ts`.
-- [ ] A failing or invalid model falls back to the URL grouping and the result says so – `import/main/run.test.ts`.
-- [ ] Only titles and `host/path` of at most ~330 pages go into the request – `topics.test.ts`.
-- [ ] `importStacks` builds chain stacks from groups, names them uniquely, skips groups ≥ 80 % already imported, respects the 50-stack room – `stacks/main.test.ts`, `stacks/shared/imported.test.ts`.
-- [ ] Optional skill parameters: `bindArgs`, `argumentHint`, `signature`; macros can't declare them – `skills/shared/params.test.ts`, `skills/main.test.ts`.
-- [ ] `/import-edge` with no argument opens the dialog, imports the chosen file, ends quietly on cancel; the tool accepts an empty path – `import/main.test.ts`, `agent/main/tools.test.ts`, `agent/main/agent.test.ts`.
-- [ ] Welcome step text and result show the grouping – `import/ui/ImportStep.test.tsx`, `welcome/ui/WelcomeView.test.tsx`.
-- [ ] `npm run check` passes; the e2e `/import-edge` test is updated for the new grouping.
+- [x] Domain grouping merges subdomains, splits a domain over 60 pages by first path segment, keeps the 30 largest clusters and turns the rest into leftovers – `import/shared/grouping.test.ts`.
+- [x] Leftovers join the cluster sharing ≥ 2 distinctive words, else stay out – `grouping.test.ts`.
+- [x] The topic answer is validated (unknown/duplicate ids, > 30 stacks, tiny stacks, bad JSON) and merges clusters, places leftovers and names stacks – `import/main/topics.test.ts`.
+- [x] A failing or invalid model falls back to the URL grouping and the result says so – `import/main/run.test.ts`.
+- [x] Only titles and `host/path` of at most ~330 pages go into the request – `topics.test.ts`.
+- [x] `importStacks` builds chain stacks from groups, names them uniquely, skips groups ≥ 80 % already imported, respects the 50-stack room – `stacks/main.test.ts`, `stacks/shared/imported.test.ts`.
+- [x] Optional skill parameters: `bindArgs`, `argumentHint`, `signature`; macros can't declare them – `skills/shared/params.test.ts`, `skills/main.test.ts`.
+- [x] `/import-edge` with no argument opens the dialog, imports the chosen file, ends quietly on cancel; the tool accepts an empty path – `import/main.test.ts`, `agent/main/tools.test.ts`, `agent/main/agent.test.ts`.
+- [x] Welcome step text and result show the grouping – `import/ui/ImportStep.test.tsx`, `welcome/ui/WelcomeView.test.tsx`.
+- [x] `npm run check` passes; the e2e `/import-edge` test is updated for the new grouping.
 
 ## 12. Testing / Verification
 
@@ -112,4 +112,8 @@
 
 ## 14. Changes during implementation
 
-None yet.
+- `ImportPort.run` also takes the run's abort signal, so Stop ends the wait for the model (combined with the 60 s timeout); a stopped run writes nothing.
+- The leftover placement runs after the model too, for single pages the model didn't place (and the ones past the 300 sent).
+- `bindArgs` now takes the parameter objects, not names; `ImportedSession` became `ImportedStack` (`name`, `lastAt`, `pages`); `Stack.imported` is the import time. Older `stacks.json` values (a session start) still load.
+- The fake Claude CLI used by the e2e tests answers the topic request by putting everything in one stack "bread".
+- `npm run test:e2e`: the new `/import-edge` test and the welcome walk were run in the cloud session (Electron binary available).

@@ -13,6 +13,7 @@ const result = {
   skipped: { invalid: 1, unsupported: 1 },
   stacksCreated: 2,
   stacksSkipped: 0,
+  grouping: 'topics' as const,
 }
 
 describe('ImportStep', () => {
@@ -26,7 +27,9 @@ describe('ImportStep', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Choose file…' }))
     const status = screen.getByRole('status')
     await waitFor(() => expect(status.textContent).toContain('Imported 12 visits'))
-    expect(status.textContent).toContain('(9 new pages) into history and 2 stacks; skipped 2 rows')
+    expect(status.textContent).toContain(
+      '(9 new pages) into history and 2 stacks, grouped by topic; skipped 2 rows',
+    )
     expect(status.textContent).toContain('/home/me/edge.csv')
     expect(api.import.run).toHaveBeenCalledWith('/home/me/edge.csv')
     expect(screen.getByRole('button', { name: 'Choose another file…' })).toBeTruthy()

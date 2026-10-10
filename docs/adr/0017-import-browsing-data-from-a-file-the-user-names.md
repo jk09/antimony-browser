@@ -1,6 +1,6 @@
 # 0017. Import browsing data from a file the user names, grouped into stacks by session
 
-- Status: Accepted
+- Status: Accepted (the grouping by session is superseded by 0018)
 - Date: 2026-10-10
 - Features: import, history, stacks, agent, skills, welcome
 - Spec: gentle-ferry-m3x7bq

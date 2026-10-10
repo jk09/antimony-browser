@@ -145,18 +145,32 @@ describe('skills main', () => {
     await expect(async () => call(channels.run, 'nope', '')).rejects.toThrow('Unknown skill')
   })
 
-  it('runs /import-edge with the typed path, spaces included, and needs one', async () => {
+  it('runs /import-edge with the typed path, spaces included', async () => {
     const { call } = setup()
     await call(channels.run, 'import-edge', ' ~/Downloads/Edge browsing data.csv ')
     expect(replay).toHaveBeenCalledWith('/import-edge ~/Downloads/Edge browsing data.csv', [
       { tool: 'import_browsing_data', input: { path: '~/Downloads/Edge browsing data.csv' } },
     ])
-    replay.mockClear()
-    expect(await call(channels.run, 'import-edge', '')).toEqual({
-      ok: false,
-      error: 'Missing <file>',
-    })
-    expect(replay).not.toHaveBeenCalled()
+  })
+
+  it('runs /import-edge without a path, which lets the import open its file dialog', async () => {
+    const { call } = setup()
+    expect(await call(channels.run, 'import-edge', '')).toEqual({ ok: true })
+    expect(replay).toHaveBeenCalledWith('/import-edge', [
+      { tool: 'import_browsing_data', input: { path: '' } },
+    ])
+    const skill = (call(channels.list) as { name: string; params: unknown[] }[]).find(
+      (s) => s.name === 'import-edge',
+    )
+    expect(skill!.params).toEqual([expect.objectContaining({ name: 'file', optional: true })])
+  })
+
+  it("doesn't let macros declare optional parameters", () => {
+    const { macros: port } = setup()
+    port.save({ ...macro, params: [{ name: 'team', hint: 'team name', optional: true }] })
+    expect(port.list().find((saved) => saved.name === 'dash')!.params).toEqual([
+      { name: 'team', hint: 'team name' },
+    ])
   })
 
   it('runs built-ins, deletes macros (UI or assistant) but not built-ins', async () => {

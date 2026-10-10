@@ -151,10 +151,7 @@ export function register({ ipc }: MainContext): void {
     if (!skill) throw new TypeError(`Unknown skill /${String(name)}`)
     if (typeof args !== 'string' || args.length > 10_000)
       throw new TypeError('args must be a string')
-    const bound = bindArgs(
-      skill.params.map((param) => param.name),
-      args,
-    )
+    const bound = bindArgs(skill.params, args)
     if ('error' in bound) return { ok: false, error: bound.error }
     return replay(
       `/${skill.name}${args.trim() ? ` ${args.trim()}` : ''}`,

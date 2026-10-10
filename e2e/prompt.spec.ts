@@ -656,7 +656,7 @@ test('with page access, the assistant reads the page and acts on it only after a
   }
 })
 
-test('/import-edge imports an Edge export without the model, one stack per session', async () => {
+test('/import-edge imports an Edge export and groups its pages into stacks by topic', async () => {
   const profile = newProfile()
   const csv = join(mkdtempSync(join(tmpdir(), 'antimony-edge-')), 'Edge browsing data.csv')
   writeFileSync(
@@ -664,6 +664,7 @@ test('/import-edge imports an Edge export without the model, one stack per sessi
     [
       'url,title,visit time',
       'https://sourdough.example/start,Sourdough starter,2026-09-01T08:00:00Z',
+      'https://sourdough.example/recipes,Sourdough recipes,2026-09-01T08:05:00Z',
       'https://flour.example/types,Flour types,2026-09-01T08:10:00Z',
       'https://other.example/lone,A lone page,2026-09-02T09:00:00Z',
     ].join('\n'),
@@ -674,15 +675,20 @@ test('/import-edge imports an Edge export without the model, one stack per sessi
     const prompt = await openPrompt(app, window)
     await prompt.fill(`/import-edge ${csv}`)
     await prompt.press('Enter')
-    await expect(window.getByText(`Import browsing data from ${csv}`)).toBeVisible()
+    const row = window.locator('.turn.tool', { hasText: `Import browsing data from ${csv}` })
+    await expect(row).toBeVisible()
+    // The topic request takes a CLI start, so the row is done only a moment later.
+    await expect(row.getByLabel('ok')).toBeVisible({ timeout: 20_000 })
     await expect(window.getByRole('alert')).toHaveCount(0)
+    // The topic request goes to the CLI directly, not through the model loop that runs tools.
     expect(requests).toHaveLength(0)
   } finally {
     await app.close()
   }
   const saved = JSON.parse(readFileSync(join(profile, 'stacks.json'), 'utf8')) as {
-    stacks: { name: string; imported?: number }[]
+    stacks: { name: string; imported?: number; nodes: object }[]
   }
-  expect(saved.stacks.filter((stack) => stack.imported)).toHaveLength(1)
-  expect(saved.stacks.find((stack) => stack.imported)!.name).toBe('sourdough-starter')
+  const imported = saved.stacks.filter((stack) => stack.imported)
+  expect(imported.map((stack) => stack.name)).toEqual(['bread'])
+  expect(Object.keys(imported[0]!.nodes)).toHaveLength(4)
 })

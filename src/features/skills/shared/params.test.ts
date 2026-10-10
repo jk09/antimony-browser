@@ -50,11 +50,27 @@ describe('skill parameters', () => {
   })
 
   it('gives the last parameter the rest of the line', () => {
-    expect(bindArgs(['team', 'query'], 'alpha open bugs now')).toEqual({
+    const params = [
+      { name: 'team', hint: '' },
+      { name: 'query', hint: '' },
+    ]
+    expect(bindArgs(params, 'alpha open bugs now')).toEqual({
       values: { team: 'alpha', query: 'open bugs now' },
     })
-    expect(bindArgs(['team', 'query'], 'alpha')).toEqual({ error: 'Missing <query>' })
+    expect(bindArgs(params, 'alpha')).toEqual({ error: 'Missing <query>' })
     expect(bindArgs([], '')).toEqual({ values: {} })
     expect(bindArgs([], 'x')).toEqual({ error: 'This macro takes no arguments' })
+  })
+
+  it('lets an optional parameter be left out, and shows it in brackets', () => {
+    const params = [{ name: 'file', hint: 'path to the file', optional: true }]
+    expect(bindArgs(params, '')).toEqual({ values: { file: '' } })
+    expect(bindArgs(params, '~/my file.csv')).toEqual({ values: { file: '~/my file.csv' } })
+    expect(signature({ name: 'import-edge', params })).toBe('/import-edge [file]')
+    expect(argumentHint(params, '')).toBe(' [file: path to the file]')
+    expect(argumentHint(params, ' x')).toBe('')
+    const mixed = [{ name: 'a', hint: '' }, ...params]
+    expect(bindArgs(mixed, '')).toEqual({ error: 'Missing <a>' })
+    expect(bindArgs(mixed, 'x')).toEqual({ values: { a: 'x', file: '' } })
   })
 })

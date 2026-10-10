@@ -10,7 +10,7 @@ import { channels as promptChannels } from '../prompt/ipc'
 import {
   channels,
   DEFAULT_HOME,
-  type ImportedSession,
+  type ImportedStack,
   type ImportedStacks,
   type Stack,
   type StackAudio,
@@ -19,7 +19,7 @@ import {
   type StacksState,
 } from './ipc'
 import { cycleKeyFor, stackCommandFor } from './shared/keys'
-import { stackFromSession } from './shared/imported'
+import { addressOf, mostlyKnown, stackFromImport } from './shared/imported'
 import { parseStoredStacks, STACKS_FILE_VERSION, type StoredStacks } from './shared/stored'
 import {
   backTarget,
@@ -58,16 +58,17 @@ function parseHome(value: unknown): string | null {
   }
 }
 
-let stackImporter: ((sessions: ImportedSession[]) => ImportedStacks) | null = null
+let stackImporter: ((groups: ImportedStack[]) => ImportedStacks) | null = null
 
 /**
- * Adds a stack per browsing session read from another browser's export (for the import feature):
- * unopened, last used when the session ended, never the current stack; sessions already imported
- * and those that don't fit under the 50-stack limit are skipped. Throws before stacks is registered.
+ * Adds a stack per group of related pages read from another browser's export (for the import
+ * feature): unopened, last used at the group's last visit, never the current stack. Groups with
+ * fewer than two pages, groups mostly in an earlier import, and those that don't fit under the
+ * 50-stack limit are skipped. Throws before stacks is registered.
  */
-export function importStacks(sessions: ImportedSession[]): ImportedStacks {
+export function importStacks(groups: ImportedStack[]): ImportedStacks {
   if (!stackImporter) throw new Error('Stacks are not available.')
-  return stackImporter(sessions)
+  return stackImporter(groups)
 }
 
 export function register({ window, browsingSession, ipc, fileMenu }: MainContext): void {
@@ -326,21 +327,24 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
     changed()
   })
 
-  stackImporter = (sessions) => {
-    const done = new Set(
-      [...stacks.values()].flatMap((s) => (s.imported === undefined ? [] : [s.imported])),
+  stackImporter = (groups) => {
+    const known = new Set(
+      [...stacks.values()]
+        .filter((stack) => stack.imported !== undefined)
+        .flatMap((stack) => Object.values(stack.nodes).map((node) => addressOf(node.url))),
     )
+    const importedAt = Date.now()
     let created = 0
     let skipped = 0
-    // Newest first, so the sessions that matter most are the ones that fit.
-    for (const session of [...sessions].sort((a, b) => b.startedAt - a.startedAt)) {
-      if (session.pages.length < 2 || done.has(session.startedAt) || stacks.size >= MAX_STACKS) {
+    // Newest first, so the groups that matter most are the ones that fit.
+    for (const group of [...groups].sort((a, b) => b.lastAt - a.lastAt)) {
+      if (group.pages.length < 2 || mostlyKnown(group, known) || stacks.size >= MAX_STACKS) {
         skipped++
         continue
       }
-      const stack = stackFromSession(randomUUID(), session, takenNames(newStack('', 0)))
+      const stack = stackFromImport(randomUUID(), group, takenNames(newStack('', 0)), importedAt)
       stacks.set(stack.id, stack)
-      done.add(session.startedAt)
+      group.pages.forEach((page) => known.add(addressOf(page.url)))
       created++
     }
     if (created > 0) changed()

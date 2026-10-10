@@ -166,6 +166,8 @@ describe('WelcomeView', () => {
     expect(within(page()).getByText('Bring your history from Edge')).toBeTruthy()
     expect(within(page()).getByText('Import here')).toBeTruthy()
     expect(page().textContent).toContain('/import-edge')
+    // What goes to the assistant for grouping by topic is said before a file is chosen.
+    expect(page().textContent).toMatch(/sent once to the\s*assistant/)
     click('Next')
     expect(within(page()).getByText('Using the prompt')).toBeTruthy()
   })
