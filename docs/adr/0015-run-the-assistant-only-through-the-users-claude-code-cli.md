@@ -1,6 +1,6 @@
 # 0015. Run the assistant only through the user's Claude Code CLI, set up from a welcome page
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-10
 - Features: agent, prompt, welcome
 - Spec: first-light-w5k8rd
