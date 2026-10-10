@@ -1,12 +1,6 @@
 // Test helper: a fake window.antimony whose events tests can fire.
 import { vi } from 'vitest'
-import {
-  claudeModels,
-  type AgentSettings,
-  type AgentState,
-  type DebugEvent,
-  type ModelList,
-} from '../../features/agent/ipc'
+import type { AgentSettings, AgentState, CliCheck, DebugEvent } from '../../features/agent/ipc'
 import type {
   HistorySettings,
   OpenRequest,
@@ -41,11 +35,8 @@ function channel<T>() {
 export const idleState: AgentState = { status: 'idle', items: [], approval: null }
 export const defaultSettings: AgentSettings = {
   model: 'claude-sonnet-5-5',
-  provider: 'anthropic',
   pageAccess: false,
   historyAccess: true,
-  hasKey: true,
-  keyPersisted: true,
 }
 export const builtins: Skill[] = ['reload', 'stop'].map((name) => ({
   name,
@@ -55,17 +46,19 @@ export const builtins: Skill[] = ['reload', 'stop'].map((name) => ({
   builtin: true,
 }))
 
-export const defaultModels: ModelList = {
-  claude: claudeModels.map(({ id, label }) => ({ id, label })),
-  cli: { models: [{ id: 'cli:claude-sonnet-5-5', label: 'Sonnet 5.5 (Claude Code)' }] },
-  ollama: { models: [{ id: 'ollama:qwen3:8b', label: 'qwen3:8b (Ollama)' }] },
+export const workingCli: CliCheck = {
+  found: { ok: true },
+  loggedIn: { ok: true },
+  answered: { ok: true, model: 'claude-sonnet-5-5', ms: 1234 },
 }
 
 export function fakeApi(
   options: {
     settings?: Partial<AgentSettings>
     skills?: Skill[]
-    models?: ModelList
+    cliCheck?: CliCheck
+    /** The welcome page was finished before (default true, so it doesn't open in other tests). */
+    welcomeDone?: boolean
     menu?: MenuEntry[]
     stacks?: StacksState
     stackPages?: StackPages[]
@@ -89,6 +82,7 @@ export function fakeApi(
   const mapOpen = channel<void>()
   const stacks = channel<StacksState>()
   const stackCommand = channel<StackCommand>()
+  const welcomeOpen = channel<void>()
   let home: string | null = null
   const currentSettings = { ...defaultSettings, ...options.settings }
 
@@ -103,9 +97,8 @@ export function fakeApi(
       onStateChanged: state.subscribe,
       settings: vi.fn(async () => currentSettings),
       updateSettings: vi.fn(async (update) => ({ ...currentSettings, ...update })),
-      setKey: vi.fn(async (key: string | null) => ({ ...currentSettings, hasKey: key !== null })),
       onSettingsChanged: settings.subscribe,
-      models: vi.fn(async () => options.models ?? defaultModels),
+      checkCli: vi.fn(async () => options.cliCheck ?? workingCli),
       debugLog: vi.fn(async () => []),
       onDebugEvent: (listener: (event: DebugEvent, label: string) => void) =>
         debugEvent.subscribe(({ event, label }) => listener(event, label)),
@@ -195,6 +188,12 @@ export function fakeApi(
       onChanged: stacks.subscribe,
       onCommand: stackCommand.subscribe,
     },
+    welcome: {
+      state: vi.fn(async () => ({ done: options.welcomeDone ?? true })),
+      setDone: vi.fn(async (done: boolean) => ({ done })),
+      requestOpen: vi.fn(async () => welcomeOpen.emit()),
+      onOpen: welcomeOpen.subscribe,
+    },
   } satisfies AntimonyApi
 
   window.antimony = api
@@ -218,6 +217,7 @@ export function fakeApi(
       recallShown: recallShown.emit,
       stacks: stacks.emit,
       stackCommand: stackCommand.emit,
+      welcomeOpen: () => welcomeOpen.emit(),
     },
   }
 }

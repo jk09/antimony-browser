@@ -6,13 +6,15 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { createInterface } from 'node:readline'
-import { claudeModels, cliModelId, type ClaudeModelId, type ModelList } from '../ipc'
-import type { ApiTool, ContentBlock } from './anthropic'
+import type { CliCheck, CliCheckStep, ModelId } from '../ipc'
+import type { ApiTool, ContentBlock } from './content'
 import { startMcpServer, type McpContent, type McpToolResult } from './mcp-server'
 
 /** The MCP server's name; the CLI calls its tools `mcp__antimony__<tool>`. */
 export const MCP_SERVER_NAME = 'antimony'
 const STATUS_TIMEOUT_MS = 5_000
+/** How long the welcome page's test waits for an answer. */
+export const CHECK_TIMEOUT_MS = 60_000
 const KILL_GRACE_MS = 2_000
 /** Approvals can take a while; the CLI's default MCP tool timeout is shorter. */
 const TOOL_TIMEOUT_MS = 24 * 60 * 60 * 1000
@@ -104,12 +106,11 @@ export function cliEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return { ...rest, MCP_TOOL_TIMEOUT: String(TOOL_TIMEOUT_MS) }
 }
 
-/** Models that take an effort level (as in the API client). */
-const takesEffort = (model: ClaudeModelId) =>
-  model === 'claude-sonnet-5-5' || model === 'claude-opus-5-5'
+/** Models that take an effort level. */
+const takesEffort = (model: ModelId) => model === 'claude-sonnet-5-5' || model === 'claude-opus-5-5'
 
 /** Flags every CLI request gets: print mode, stream-json both ways, nothing of the user's setup. */
-function baseArgs(model: ClaudeModelId, system: string): string[] {
+function baseArgs(model: ModelId, system: string): string[] {
   return [
     '-p',
     '--input-format',
@@ -136,7 +137,7 @@ function baseArgs(model: ClaudeModelId, system: string): string[] {
 }
 
 export interface RunArgs {
-  model: ClaudeModelId
+  model: ModelId
   system: string
   mcpConfigPath: string
   tools: string[]
@@ -157,7 +158,7 @@ export function runArgs({ model, system, mcpConfigPath, tools, maxTurns, resume 
   ]
 }
 
-export function completeArgs(model: ClaudeModelId, system: string): string[] {
+export function completeArgs(model: ModelId, system: string): string[] {
   return [...baseArgs(model, system), '--max-turns', '1', '--no-session-persistence']
 }
 
@@ -291,9 +292,13 @@ export function describeCliFailure({ code, stderr, result }: CliOutcome): string
   return `The Claude Code CLI exited with code ${code ?? 'none'}${tail ? `: ${tail}` : '.'}`
 }
 
-/** The CLI group of the model picker: its models if the CLI is logged in, else why not. */
-export function cliStatus(options: CliOptions): Promise<ModelList['cli']> {
+/** Whether the CLI starts (`auth status --json`) and is logged in; never rejects. */
+export function cliStatus(
+  options: CliOptions,
+): Promise<{ found: CliCheckStep; loggedIn: CliCheckStep | null }> {
   const spawn = options.spawn ?? nodeSpawn
+  const notFound = (error: string) => ({ found: { ok: false, error }, loggedIn: null })
+  const login = (loggedIn: CliCheckStep) => ({ found: { ok: true }, loggedIn })
   return new Promise((resolve) => {
     let child: ChildProcess
     try {
@@ -303,13 +308,13 @@ export function cliStatus(options: CliOptions): Promise<ModelList['cli']> {
         shell: false,
         windowsHide: true,
       })
-    } catch {
-      resolve({ error: CLI_NOT_FOUND })
+    } catch (error) {
+      resolve(notFound(startError(error as NodeJS.ErrnoException).message))
       return
     }
     let stdout = ''
     let settled = false
-    const done = (value: ModelList['cli']) => {
+    const done = (value: { found: CliCheckStep; loggedIn: CliCheckStep | null }) => {
       if (settled) return
       settled = true
       clearTimeout(timer)
@@ -317,12 +322,12 @@ export function cliStatus(options: CliOptions): Promise<ModelList['cli']> {
     }
     const timer = setTimeout(() => {
       kill(child)
-      done({ error: `The Claude Code CLI (${options.command}) didn't answer.` })
+      done(login({ ok: false, error: `The Claude Code CLI (${options.command}) didn't answer.` }))
     }, STATUS_TIMEOUT_MS)
     child.stdout!.on('data', (chunk: Buffer) => {
       stdout += chunk.toString('utf8')
     })
-    child.on('error', (error: NodeJS.ErrnoException) => done({ error: startError(error).message }))
+    child.on('error', (error: NodeJS.ErrnoException) => done(notFound(startError(error).message)))
     child.on('close', () => {
       let status: { loggedIn?: unknown } | null = null
       try {
@@ -330,20 +335,44 @@ export function cliStatus(options: CliOptions): Promise<ModelList['cli']> {
       } catch {
         // handled below
       }
-      if (status?.loggedIn === true) {
-        done({
-          models: claudeModels.map(({ id, label }) => ({
-            id: cliModelId(id),
-            label: `${label} (Claude Code)`,
-          })),
-        })
-      } else if (status?.loggedIn === false) {
-        done({ error: CLI_NOT_LOGGED_IN })
-      } else {
-        done({ error: `Unexpected answer from ${options.command} auth status.` })
+      if (status?.loggedIn === true) done(login({ ok: true }))
+      else if (status?.loggedIn === false) done(login({ ok: false, error: CLI_NOT_LOGGED_IN }))
+      else {
+        done(login({ ok: false, error: `Unexpected answer from ${options.command} auth status.` }))
       }
     })
   })
+}
+
+/**
+ * The welcome page's test: the CLI starts, is logged in, and answers a fixed one-line request with
+ * `model` (no tools, no session) within `timeoutMs`. Never rejects; failures are in the steps.
+ */
+export async function checkCli(
+  options: CliOptions,
+  model: ModelId,
+  timeoutMs = CHECK_TIMEOUT_MS,
+): Promise<CliCheck> {
+  const { found, loggedIn } = await cliStatus(options)
+  if (!loggedIn?.ok) return { found, loggedIn, answered: null }
+  const started = Date.now()
+  try {
+    await cliComplete(options, {
+      model,
+      system: 'You are checking that you can be reached. Reply with the single word OK.',
+      content: [{ type: 'text', text: 'Reply with OK.' }],
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+    return { found, loggedIn, answered: { ok: true, model, ms: Date.now() - started } }
+  } catch (error) {
+    const message =
+      error instanceof Error && error.name === 'AbortError'
+        ? `No answer within ${Math.ceil(timeoutMs / 1000)} s.`
+        : error instanceof Error
+          ? error.message
+          : String(error)
+    return { found, loggedIn, answered: { ok: false, model, error: message } }
+  }
 }
 
 /** An Anthropic tool_result block as MCP tool-call content. */
@@ -362,7 +391,7 @@ export function toMcpResult(block: ContentBlock): McpToolResult {
 }
 
 export interface CliTurn {
-  model: ClaudeModelId
+  model: ModelId
   system: string
   /** The user message's content blocks (browser state, attachments, text). */
   content: ContentBlock[]
@@ -422,7 +451,7 @@ export async function runCliTurn(options: CliOptions, turn: CliTurn): Promise<Cl
 /** One request without tools or session (history summaries, search); returns the answer text. */
 export async function cliComplete(
   options: CliOptions,
-  request: { model: ClaudeModelId; system: string; content: ContentBlock[]; signal?: AbortSignal },
+  request: { model: ModelId; system: string; content: ContentBlock[]; signal?: AbortSignal },
 ): Promise<string> {
   const outcome = await runCliProcess(
     options,

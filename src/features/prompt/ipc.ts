@@ -38,12 +38,16 @@ export interface CommandInfo {
 export const promptCommands: CommandInfo[] = [
   { name: 'new', usage: '', description: 'Start a new conversation' },
   { name: 'debug', usage: '', description: 'Show or hide the assistant debugger' },
-  { name: 'key', usage: '', description: 'Set the Anthropic API key (/key clear removes it)' },
   {
     name: 'model',
     usage: '<model>',
-    description: 'Choose the model (Claude API key, Claude Code CLI or Ollama)',
-    options: ['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-haiku-4-5'],
+    description: 'Choose the model strength (runs through your Claude Code CLI)',
+    options: ['haiku', 'sonnet', 'opus'],
+  },
+  {
+    name: 'welcome',
+    usage: '',
+    description: 'Open the welcome page: set up the Claude Code CLI, learn the prompt and skills',
   },
   {
     name: 'page-access',

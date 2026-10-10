@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   _electron as electron,
@@ -39,7 +40,7 @@ test.beforeAll(async () => {
 
 test.afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())))
 
-const env = { ...process.env, ANTHROPIC_API_KEY: '', ANTHROPIC_BASE_URL: 'http://127.0.0.1:9' }
+const env = { ...process.env, CLAUDE_CLI_PATH: join(tmpdir(), 'no-such-claude-cli') }
 
 async function prompt(app: ElectronApplication, window: Page) {
   const location = window.getByRole('textbox', { name: 'Prompt' })

@@ -12,12 +12,12 @@ Antimony is a desktop web browser organised around an AI assistant instead of a 
 
 - **One prompt for everything.** The location bar and the assistant are the same input, docked in a side panel so the page keeps its full size. Every application menu item is reachable from it too (`/menu`), so there is no menu bar to hunt through.
 - **An assistant that acts in the browser.** It can navigate, open tabs, read the page, click and type. Every page action needs your approval first.
-- **Your choice of model.** Use Claude through an Anthropic API key or your own Claude Code login, or keep everything on your machine with a local [Ollama](https://ollama.com/) model.
+- **Claude through your own Claude Code login.** The assistant runs on the [Claude Code CLI](https://docs.claude.com/en/docs/claude-code) installed on your computer; pick Haiku, Sonnet or Opus for speed or strength. A welcome page on first launch checks the CLI is installed and answering, and shows how to use the prompt and skills.
 - **Memory you can search.** Every page you visit is stored once in a local database. Find it again by address, by the words it contained or by what it was about, and turn any page into a bookmark by adding a note.
 - **Macros.** Ask the assistant to store a sequence of browser actions as a `/name` command, then replay it instantly, without calling the model.
 - **Tabs as a tree.** Each tab's navigation is shown as a branching tree of breadcrumbs, so you can go back to any earlier page and follow a different link without losing the path you were on.
 
-**Privacy and security:** browsing history and settings stay on your device. Web pages run in sandboxed views with no access to the browser's internals, and the assistant sends page content to a model only when you ask it to; with a local Ollama model nothing leaves your computer.
+**Privacy and security:** browsing history and settings stay on your device. Web pages run in sandboxed views with no access to the browser's internals, and the assistant sends page content to Claude (through your Claude Code CLI) only when you turn page access on. Antimony stores no API key.
 
 **Status:** early-stage and under active development; see [docs/features.md](docs/features.md) for what exists today.
 

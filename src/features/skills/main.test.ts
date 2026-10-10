@@ -94,7 +94,7 @@ describe('skills main', () => {
     const { macros: port } = setup()
     for (const bad of [
       { ...macro, name: 'Dash!' },
-      { ...macro, name: 'key' },
+      { ...macro, name: 'welcome' },
       { ...macro, name: 'reload' },
       { ...macro, steps: [] },
       { ...macro, steps: [{ tool: 'read_page', input: {} }] },

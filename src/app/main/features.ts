@@ -6,6 +6,7 @@ import { register as navigation } from '../../features/navigation/main'
 import { register as prompt } from '../../features/prompt/main'
 import { register as skills } from '../../features/skills/main'
 import { register as stacks } from '../../features/stacks/main'
+import { register as welcome } from '../../features/welcome/main'
 import type { ChromeUiIpc } from './ipc'
 
 /** What a feature's main-process side gets at startup. */
@@ -35,4 +36,5 @@ export const features: RegisterFeature[] = [
   prompt,
   skills,
   stacks,
+  welcome,
 ]

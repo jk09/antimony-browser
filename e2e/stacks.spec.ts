@@ -1,5 +1,7 @@
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
 import { newProfile } from './profile'
 
@@ -28,7 +30,7 @@ test.beforeAll(async () => {
 
 test.afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())))
 
-const env = { ...process.env, ANTHROPIC_API_KEY: '', ANTHROPIC_BASE_URL: 'http://127.0.0.1:9' }
+const env = { ...process.env, CLAUDE_CLI_PATH: join(tmpdir(), 'no-such-claude-cli') }
 
 /** The URL of the page view in the window (the active tab). */
 const shownUrl = (app: ElectronApplication) =>

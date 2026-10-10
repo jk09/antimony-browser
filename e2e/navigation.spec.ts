@@ -1,5 +1,7 @@
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   _electron as electron,
   expect,
@@ -40,8 +42,8 @@ const pageUrls = (app: ElectronApplication) =>
       .map((contents) => contents.getURL())
   })
 
-// No API key and no real API: these tests never reach a model.
-const env = { ...process.env, ANTHROPIC_API_KEY: '', ANTHROPIC_BASE_URL: 'http://127.0.0.1:9' }
+// No Claude Code CLI: these tests never reach a model.
+const env = { ...process.env, CLAUDE_CLI_PATH: join(tmpdir(), 'no-such-claude-cli') }
 
 // A fresh profile per launch, so prompt history and settings don't leak between tests.
 const launch = () =>
@@ -95,7 +97,7 @@ test('File → Prompt… (Ctrl+L) loads a typed URL in the page view', async () 
   }
 })
 
-test('text that is not a web address goes to the assistant, which needs a key', async () => {
+test('text that is not a web address goes to the assistant, which needs the Claude Code CLI', async () => {
   const app = await launch()
   try {
     const window = await app.firstWindow()
@@ -103,7 +105,9 @@ test('text that is not a web address goes to the assistant, which needs a key', 
     await location.fill('file:///etc/passwd')
     await location.press('Enter')
 
-    await expect(window.getByRole('alert')).toContainText('/key')
+    await expect(window.getByRole('region', { name: 'Conversation' })).toContainText(
+      'Claude Code CLI not found',
+    )
     await expect(location).toBeVisible()
     // No tab is created until a page is loaded.
     expect(await pageUrls(app)).toEqual([])
