@@ -2,6 +2,7 @@ import { contextBridge } from 'electron'
 import { agentBridge } from '../../features/agent/preload'
 import { appearanceBridge } from '../../features/appearance/preload'
 import { historyBridge } from '../../features/history/preload'
+import { importBridge } from '../../features/import/preload'
 import { menuBridge } from '../../features/menu/preload'
 import { navigationBridge } from '../../features/navigation/preload'
 import { promptBridge } from '../../features/prompt/preload'
@@ -16,6 +17,7 @@ const api: AntimonyApi = {
   agent: agentBridge,
   appearance: appearanceBridge,
   history: historyBridge,
+  import: importBridge,
   menu: menuBridge,
   navigation: navigationBridge,
   prompt: promptBridge,

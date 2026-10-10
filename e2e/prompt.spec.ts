@@ -1,6 +1,8 @@
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { resolve } from 'node:path'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import {
   _electron as electron,
   expect,
@@ -494,6 +496,10 @@ test('a fresh profile opens the welcome page, which tests the CLI and picks the 
     // The Theme step can be skipped; the system look stays.
     await expect(welcome).toContainText('What should the browser look like for you?')
     await welcome.getByRole('button', { name: 'Next' }).click()
+    // The Import step can be skipped too; nothing is imported without choosing a file.
+    await expect(welcome).toContainText('Bring your history from Edge')
+    await expect(welcome.getByRole('button', { name: 'Choose file…' })).toBeVisible()
+    await welcome.getByRole('button', { name: 'Next' }).click()
     await expect(welcome).toContainText('Using the prompt')
     await welcome.getByRole('button', { name: 'Next' }).click()
     await expect(welcome).toContainText('store it as /wiki')
@@ -648,4 +654,35 @@ test('with page access, the assistant reads the page and acts on it only after a
   } finally {
     await app.close()
   }
+})
+
+test('/import-edge imports an Edge export without the model, one stack per session', async () => {
+  const profile = newProfile()
+  const csv = join(mkdtempSync(join(tmpdir(), 'antimony-edge-')), 'Edge browsing data.csv')
+  writeFileSync(
+    csv,
+    [
+      'url,title,visit time',
+      'https://sourdough.example/start,Sourdough starter,2026-09-01T08:00:00Z',
+      'https://flour.example/types,Flour types,2026-09-01T08:10:00Z',
+      'https://other.example/lone,A lone page,2026-09-02T09:00:00Z',
+    ].join('\n'),
+  )
+  const app = await launch({}, profile)
+  try {
+    const window = await app.firstWindow()
+    const prompt = await openPrompt(app, window)
+    await prompt.fill(`/import-edge ${csv}`)
+    await prompt.press('Enter')
+    await expect(window.getByText(`Import browsing data from ${csv}`)).toBeVisible()
+    await expect(window.getByRole('alert')).toHaveCount(0)
+    expect(requests).toHaveLength(0)
+  } finally {
+    await app.close()
+  }
+  const saved = JSON.parse(readFileSync(join(profile, 'stacks.json'), 'utf8')) as {
+    stacks: { name: string; imported?: number }[]
+  }
+  expect(saved.stacks.filter((stack) => stack.imported)).toHaveLength(1)
+  expect(saved.stacks.find((stack) => stack.imported)!.name).toBe('sourdough-starter')
 })

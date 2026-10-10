@@ -6,6 +6,7 @@ const allSteps = [
   { id: 'test', title: 'Test' },
   { id: 'model', title: 'Model' },
   { id: 'theme', title: 'Theme' },
+  { id: 'import', title: 'Import' },
   { id: 'prompt', title: 'Prompt' },
   { id: 'skills', title: 'Skills' },
 ] as const
@@ -134,9 +135,15 @@ function CliTest({ check, running }: { check: CliCheck | null; running: boolean 
  * CLI, tests it, picks the model strength and explains the prompt and skills. Opens on the first
  * launch and with /welcome or File → Welcome; closing or finishing it marks it done.
  */
-export function WelcomeView({ themeStep }: { themeStep?: ReactNode } = {}) {
-  // The Theme step's content comes from App.tsx (appearance's picker); without it there's no step.
-  const steps = allSteps.filter((s) => s.id !== 'theme' || themeStep)
+export function WelcomeView({
+  themeStep,
+  importStep,
+}: { themeStep?: ReactNode; importStep?: ReactNode } = {}) {
+  // The Theme and Import steps' content comes from App.tsx (appearance's picker, import's
+  // chooser); without it there's no step.
+  const steps = allSteps.filter(
+    (s) => (s.id !== 'theme' || themeStep) && (s.id !== 'import' || importStep),
+  )
   const api = window.antimony
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<StepId>('cli')
@@ -358,6 +365,20 @@ export function WelcomeView({ themeStep }: { themeStep?: ReactNode } = {}) {
               <code>/settings theme</code> changes it later.
             </p>
             {themeStep}
+            {nav()}
+          </section>
+        )}
+        {step === 'import' && importStep && (
+          <section aria-labelledby="welcome-import">
+            <h3 id="welcome-import">Bring your history from Edge</h3>
+            <p>
+              In Edge open <em>Settings → Profiles → Export browsing data</em> and save the file,
+              then choose it here. Its pages are added to your history, and pages you visited
+              together (less than 30 minutes apart) become stacks. Nothing leaves this computer, and
+              importing the same file again adds nothing. You can skip this and do it later with{' '}
+              <code>/import-edge</code> and the path of the file.
+            </p>
+            {importStep}
             {nav()}
           </section>
         )}

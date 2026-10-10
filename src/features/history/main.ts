@@ -249,6 +249,34 @@ export function onHistoryCleared(listener: (all: boolean) => void): () => void {
   return () => clearedListeners.delete(listener)
 }
 
+/** Visits read from another browser's export: raw addresses, epoch milliseconds. */
+export interface ImportedVisit {
+  url: string
+  title: string
+  at: number
+}
+
+export interface ImportedVisits {
+  visitsImported: number
+  pagesCreated: number
+  pagesUpdated: number
+  /** Visits already in history (same page and time). */
+  duplicates: number
+  /** Addresses history doesn't store (not http(s), too long). */
+  invalid: number
+}
+
+let visitImporter: ((visits: ImportedVisit[]) => ImportedVisits) | null = null
+
+/**
+ * Adds visits to history (all or nothing; once per canonical URL and time); for the import
+ * feature. Throws before history is registered.
+ */
+export function importVisits(visits: ImportedVisit[]): ImportedVisits {
+  if (!visitImporter) throw new Error('Browsing history is not available.')
+  return visitImporter(visits)
+}
+
 export function register({ window, ipc, fileMenu }: MainContext): void {
   const userData = app.getPath('userData')
   const db = openDb(join(userData, 'history.sqlite'))
@@ -423,6 +451,7 @@ export function register({ window, ipc, fileMenu }: MainContext): void {
     recorder.tick()
   }, TICK_MS)
   app.on('will-quit', () => {
+    visitImporter = null
     clearInterval(ticker)
     recorder.dispose()
     settings.flush()
@@ -430,6 +459,17 @@ export function register({ window, ipc, fileMenu }: MainContext): void {
   })
 
   const changed = () => ipc.send(channels.changed, null)
+
+  visitImporter = (visits) => {
+    const canonical: ImportedVisit[] = []
+    for (const visit of visits) {
+      const url = canonicalUrl(visit.url)
+      if (url !== null) canonical.push({ ...visit, url })
+    }
+    const added = db.importVisits(canonical)
+    if (added.visitsImported > 0) changed()
+    return { ...added, invalid: visits.length - canonical.length }
+  }
 
   const textSearch = (query: string, bookmarked: boolean) =>
     db.search(ftsQuery(query), { bookmarked, limit: SEARCH_LIMIT })

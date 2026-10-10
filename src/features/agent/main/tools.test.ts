@@ -4,6 +4,7 @@ import {
   describeCall,
   executeTool,
   formatState,
+  toolNamed,
   toolsFor,
   ToolError,
   untrusted,
@@ -13,8 +14,44 @@ import {
   type HistoryRecall,
 } from './tools'
 
+describe('import_browsing_data', () => {
+  it('is replayable, needs no page and reports the importer result or its error', async () => {
+    expect(toolNamed('import_browsing_data')).toMatchObject({ kind: 'import', replayable: true })
+    expect(validateInput('import_browsing_data', { path: '/a.csv' })).toEqual({ path: '/a.csv' })
+    expect(() => validateInput('import_browsing_data', {})).toThrow('missing argument path')
+    expect(describeCall('import_browsing_data', { path: '/a.csv' })).toBe(
+      'Import browsing data from /a.csv',
+    )
+    await expect(
+      executeTool(
+        null,
+        'import_browsing_data',
+        { path: '/a.csv' },
+        { importer: { run: async () => 'ok' } },
+      ),
+    ).resolves.toEqual({ text: 'ok' })
+    await expect(
+      executeTool(
+        null,
+        'import_browsing_data',
+        { path: '/a.csv' },
+        {
+          importer: {
+            run: async () => {
+              throw new Error('no such file')
+            },
+          },
+        },
+      ),
+    ).rejects.toThrow('no such file')
+    await expect(executeTool(null, 'import_browsing_data', { path: '/a.csv' })).rejects.toThrow(
+      'not available',
+    )
+  })
+})
+
 describe('toolsFor', () => {
-  it('offers only navigation, history search and macro tools without page access', () => {
+  it('offers only navigation, history search, macro and import tools without page access', () => {
     const names = toolsFor({ pageAccess: false, historyAccess: true }).map((tool) => tool.name)
     expect(names).toEqual([
       'navigate',
@@ -29,6 +66,7 @@ describe('toolsFor', () => {
       'save_macro',
       'list_macros',
       'delete_macro',
+      'import_browsing_data',
     ])
   })
 

@@ -104,7 +104,7 @@ vi.mock('../history/main', () => ({
   },
 }))
 
-const { register } = await import('./main')
+const { register, importStacks } = await import('./main')
 const { channels } = await import('./ipc')
 
 /**
@@ -722,5 +722,65 @@ describe('stacks main', () => {
     expect(state().stacks).toHaveLength(1)
     expect(rowsOf()).toEqual(['Two'])
     expect(tabs.calls).toContain('close 2')
+  })
+
+  describe('importStacks', () => {
+    const session = (startedAt: number, titles: string[]) => ({
+      startedAt,
+      endedAt: startedAt + titles.length * 1000,
+      pages: titles.map((title, n) => ({
+        url: `https://${title.toLowerCase()}.example/${startedAt}`,
+        title,
+        at: startedAt + n * 1000,
+      })),
+    })
+
+    it('adds unopened stacks behind the user’s own, never current, and persists them', () => {
+      const dir = mkdtempSync(join(tmpdir(), 'antimony-stacks-'))
+      const { state, visit } = setup(dir)
+      tabs.open.add(1)
+      tabs.activeId = 1
+      visit(1, 'Mine')
+      const before = tabs.calls.length
+
+      expect(
+        importStacks([
+          session(1000, ['Alpha', 'Beta']),
+          session(9000, ['Gamma', 'Delta']),
+          session(50, ['Solo']),
+        ]),
+      ).toEqual({
+        created: 2,
+        skipped: 1,
+      })
+      expect(tabs.calls).toHaveLength(before)
+      const names = state().stacks.map((stack) => stack.name)
+      expect(names.slice(1)).toEqual(['gamma', 'alpha'])
+      expect(state().current!.id).toBe(state().stacks[0]!.id)
+      expect(state().stacks.map((stack) => stack.pages)).toEqual([1, 2, 2])
+
+      quitListeners.forEach((listener) => listener())
+      const saved = JSON.parse(readFileSync(join(dir, 'stacks.json'), 'utf8'))
+      expect(saved.stacks.filter((stack: { imported?: number }) => stack.imported)).toHaveLength(2)
+    })
+
+    it('skips sessions it already imported and opens an imported stack at its last page', () => {
+      const { state, call } = setup()
+      importStacks([session(1000, ['Alpha', 'Beta'])])
+      expect(importStacks([session(1000, ['Alpha', 'Beta'])])).toEqual({ created: 0, skipped: 1 })
+      const id = state().stacks.find((stack) => stack.name === 'alpha')!.id
+      call(channels.switch, id)
+      expect(tabs.calls).toContain('create 1 https://beta.example/1000 active')
+      expect(state().current!.rows.map((row) => row.title)).toEqual(['Alpha', 'Beta'])
+    })
+
+    it('stops at 50 stacks without closing the user’s own', () => {
+      const { state } = setup()
+      const many = Array.from({ length: 60 }, (_, n) => session(1000 * (n + 1), ['One', 'Two']))
+      expect(importStacks(many)).toEqual({ created: 50, skipped: 10 })
+      expect(state().stacks).toHaveLength(50)
+      // The newest sessions are the ones that fit.
+      expect(state().stacks[0]!.pages).toBe(2)
+    })
   })
 })

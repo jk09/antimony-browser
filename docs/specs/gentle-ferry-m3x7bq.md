@@ -6,12 +6,12 @@
 | --- | --- |
 | **Feature name** | Import the file Edge's "Export browsing data" creates into Antimony's history, grouping related pages into stacks – from the welcome page and from a deterministic `/import-edge` skill |
 | **Spec ID** | gentle-ferry-m3x7bq |
-| **Status** | Draft <!-- one of: Draft, Active, Done --> |
+| **Status** | Active <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-10 09:00 +00:00 |
-| **Last updated** | 2026-10-10 09:00 +00:00 |
+| **Last updated** | 2026-10-10 11:00 +00:00 |
 | **Affected features** | import, agent, history, stacks, skills, welcome |
 | **Target release** | 0.1.0 |
 | **Related links** | specs first-light-w5k8rd (welcome), spoken-macro-m4q7zt (skills), ember-ledger-h3x8vq (history); ADRs 0006, 0008, 0013 |
@@ -90,16 +90,16 @@
 
 ## 11. Acceptance Criteria
 
-- [ ] The CSV parser handles quoting, BOM, CRLF, semicolons, column aliases and all listed time formats, and rejects files without URL/time columns – `import/shared/edge-csv.test.ts`.
-- [ ] Non-http(s) and invalid rows are skipped and counted – `edge-csv.test.ts`.
-- [ ] Sessions split at a gap over 30 minutes; repeat visits reuse a node; single-page sessions make no stack – `import/shared/sessions.test.ts`.
-- [ ] History: pages created/updated by canonical URL, min/max times, visit counts, no duplicate on re-import, existing data kept – `history/main.test.ts`.
-- [ ] Stacks: imported stacks are added unopened, named by the usual rule, behind existing ones, never current, limits respected – `stacks/main.test.ts`.
-- [ ] `import_browsing_data` validates its path (absolute / `~/`, exists, `.csv`, size) and is replayable; the model-called form asks approval, the user-typed skill doesn't – `agent/main/tools.test.ts`, `agent/main/agent.test.ts`.
-- [ ] Built-in skill `/import-edge` runs the tool with the typed path (spaces kept) and is listed in `/config` – `skills/main.test.ts`, `skills/ui/ConfigView.test.tsx`.
-- [ ] The welcome Import step chooses a file, shows progress, the result or the error, and can be skipped – `welcome/ui/WelcomeView.test.tsx`, `import/ui/ImportStep.test.tsx`.
-- [ ] An import is all-or-nothing and one at a time – `import/main.test.ts`.
-- [ ] `npm run check` passes.
+- [x] The CSV parser handles quoting, BOM, CRLF, semicolons, column aliases and all listed time formats, and rejects files without URL/time columns – `import/shared/edge-csv.test.ts`.
+- [x] Non-http(s) and invalid rows are skipped and counted – `edge-csv.test.ts`.
+- [x] Sessions split at a gap over 30 minutes; repeat visits reuse a node; single-page sessions make no stack – `import/shared/sessions.test.ts`.
+- [x] History: pages created/updated by canonical URL, min/max times, visit counts, no duplicate on re-import, existing data kept – `history/main.test.ts`.
+- [x] Stacks: imported stacks are added unopened, named by the usual rule, behind existing ones, never current, limits respected – `stacks/main.test.ts`.
+- [x] `import_browsing_data` validates its path (absolute / `~/`, exists, `.csv`, size) and is replayable; the model-called form asks approval, the user-typed skill doesn't – `agent/main/tools.test.ts`, `agent/main/agent.test.ts`.
+- [x] Built-in skill `/import-edge` runs the tool with the typed path (spaces kept) and is listed in `/config` – `skills/main.test.ts`, `skills/ui/ConfigView.test.tsx`.
+- [x] The welcome Import step chooses a file, shows progress, the result or the error, and can be skipped – `welcome/ui/WelcomeView.test.tsx`, `import/ui/ImportStep.test.tsx`.
+- [x] An import is all-or-nothing and one at a time – `import/main.test.ts`.
+- [x] `npm run check` passes.
 
 ## 12. Testing / Verification
 
@@ -114,4 +114,9 @@
 
 ## 14. Changes during implementation
 
-None yet.
+- The model-called import asks for approval in the conversation (the usual approval row naming the file) instead of a separate native dialog; "Allow for this run" doesn't cover it.
+- Parsing and the history write run in one go (a single transaction) rather than in 2 000-row chunks: chunking would have to span an open transaction. The visit-count column is not read (each row is one visit).
+- Stacks: imported sessions never evict the user's own stacks – they fill only the room left under 50 stacks (newest sessions first); `Stack.imported` (session start) keeps a re-import from duplicating a stack, so a stack the user closed returns on the next import of the same file.
+- The Edge column names are unverified; the parser is header-driven (see section 10) and should be re-checked against a real export.
+- ADR 0017 is Proposed, awaiting acceptance.
+- `npm run test:e2e` not run in the cloud session (no Electron binary); CI runs it.

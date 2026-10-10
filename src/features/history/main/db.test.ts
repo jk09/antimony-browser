@@ -36,6 +36,58 @@ beforeEach(() => {
 })
 afterEach(() => db.close())
 
+describe('importVisits', () => {
+  const row = (url: string, at: number, title = '') => ({ url, title, at })
+
+  it('creates pages with their first and last visit, counts and the import transition', () => {
+    const result = db.importVisits([
+      row('https://a.example/', NOW - 2 * DAY, 'A'),
+      row('https://a.example/', NOW - DAY),
+      row('https://b.example/', NOW - DAY, 'B'),
+    ])
+    expect(result).toEqual({ visitsImported: 3, pagesCreated: 2, pagesUpdated: 0, duplicates: 0 })
+    const [a] = db.pages([1], false)
+    expect(a).toMatchObject({ url: 'https://a.example/', title: 'A', visitCount: 2, dwellMs: 0 })
+    expect(a!.lastVisitAt).toBe(NOW - DAY)
+  })
+
+  it('is idempotent: importing the same visits again changes nothing', () => {
+    const rows = [row('https://a.example/', NOW - DAY, 'A'), row('https://b.example/', NOW, 'B')]
+    db.importVisits(rows)
+    expect(db.importVisits(rows)).toEqual({
+      visitsImported: 0,
+      pagesCreated: 0,
+      pagesUpdated: 0,
+      duplicates: 2,
+    })
+    expect(db.pages([1, 2], false).map((page) => page.visitCount)).toEqual([1, 1])
+  })
+
+  it('keeps what a page already has: older imports widen its range, titles fill only blanks', () => {
+    visit('https://a.example/', NOW)
+    db.setTitle(1, 'Mine')
+    const result = db.importVisits([row('https://a.example/', NOW - 3 * DAY, 'Edge title')])
+    expect(result).toMatchObject({ visitsImported: 1, pagesCreated: 0, pagesUpdated: 1 })
+    expect(db.pages([1], false)[0]).toMatchObject({
+      title: 'Mine',
+      visitCount: 2,
+      lastVisitAt: NOW,
+    })
+    visit('https://blank.example/', NOW)
+    db.importVisits([row('https://blank.example/', NOW - DAY, 'From Edge')])
+    expect(db.pages([2], false)[0]!.title).toBe('From Edge')
+  })
+
+  it('finds imported pages by their title and rolls back on failure', () => {
+    db.importVisits([row('https://a.example/', NOW, 'Sourdough starter guide')])
+    expect(db.search(ftsQuery('sourdough'), { bookmarked: false, limit: 5 })).toHaveLength(1)
+    expect(() =>
+      db.importVisits([row('https://z.example/', NOW), row('https://y.example/', Number.NaN)]),
+    ).toThrow()
+    expect(db.suggest('z.example', 5, NOW)).toEqual([])
+  })
+})
+
 function visit(url: string, at = NOW, transition: 'link' | 'typed' = 'link') {
   return db.startVisit({ url, title: '', transition, at, referrerPageId: null })
 }

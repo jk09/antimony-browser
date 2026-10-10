@@ -135,15 +135,23 @@ export interface HistoryPort {
   recall(request: HistoryRecallRequest, signal?: AbortSignal): Promise<HistoryRecall>
 }
 
+/** Imports another browser's export, provided by the import feature (provideImporter in main.ts). */
+export interface ImportPort {
+  /** Imports the file at `path`; resolves with a one-line result, rejects with a readable error. */
+  run(path: string): Promise<string>
+}
+
 /**
  * navigation: like the address bar, never needs approval.
  * history: reads the browsing history; no page access or approval, but like reading a page it
  * makes a later cross-site navigation in the run ask first.
  * macro: saves, lists or deletes macros; no page access, approval only after page or history
  * content was read in the run.
+ * import: reads a file on the user's computer into history and stacks; no page access, needs no
+ * browser; the user approves it when the model calls it (a typed skill is the user's own request).
  * read: needs page access. action: needs page access and the user's approval.
  */
-export type ToolKind = 'navigation' | 'history' | 'macro' | 'read' | 'action'
+export type ToolKind = 'navigation' | 'history' | 'macro' | 'import' | 'read' | 'action'
 
 /** Read and action tools work on the page and need page access. */
 export function needsPageAccess(tool: ToolDefinition): boolean {
@@ -315,6 +323,17 @@ export const toolDefinitions: ToolDefinition[] = [
     input_schema: schema({ name: macroName }, ['name']),
   },
   {
+    name: 'import_browsing_data',
+    kind: 'import',
+    replayable: true,
+    description:
+      'Import the file Edge\'s "Export browsing data" created (a .csv) into the user\'s history and stacks: pages visited close together become one stack. Only call it when the user asked to import a file in this request, with the path they gave. The user is asked to approve it.',
+    input_schema: schema(
+      { path: { type: 'string', description: 'Path of the exported .csv file on this computer.' } },
+      ['path'],
+    ),
+  },
+  {
     name: 'read_page',
     kind: 'read',
     replayable: false,
@@ -469,6 +488,8 @@ export function describeCall(name: string, input: Input, element?: ElementInfo):
       const query = input['query'] ? `"${String(input['query'])}"` : ''
       return `Recall history for ${[query, image].filter(Boolean).join(' by ')}`
     }
+    case 'import_browsing_data':
+      return `Import browsing data from ${String(input['path'])}`
     case 'read_page':
       return 'Read the page'
     case 'find_in_page':
@@ -710,11 +731,21 @@ function runMacroTool(macros: MacroPort | null, name: string, input: Input): Too
   }
 }
 
+async function importBrowsingData(importer: ImportPort | null, input: Input): Promise<ToolOutput> {
+  if (!importer) throw new ToolError('Importing is not available.')
+  try {
+    return { text: await importer.run(String(input['path'])) }
+  } catch (error) {
+    throw new ToolError(error instanceof Error ? error.message : String(error))
+  }
+}
+
 /** What the tools reach besides the page: history's search, the macro store, new stacks. */
 export interface ToolPorts {
   history?: HistoryPort | null
   macros?: MacroPort | null
   stacks?: StackOpener | null
+  importer?: ImportPort | null
   /** Images attached to the current request (recall_history). */
   images?: AttachedImage[]
   /** Aborted when the run stops (tools that wait on a model request). */
@@ -733,6 +764,7 @@ export async function executeTool(
 ): Promise<ToolOutput> {
   if (name === 'search_history') return searchHistory(ports.history ?? null, input)
   if (name === 'recall_history') return recallHistory(ports, input)
+  if (name === 'import_browsing_data') return importBrowsingData(ports.importer ?? null, input)
   if (toolNamed(name)?.kind === 'macro') return runMacroTool(ports.macros ?? null, name, input)
   if (!browser) throw new ToolError('The browser page is not available.')
   if (name === 'new_stack') {

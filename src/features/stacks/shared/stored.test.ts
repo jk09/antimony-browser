@@ -35,6 +35,19 @@ describe('stored stacks', () => {
     ).toThrow(TypeError)
   })
 
+  it('reads the import time of imported stacks and rejects a wrong one', () => {
+    expect(
+      parseStoredStacks({ current: null, stacks: [stack({ imported: 1700000000000 })] }).stacks[0]!
+        .imported,
+    ).toBe(1700000000000)
+    expect(parseStoredStacks({ current: null, stacks: [stack()] }).stacks[0]).not.toHaveProperty(
+      'imported',
+    )
+    expect(() =>
+      parseStoredStacks({ current: null, stacks: [stack({ imported: 'soon' })] }),
+    ).toThrow(TypeError)
+  })
+
   it('keeps the home page of version 2 files, null included', () => {
     const home = (value: unknown) =>
       parseStoredStacks({ version: 2, current: null, stacks: [], home: value }).home

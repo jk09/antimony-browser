@@ -7,7 +7,8 @@ import { bareInput, bareUrl, domainOf, hostOf } from '../shared/canonical-url'
 import type { PageMeta } from '../shared/page-meta'
 import type { Follow, MapRow } from './map'
 
-export type Transition = 'typed' | 'link' | 'back_forward' | 'assistant' | 'reload' | 'in_page'
+export type Transition =
+  'typed' | 'link' | 'back_forward' | 'assistant' | 'reload' | 'in_page' | 'import'
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 const SCHEMA_VERSION = 1
@@ -239,6 +240,75 @@ export class HistoryDb {
         )
         .run(pageId, visit.at, visit.transition, referrer)
       return { pageId, visitId: Number(inserted.lastInsertRowid) }
+    })
+  }
+
+  /**
+   * Adds visits read from another browser's export, in one transaction. Pages are created by
+   * canonical URL (existing data stays; titles only fill empty ones); a visit already there (same
+   * page and time) is not added again, so importing a file twice changes nothing.
+   */
+  importVisits(visits: { url: string; title: string; at: number }[]): {
+    visitsImported: number
+    pagesCreated: number
+    pagesUpdated: number
+    duplicates: number
+  } {
+    return this.transaction(() => {
+      const find = this.db.prepare('SELECT id FROM pages WHERE url = ?')
+      const insertPage = this.db.prepare(
+        `INSERT INTO pages (url, bare, host, domain, title, first_visit_at, last_visit_at,
+           visit_count, typed_count)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0) RETURNING id`,
+      )
+      const seen = this.db.prepare('SELECT 1 FROM visits WHERE page_id = ? AND started_at = ?')
+      const insertVisit = this.db.prepare(
+        "INSERT INTO visits (page_id, started_at, transition) VALUES (?, ?, 'import')",
+      )
+      const touch = this.db.prepare(
+        `UPDATE pages SET
+           first_visit_at = min(first_visit_at, ?), last_visit_at = max(last_visit_at, ?),
+           visit_count = visit_count + 1,
+           title = CASE WHEN title = '' THEN ? ELSE title END
+         WHERE id = ?`,
+      )
+      const created = new Set<number>()
+      const updated = new Set<number>()
+      let visitsImported = 0
+      let duplicates = 0
+      for (const visit of visits) {
+        let id: number
+        const existing = find.get(visit.url) as Row | undefined
+        if (existing) id = Number(existing['id'])
+        else {
+          const host = hostOf(visit.url)
+          const page = insertPage.get(
+            visit.url,
+            bareUrl(visit.url),
+            host,
+            domainOf(host),
+            visit.title,
+            visit.at,
+            visit.at,
+          ) as Row
+          id = Number(page['id'])
+          created.add(id)
+        }
+        if (seen.get(id, visit.at)) {
+          duplicates++
+          continue
+        }
+        insertVisit.run(id, visit.at)
+        touch.run(visit.at, visit.at, visit.title, id)
+        visitsImported++
+        if (!created.has(id)) updated.add(id)
+      }
+      return {
+        visitsImported,
+        pagesCreated: created.size,
+        pagesUpdated: updated.size,
+        duplicates,
+      }
     })
   }
 

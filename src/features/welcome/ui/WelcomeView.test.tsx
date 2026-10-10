@@ -144,4 +144,36 @@ describe('WelcomeView', () => {
     click('Next')
     expect(within(page()).getByText('Using the prompt')).toBeTruthy()
   })
+
+  it('has an Import step after Theme when App provides one, and it can be skipped', async () => {
+    fakeApi({ welcomeDone: false })
+    render(<WelcomeView themeStep={<p>Theme picker here</p>} importStep={<p>Import here</p>} />)
+    await screen.findByRole('region', { name: 'Welcome' })
+    expect(
+      within(screen.getByRole('list', { name: 'Steps' }))
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual([
+      '1 · Claude Code CLI',
+      '2 · Test',
+      '3 · Model',
+      '4 · Theme',
+      '5 · Import',
+      '6 · Prompt',
+      '7 · Skills',
+    ])
+    click('5 · Import')
+    expect(within(page()).getByText('Bring your history from Edge')).toBeTruthy()
+    expect(within(page()).getByText('Import here')).toBeTruthy()
+    expect(page().textContent).toContain('/import-edge')
+    click('Next')
+    expect(within(page()).getByText('Using the prompt')).toBeTruthy()
+  })
+
+  it('has no Import step without one', async () => {
+    fakeApi({ welcomeDone: false })
+    render(<WelcomeView />)
+    await screen.findByRole('region', { name: 'Welcome' })
+    expect(screen.queryByRole('button', { name: /Import/ })).toBeNull()
+  })
 })

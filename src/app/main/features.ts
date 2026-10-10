@@ -2,6 +2,7 @@ import type { BrowserWindow, MenuItemConstructorOptions, Session } from 'electro
 import { register as agent } from '../../features/agent/main'
 import { register as appearance } from '../../features/appearance/main'
 import { register as history } from '../../features/history/main'
+import { register as importFeature } from '../../features/import/main'
 import { register as menu } from '../../features/menu/main'
 import { register as navigation } from '../../features/navigation/main'
 import { register as prompt } from '../../features/prompt/main'
@@ -33,6 +34,7 @@ export const features: RegisterFeature[] = [
   agent,
   appearance,
   history,
+  importFeature,
   menu,
   navigation,
   prompt,
