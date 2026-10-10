@@ -195,7 +195,7 @@ test('Ctrl+Tab switches to the previous stack on release, and back again', async
     const prompt = window.getByRole('textbox', { name: 'Prompt' })
     // The header's stack button only: while the Ctrl+Tab list is still open (it closes a moment after
     // the tab has switched) its rows are buttons named `@…` too, and a broader locator matches them.
-    const switcher = window.getByTitle('Switch stack (Ctrl+Tab)')
+    const switcher = window.getByTitle(/^All stacks \(/)
 
     // Two stacks: A → B → C, and the page C opens in a new tab.
     await prompt.fill(`${origin}/a`)

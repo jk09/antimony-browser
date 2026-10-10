@@ -10,7 +10,7 @@ import {
 } from './claude-cli'
 import type { ApiTool, ContentBlock } from './content'
 import { fakeBrowser } from './fake-browser'
-import type { HistoryPort, ImportPort, MacroInfo, MacroPort, StackOpener } from './tools'
+import type { HistoryPort, ImportPort, MacroInfo, MacroPort, StackInfo, StackPort } from './tools'
 
 /** What the scripted CLI's model saw at one step of a turn. */
 interface ModelRequest {
@@ -82,7 +82,7 @@ function setup(
     history?: HistoryPort | null
     historyAccess?: boolean
     macros?: MacroPort | null
-    stacks?: StackOpener | null
+    stacks?: StackPort | null
     importer?: ImportPort | null
   } = {},
 ) {
@@ -594,7 +594,7 @@ describe('macros', () => {
   })
 
   it('opens a new stack, optionally at a URL', async () => {
-    const stacks = { open: vi.fn() }
+    const stacks = { open: vi.fn(), list: vi.fn(() => []) }
     const { agent, browser } = setup(
       [
         async () => response([toolUse('t1', 'new_stack', {})], 'tool_use'),
@@ -611,8 +611,53 @@ describe('macros', () => {
     )
   })
 
+  it('states the number of open stacks and lists them with list_stacks', async () => {
+    const listed: StackInfo[] = [
+      {
+        name: 'docs',
+        rootTitle: 'Docs',
+        current: true,
+        imported: false,
+        pages: [
+          { title: 'Docs', url: 'https://docs.example/', depth: 0, ref: 'docs', active: true },
+        ],
+      },
+      { name: 'news', rootTitle: 'News', current: false, imported: true, pages: [] },
+    ]
+    const stacks = { open: vi.fn(), list: vi.fn(() => listed) }
+    const { agent, requests } = setup(
+      [
+        async () => response([toolUse('t1', 'list_stacks', {})], 'tool_use'),
+        async () =>
+          response([toolUse('t2', 'navigate', { url: 'https://evil.example/' })], 'tool_use'),
+        async () => response([{ type: 'text', text: 'ok' }]),
+      ],
+      { stacks },
+    )
+    const running = agent.run(input('how many stacks do I have?'))
+    await waitFor(() => agent.state().status === 'awaiting-approval')
+    expect(JSON.stringify(requests[0]!.messages[0])).toContain('Open stacks: 2 (current: @docs)')
+    expect(requests[0]!.tools.map((tool) => tool.name)).toContain('list_stacks')
+    expect(JSON.stringify(requests[1]!.messages.at(-1))).toContain('2 open stacks')
+    // Stack titles are page content: leaving the site afterwards asks first.
+    expect(agent.state().approval!.description).toBe('Open https://evil.example/')
+    agent.approve('deny')
+    await running
+  })
+
+  it('offers no list_stacks while history access is off', async () => {
+    const stacks = { open: vi.fn(), list: vi.fn(() => []) }
+    const { agent, requests } = setup([async () => response([{ type: 'text', text: 'ok' }])], {
+      stacks,
+      historyAccess: false,
+    })
+    await agent.run(input('list my stacks'))
+    expect(requests[0]!.tools.map((tool) => tool.name)).not.toContain('list_stacks')
+    expect(JSON.stringify(requests[0]!.messages[0])).toContain('Open stacks: 0')
+  })
+
   it('replays new_stack steps', async () => {
-    const stacks = { open: vi.fn() }
+    const stacks = { open: vi.fn(), list: vi.fn(() => []) }
     const { agent } = setup([], { stacks })
     expect(await agent.replay('/ns', [{ tool: 'new_stack', input: {} }])).toEqual({ ok: true })
     expect(stacks.open).toHaveBeenCalled()

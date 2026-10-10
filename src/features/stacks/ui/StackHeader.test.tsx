@@ -167,15 +167,17 @@ describe('StackHeader', () => {
     }
     const { api, emit } = await renderHeader(three)
     const switcher = screen.getByRole('button', { name: /@page-1/ })
-    expect(switcher.title).toBe('Switch stack (Ctrl+Tab)')
+    expect(switcher.title).toBe('All stacks (3): click to switch or search (Ctrl+Tab)')
+    expect(switcher.textContent).toBe('@page-13 stacks▾')
     const highlighted = () =>
       within(screen.getByRole('dialog', { name: 'Stacks' }))
         .getAllByRole('listitem')
         .filter((item) => item.getAttribute('aria-selected') === 'true')
         .map((item) => item.textContent)
 
-    // One Ctrl+Tab: the previous stack.
+    // One Ctrl+Tab: the previous stack; focus stays where it is.
     act(() => emit.stackCommand('cycle-next'))
+    expect(document.activeElement).toBe(document.body)
     expect(highlighted()).toEqual([expect.stringContaining('@docs')])
     act(() => emit.stackCommand('cycle-end'))
     expect(api.stacks.switch).toHaveBeenLastCalledWith('s2')
@@ -207,6 +209,102 @@ describe('StackHeader', () => {
     expect(api.stacks.switch).toHaveBeenCalledTimes(2)
   })
 
+  it('opens the stack list with its search focused; finds stacks and pages of any stack', async () => {
+    const three: StacksState = {
+      ...state([row(1, 0)], 1),
+      stacks: [
+        { id: 's1', name: 'page-1', rootTitle: 'Page 1', pages: 1, audio: null },
+        { id: 's2', name: 'docs', rootTitle: 'Docs', pages: 2, audio: null },
+        { id: 's3', name: 'news', rootTitle: 'Tempest news', pages: 1, audio: null },
+      ],
+    }
+    const page = (id: number, title: string, ref: string) => ({
+      id,
+      url: `https://site.example/${ref}`,
+      title,
+      depth: 0,
+      last: true,
+      ref,
+    })
+    const fake = fakeApi({
+      stacks: three,
+      stackPages: [
+        {
+          id: 's1',
+          name: 'page-1',
+          rootTitle: 'Page 1',
+          rows: [page(1, 'Page 1', 'p1')],
+          activeId: 1,
+        },
+        {
+          id: 's2',
+          name: 'docs',
+          rootTitle: 'Docs',
+          rows: [page(1, 'Docs', 'docs'), page(2, 'Tempest manual', 'manual')],
+          activeId: 1,
+        },
+        {
+          id: 's3',
+          name: 'news',
+          rootTitle: 'Tempest news',
+          rows: [page(1, 'Tempest news', 'tn')],
+          activeId: 1,
+        },
+      ],
+    })
+    render(<StackHeader />)
+    await act(async () => {})
+    const switcher = screen.getByRole('button', { name: /@page-1/ })
+    fireEvent.click(switcher)
+    await act(async () => {})
+    const box = screen.getByRole('combobox', { name: 'Search stacks and pages' })
+    expect(document.activeElement).toBe(box)
+    expect(fake.api.stacks.pages).toHaveBeenCalled()
+
+    fireEvent.change(box, { target: { value: 'tempest' } })
+    const list = screen.getByRole('dialog', { name: 'Stacks' })
+    const options = () =>
+      within(list)
+        .getAllByRole('listitem')
+        .map((item) => `${item.getAttribute('aria-selected')}:${item.textContent}`)
+    expect(options()).toEqual([
+      'true:@newsTempest news · 1 page×',
+      'false:Tempest manual@docs · https://site.example/manual',
+      'false:Tempest news@news · https://site.example/tn',
+    ])
+    expect(within(list).getAllByText(/tempest/i, { selector: 'mark' }).length).toBeGreaterThan(0)
+
+    // Arrows move the selection; Enter on a page opens it in its stack.
+    fireEvent.keyDown(box, { key: 'ArrowDown' })
+    expect(box.getAttribute('aria-activedescendant')).toBe(
+      within(list).getAllByRole('listitem')[1]!.id,
+    )
+    fireEvent.keyDown(box, { key: 'Enter' })
+    expect(fake.api.stacks.openPage).toHaveBeenCalledWith('s2', 2)
+    expect(screen.queryByRole('dialog', { name: 'Stacks' })).toBeNull()
+
+    // Enter on a stack switches; reopening clears the query.
+    fireEvent.click(switcher)
+    await act(async () => {})
+    const again = screen.getByRole('combobox', { name: 'Search stacks and pages' })
+    expect((again as HTMLInputElement).value).toBe('')
+    fireEvent.change(again, { target: { value: 'doc' } })
+    fireEvent.keyDown(again, { key: 'Enter' })
+    expect(fake.api.stacks.switch).toHaveBeenCalledWith('s2')
+
+    // Escape clears the query first, then closes and returns to the switcher.
+    fireEvent.click(switcher)
+    await act(async () => {})
+    const third = screen.getByRole('combobox', { name: 'Search stacks and pages' })
+    fireEvent.change(third, { target: { value: 'zzz' } })
+    expect(screen.getByText('No matching stacks or pages')).toBeTruthy()
+    fireEvent.keyDown(third, { key: 'Escape' })
+    expect((third as HTMLInputElement).value).toBe('')
+    fireEvent.keyDown(third, { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: 'Stacks' })).toBeNull()
+    expect(document.activeElement).toBe(switcher)
+  })
+
   it('shows sound indicators that mute or unmute a stack without switching', async () => {
     const { api } = await renderHeader({
       ...state([row(1, 0)], 1),
@@ -220,7 +318,7 @@ describe('StackHeader', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Mute @page-1' }))
     expect(api.stacks.setMuted).toHaveBeenLastCalledWith('s1', true)
 
-    fireEvent.click(screen.getByRole('button', { name: '@page-1' }))
+    fireEvent.click(screen.getByRole('button', { name: /^@page-1/ }))
     const list = screen.getByRole('dialog', { name: 'Stacks' })
     expect(within(list).getByRole('button', { name: 'Mute @page-1' })).toBeTruthy()
     expect(within(list).queryByRole('button', { name: /mute @news/i })).toBeNull()
