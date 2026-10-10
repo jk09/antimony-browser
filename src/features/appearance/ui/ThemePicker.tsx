@@ -8,10 +8,37 @@ interface Candidate extends CheckedTheme {
 
 type Phase =
   | { kind: 'idle' }
-  | { kind: 'generating' }
+  | { kind: 'generating'; started: number }
   | { kind: 'capturing'; index: number; total: number }
   | { kind: 'done'; candidates: Candidate[] }
   | { kind: 'error'; message: string }
+
+/** Seconds since `started`, updated every second while shown. */
+function useElapsed(started: number): number {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+  return Math.max(0, Math.floor((now - started) / 1000))
+}
+
+/** The model request: a moving bar, the seconds so far and Cancel. */
+function Generating({ started, onCancel }: { started: number; onCancel: () => void }) {
+  const seconds = useElapsed(started)
+  return (
+    <div className="theme-progress">
+      <progress aria-label="Asking the model for themes" />
+      <p role="status">
+        Asking the model for themes that meet WCAG 2.2 AA… {seconds} s
+        <span className="theme-progress-hint"> (usually 10–60 s)</span>
+      </p>
+      <button type="button" onClick={onCancel}>
+        Cancel
+      </button>
+    </div>
+  )
+}
 
 /** What the window shows while each candidate is captured: readable sample UI. */
 function SampleScene() {
@@ -57,6 +84,8 @@ export function ThemePicker({
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
   const [current, setCurrent] = useState<Theme | null>(null)
   const started = useRef(false)
+  /** Bumped by every run and by Cancel, so an outdated run's results are dropped. */
+  const runId = useRef(0)
 
   useEffect(() => {
     api.appearance
@@ -68,17 +97,20 @@ export function ThemePicker({
 
   const run = useCallback(
     async (need: string) => {
-      setPhase({ kind: 'generating' })
+      const id = ++runId.current
+      setPhase({ kind: 'generating', started: Date.now() })
       let checked: CheckedTheme[]
       try {
         checked = await api.appearance.generate(need)
       } catch (reason) {
+        if (id !== runId.current) return
         setPhase({
           kind: 'error',
           message: reason instanceof Error ? reason.message : String(reason),
         })
         return
       }
+      if (id !== runId.current) return
       const stored = await api.appearance.get().catch(() => null)
       const candidates: Candidate[] = []
       try {
@@ -111,6 +143,11 @@ export function ThemePicker({
   }, [autoStart, initialDescription, run])
 
   const busy = phase.kind === 'generating' || phase.kind === 'capturing'
+  const cancel = () => {
+    runId.current++
+    setPhase({ kind: 'idle' })
+    api.appearance.cancel().catch((reason: unknown) => console.error(reason))
+  }
   const choose = (theme: Theme | null) => {
     api.appearance
       .set(theme)
@@ -126,9 +163,12 @@ export function ThemePicker({
   if (phase.kind === 'capturing') {
     return (
       <div className="theme-picker">
-        <p role="status">
-          Taking screenshot {phase.index + 1} of {phase.total}…
-        </p>
+        <div className="theme-progress">
+          <progress aria-label="Taking screenshots" value={phase.index + 1} max={phase.total} />
+          <p role="status">
+            Taking screenshot {phase.index + 1} of {phase.total}…
+          </p>
+        </div>
         <SampleScene />
       </div>
     )
@@ -180,9 +220,7 @@ export function ThemePicker({
           </button>
         )}
       </p>
-      {phase.kind === 'generating' && (
-        <p role="status">Asking the model for themes that meet WCAG 2.2 AA…</p>
-      )}
+      {phase.kind === 'generating' && <Generating started={phase.started} onCancel={cancel} />}
       {phase.kind === 'error' && (
         <div className="theme-error" role="alert">
           <p>{phase.message}</p>

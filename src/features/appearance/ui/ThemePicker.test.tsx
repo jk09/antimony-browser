@@ -64,6 +64,50 @@ describe('ThemePicker', () => {
     await waitFor(() => expect(api.appearance.set).toHaveBeenLastCalledWith(null))
   })
 
+  it('shows progress while the model works, with the seconds so far, and Cancel drops the answer', async () => {
+    const { api } = fakeApi()
+    let answer: (themes: never[]) => void = () => {}
+    api.appearance.generate.mockImplementationOnce(
+      () => new Promise((resolve) => (answer = resolve as typeof answer)),
+    )
+    const start = Date.now()
+    const now = vi.spyOn(Date, 'now').mockReturnValue(start)
+    render(<ThemePicker initialDescription="calm" />)
+    fireEvent.click(screen.getByRole('button', { name: 'Show themes' }))
+    expect(screen.getByRole('progressbar', { name: 'Asking the model for themes' })).toBeTruthy()
+    expect(screen.getByRole('status').textContent).toContain('0 s')
+    now.mockReturnValue(start + 12_000)
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 1100)))
+    expect(screen.getByRole('status').textContent).toContain('12 s')
+    now.mockRestore()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(api.appearance.cancel).toHaveBeenCalled()
+    expect(screen.queryByRole('progressbar')).toBeNull()
+    await act(async () => answer([]))
+    expect(screen.queryByRole('radiogroup')).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(api.appearance.capture).not.toHaveBeenCalled()
+  })
+
+  it('shows how far the screenshots are', async () => {
+    const { api } = fakeApi()
+    let release: () => void = () => {}
+    api.appearance.capture.mockImplementationOnce(
+      () => new Promise((resolve) => (release = () => resolve('data:image/jpeg;base64,1'))),
+    )
+    render(<ThemePicker initialDescription="calm" />)
+    fireEvent.click(screen.getByRole('button', { name: 'Show themes' }))
+    const bar = (await screen.findByRole('progressbar', {
+      name: 'Taking screenshots',
+    })) as HTMLProgressElement
+    expect([bar.value, bar.max]).toEqual([1, 2])
+    expect(screen.getByRole('status').textContent).toContain('Taking screenshot 1 of 2')
+    await waitFor(() => expect(api.appearance.capture).toHaveBeenCalledTimes(1))
+    await act(async () => release())
+    await screen.findByRole('radiogroup', { name: 'Themes' })
+  })
+
   it('offers usability needs as one-click suggestions', async () => {
     const { api } = fakeApi()
     render(<ThemePicker />)

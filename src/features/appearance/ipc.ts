@@ -7,6 +7,8 @@ export const channels = {
   set: 'appearance:set',
   generate: 'appearance:generate',
   capture: 'appearance:capture',
+  // Stops the model request of a running generate (it then rejects with an AbortError).
+  cancel: 'appearance:cancel',
   // /settings theme, File → Appearance…: the UI asks main to open the page (main relays it).
   requestOpen: 'appearance:request-open',
   // main → UI
@@ -52,6 +54,8 @@ export interface AppearanceApi {
   onChanged(listener: (theme: Theme | null) => void): () => void
   /** Theme candidates for a usability need, from the selected model, contrast-checked. */
   generate(description: string): Promise<CheckedTheme[]>
+  /** Stops a running `generate`. */
+  cancel(): Promise<void>
   /** A JPEG data URL of the browser window as it looks now (the chrome UI only), or null. */
   capture(): Promise<string | null>
   /** Opens the appearance page, optionally generating themes for a need right away. */

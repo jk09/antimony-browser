@@ -43,7 +43,7 @@ describe('appearance main', () => {
     expect(ctx.ipc.send).toHaveBeenLastCalledWith(channels.changed, null)
   })
 
-  it('rejects malformed and unreadable themes', () => {
+  it('rejects malformed and unreadable themes', async () => {
     const { call } = setup()
     const theme = sampleTheme()
     expect(() =>
@@ -60,7 +60,7 @@ describe('appearance main', () => {
         },
       }),
     ).toThrow('not readable enough')
-    expect(() => call(channels.generate, '')).toThrow(TypeError)
+    await expect(call(channels.generate, '')).rejects.toThrow(TypeError)
     expect(() => call(channels.requestOpen, { description: 42 })).toThrow(TypeError)
   })
 
@@ -74,6 +74,23 @@ describe('appearance main', () => {
     }[]
     expect(themes.map((t) => t.theme.name)).toEqual(['A', 'B'])
     expect(complete.mock.calls[0]![0].text).toContain('Need: light, for astigmatism')
+  })
+
+  it('Cancel stops the running model request', async () => {
+    let signal: AbortSignal | undefined
+    complete.mockImplementationOnce(
+      (request: { signal: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          signal = request.signal
+          signal.addEventListener('abort', () => reject(new Error('Aborted')))
+        }),
+    )
+    const { call } = setup()
+    const running = call(channels.generate, 'calm') as Promise<unknown>
+    await vi.waitFor(() => expect(signal).toBeDefined())
+    call(channels.cancel)
+    await expect(running).rejects.toThrow('Aborted')
+    expect(signal!.aborted).toBe(true)
   })
 
   it('captures the chrome UI as a JPEG at most 800 px wide', async () => {

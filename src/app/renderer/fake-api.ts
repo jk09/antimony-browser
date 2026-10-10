@@ -217,6 +217,7 @@ export function fakeApi(
           ],
       ),
       capture: vi.fn(async () => 'data:image/jpeg;base64,AAAA'),
+      cancel: vi.fn(async () => {}),
       requestOpen: vi.fn(async (request?: AppearanceOpen) =>
         appearanceOpen.emit(request ?? { description: '' }),
       ),

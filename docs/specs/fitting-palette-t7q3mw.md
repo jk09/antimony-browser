@@ -116,3 +116,4 @@
 - The sample theme used by tests lives in `appearance/shared/sample-theme.ts`, because main-process tests may not import renderer code.
 - The e2e fake CLI answers the theme request with two fixed candidates. Checked by hand with the real Claude Code CLI: "a light theme suitable for astigmatism" gave four light themes (lowest text contrast 4.9–5.6:1) and real captures.
 - Drafted ADR 0016 (Proposed) for generating themes with the model, checking them in code and showing window captures.
+- After shipping: the wait for the model showed only a static line (reported by the owner on Windows), so the picker now shows a moving progress bar, the seconds so far and Cancel (`appearance:cancel` aborts the model request), and a determinate bar while the screenshots are taken.
