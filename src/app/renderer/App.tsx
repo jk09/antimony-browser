@@ -11,6 +11,7 @@ import { PageArea } from '../../features/navigation/ui/PageArea'
 import { AssistantPanel } from '../../features/prompt/ui/AssistantPanel'
 import { ConfigView } from '../../features/skills/ui/ConfigView'
 import { StackHeader } from '../../features/stacks/ui/StackHeader'
+import { ImportStep } from '../../features/import/ui/ImportStep'
 import { WelcomeView } from '../../features/welcome/ui/WelcomeView'
 
 /**
@@ -33,7 +34,7 @@ export function App() {
         <RecallView />
         <MapView />
         <ConfigView />
-        <WelcomeView themeStep={<ThemePicker />} />
+        <WelcomeView themeStep={<ThemePicker />} importStep={<ImportStep />} />
         <AppearanceView />
         <DebugPanel />
       </div>

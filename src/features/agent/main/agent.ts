@@ -26,6 +26,7 @@ import {
   type BrowserPort,
   type HistoryPort,
   type MacroPort,
+  type ImportPort,
   type StackOpener,
   type ToolOutput,
 } from './tools'
@@ -38,6 +39,7 @@ Browser
 - The browser's tabs are called stacks. new_stack opens one (also for "open a new window/tab"), optionally at a URL; navigate loads a page in the current stack.
 - For pages the user visited before ("that article I read last week", "search my history for …"), use search_history; it works without page access but not while history access is off (/history-access on). To find a page by a picture the user attached ("a page with an image like this"), or to show the user what they read about a topic as a cloud, use recall_history.
 - With page access on, read_page shows the page text and its interactive elements with CSS selectors for click and type_text; find_in_page, scroll and screenshot help too. Without page access you only know the URL and title; if the request needs the page content, tell the user to turn page access on (/page-access on).
+- When the user asks to import the file Edge's "Export browsing data" created, call import_browsing_data with the path they gave; they approve it. Never import a file they didn't name.
 
 Acting
 - When a request is clear, act; don't ask for confirmation the browser already asks for. Ask only when the request is ambiguous.
@@ -74,6 +76,8 @@ export interface AgentDeps {
   macros(): MacroPort | null
   /** Opens new stacks, once the stacks feature provided it. */
   stacks(): StackOpener | null
+  /** Imports browsing-data exports, once the import feature provided it. */
+  importer(): ImportPort | null
   settings(): { model: ModelId; pageAccess: boolean; historyAccess: boolean }
   onState(state: AgentState): void
   onDebug(event: DebugEvent, label: string): void
@@ -346,7 +350,7 @@ export class Agent {
         }
       }
       for (const [index, step] of steps.entries()) {
-        const browser = this.requireBrowser()
+        const browser = toolNamed(step.tool)?.kind === 'import' ? null : this.requireBrowser()
         const input = validateInput(step.tool, step.input)
         const item = this.addItem({
           kind: 'tool',
@@ -455,9 +459,9 @@ export class Agent {
           'History access is off; the user has to turn it on (/history-access on).',
         )
       }
-      // History search and macros don't touch the page.
+      // History search, macros and imports don't touch the page.
       const browser =
-        tool.kind === 'history' || tool.kind === 'macro'
+        tool.kind === 'history' || tool.kind === 'macro' || tool.kind === 'import'
           ? this.deps.browser()
           : this.requireBrowser()
 
@@ -481,7 +485,12 @@ export class Agent {
         siteOf(String(input['url'])) !== siteOf(browser.state().url)
       // Content read earlier in the run could have steered a macro change: the user confirms it.
       const steeredMacro = tool.kind === 'macro' && call.name !== 'list_macros' && flags.readPage
-      if ((tool.kind === 'action' || leavesSite || steeredMacro) && !flags.allowAll) {
+      // Reading a file the model named is never covered by "Allow for this run".
+      const readsFile = tool.kind === 'import'
+      if (
+        (tool.kind === 'action' || leavesSite || steeredMacro || readsFile) &&
+        (readsFile || !flags.allowAll)
+      ) {
         const decision = await this.ask(run, summary, signal)
         if (decision === 'deny') {
           this.updateItem(item, { status: 'denied' })
@@ -492,7 +501,7 @@ export class Agent {
             is_error: true,
           }
         }
-        if (decision === 'allow-run') flags.allowAll = true
+        if (decision === 'allow-run' && !readsFile) flags.allowAll = true
       }
 
       const output = await this.execute(run, browser, call.name, input, signal, item)
@@ -549,6 +558,7 @@ export class Agent {
           history: this.deps.history(),
           macros: this.deps.macros(),
           stacks: this.deps.stacks(),
+          importer: this.deps.importer(),
           images: this.requestImages,
           signal,
         }),

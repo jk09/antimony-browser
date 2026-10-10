@@ -1,6 +1,7 @@
 import type { AgentApi } from '../features/agent/ipc'
 import type { AppearanceApi } from '../features/appearance/ipc'
 import type { HistoryApi } from '../features/history/ipc'
+import type { ImportApi } from '../features/import/ipc'
 import type { MenuApi } from '../features/menu/ipc'
 import type { NavigationApi } from '../features/navigation/ipc'
 import type { PromptApi } from '../features/prompt/ipc'
@@ -18,6 +19,7 @@ export interface AntimonyApi {
   agent: AgentApi
   appearance: AppearanceApi
   history: HistoryApi
+  import: ImportApi
   menu: MenuApi
   navigation: NavigationApi
   prompt: PromptApi

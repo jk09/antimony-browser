@@ -223,6 +223,19 @@ export function fakeApi(
       ),
       onOpen: appearanceOpen.subscribe,
     },
+    import: {
+      choose: vi.fn(async (): Promise<string | null> => null),
+      run: vi.fn(async (_path: string) => ({
+        rows: 0,
+        visitsImported: 0,
+        pagesCreated: 0,
+        pagesUpdated: 0,
+        duplicates: 0,
+        skipped: { invalid: 0, unsupported: 0 },
+        stacksCreated: 0,
+        stacksSkipped: 0,
+      })),
+    },
     welcome: {
       state: vi.fn(async () => ({ done: options.welcomeDone ?? true })),
       setDone: vi.fn(async (done: boolean) => ({ done })),

@@ -42,7 +42,7 @@ function parseNode(key: string, raw: unknown): StackNode {
 
 function parseStack(raw: unknown): Stack {
   if (!isRecord(raw)) fail('a stack is not an object')
-  const { id, name, nodes, rootId, activeId, nextNodeId, lastUsedAt, startRoot } = raw
+  const { id, name, nodes, rootId, activeId, nextNodeId, lastUsedAt, startRoot, imported } = raw
   if (typeof id !== 'string' || !id) fail('a stack has no id')
   if (name !== null && typeof name !== 'string') fail(`stack ${id} has a wrong name`)
   if (!isRecord(nodes)) fail(`stack ${id} has no nodes`)
@@ -68,6 +68,9 @@ function parseStack(raw: unknown): Stack {
   if (typeof lastUsedAt !== 'number') fail(`stack ${id} has no last use time`)
   if (startRoot !== undefined && typeof startRoot !== 'boolean')
     fail(`stack ${id} has a wrong startRoot`)
+  if (imported !== undefined && (typeof imported !== 'number' || !Number.isFinite(imported))) {
+    fail(`stack ${id} has a wrong imported time`)
+  }
   return {
     id,
     name,
@@ -77,6 +80,7 @@ function parseStack(raw: unknown): Stack {
     nextNodeId,
     lastUsedAt,
     ...(startRoot === true && { startRoot }),
+    ...(typeof imported === 'number' && { imported }),
   }
 }
 

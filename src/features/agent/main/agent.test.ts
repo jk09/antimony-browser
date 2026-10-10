@@ -10,7 +10,7 @@ import {
 } from './claude-cli'
 import type { ApiTool, ContentBlock } from './content'
 import { fakeBrowser } from './fake-browser'
-import type { HistoryPort, MacroInfo, MacroPort, StackOpener } from './tools'
+import type { HistoryPort, ImportPort, MacroInfo, MacroPort, StackOpener } from './tools'
 
 /** What the scripted CLI's model saw at one step of a turn. */
 interface ModelRequest {
@@ -83,6 +83,7 @@ function setup(
     historyAccess?: boolean
     macros?: MacroPort | null
     stacks?: StackOpener | null
+    importer?: ImportPort | null
   } = {},
 ) {
   const { browser, state } = fakeBrowser(options.elements)
@@ -105,6 +106,7 @@ function setup(
     history: () => options.history ?? null,
     macros: () => options.macros ?? null,
     stacks: () => options.stacks ?? null,
+    importer: () => options.importer ?? null,
     settings: () => settings,
     onState: (value) => states.push(structuredClone(value)),
     onDebug: (event) => events.push(event),
@@ -614,6 +616,73 @@ describe('macros', () => {
     const { agent } = setup([], { stacks })
     expect(await agent.replay('/ns', [{ tool: 'new_stack', input: {} }])).toEqual({ ok: true })
     expect(stacks.open).toHaveBeenCalled()
+  })
+})
+
+describe('import_browsing_data', () => {
+  const call = () =>
+    response([toolUse('t1', 'import_browsing_data', { path: '/home/me/edge.csv' })], 'tool_use')
+  const done = async () => response([{ type: 'text', text: 'Done.' }])
+
+  it('asks for approval every time, even after "Allow for this run", and needs no page access', async () => {
+    const importer = { run: vi.fn(async () => 'Imported 3 visits.') }
+    const { agent, browser } = setup([async () => call(), async () => call(), done], { importer })
+    const running = agent.run(input('import /home/me/edge.csv'))
+    await waitFor(() => agent.state().status === 'awaiting-approval')
+    expect(agent.state().approval!.description).toBe('Import browsing data from /home/me/edge.csv')
+    expect(importer.run).not.toHaveBeenCalled()
+    agent.approve('allow-run')
+    await waitFor(() => importer.run.mock.calls.length === 1)
+    await waitFor(() => agent.state().status === 'awaiting-approval')
+    agent.approve('allow')
+    await running
+    expect(importer.run).toHaveBeenCalledTimes(2)
+    expect(importer.run).toHaveBeenCalledWith('/home/me/edge.csv')
+    expect(browser.load).not.toHaveBeenCalled()
+  })
+
+  it('imports nothing when the user denies it, and reports an unavailable importer', async () => {
+    const importer = { run: vi.fn(async () => 'x') }
+    const denied = setup([async () => call(), done], { importer })
+    const running = denied.agent.run(input('import it'))
+    await waitFor(() => denied.agent.state().status === 'awaiting-approval')
+    denied.agent.approve('deny')
+    await running
+    expect(importer.run).not.toHaveBeenCalled()
+
+    const without = setup([async () => call(), done])
+    const second = without.agent.run(input('import it'))
+    await waitFor(() => without.agent.state().status === 'awaiting-approval')
+    without.agent.approve('allow')
+    await second
+    expect(without.agent.state().items).toContainEqual(
+      expect.objectContaining({ tool: 'import_browsing_data', status: 'error' }),
+    )
+  })
+
+  it('replays as a skill without the model, approval, page access or a page', async () => {
+    const importer = { run: vi.fn(async () => 'Imported.') }
+    const { agent, deps } = setup([], { importer })
+    const result = await agent.replay('/import-edge /tmp/e.csv', [
+      { tool: 'import_browsing_data', input: { path: '/tmp/e.csv' } },
+    ])
+    expect(result).toEqual({ ok: true })
+    expect(importer.run).toHaveBeenCalledWith('/tmp/e.csv')
+    expect(deps.runCli).not.toHaveBeenCalled()
+  })
+
+  it('shows a failed import as the failing step', async () => {
+    const importer = {
+      run: vi.fn(async () => {
+        throw new Error('The file is empty.')
+      }),
+    }
+    const { agent } = setup([], { importer })
+    const result = await agent.replay('/import-edge x', [
+      { tool: 'import_browsing_data', input: { path: '/x.csv' } },
+    ])
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain('The file is empty.')
   })
 })
 

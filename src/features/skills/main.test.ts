@@ -15,7 +15,16 @@ vi.mock('electron', () => ({
 }))
 const replay = vi.fn(async (_label: string, _steps: unknown) => ({ ok: true }))
 let macros: MacroPort | null = null
-const replayable = ['navigate', 'click', 'go_back', 'reload', 'go_forward', 'stop', 'new_stack']
+const replayable = [
+  'import_browsing_data',
+  'navigate',
+  'click',
+  'go_back',
+  'reload',
+  'go_forward',
+  'stop',
+  'new_stack',
+]
 vi.mock('../agent/main', () => ({
   replay: (label: string, steps: unknown) => replay(label, steps),
   provideMacros: (port: MacroPort) => {
@@ -58,7 +67,7 @@ describe('skills main', () => {
   it('lists the built-in skills and offers no way to save from the UI', () => {
     const { call } = setup()
     const names = (call(channels.list) as { name: string }[]).map((skill) => skill.name)
-    expect(names).toEqual(expect.arrayContaining(['reload', 'stop']))
+    expect(names).toEqual(expect.arrayContaining(['reload', 'stop', 'import-edge']))
     expect(Object.values(channels)).toEqual([
       'skills:list',
       'skills:delete',
@@ -134,6 +143,20 @@ describe('skills main', () => {
     ])
     expect(await call(channels.run, 'dash', '')).toEqual({ ok: false, error: 'Missing <team>' })
     await expect(async () => call(channels.run, 'nope', '')).rejects.toThrow('Unknown skill')
+  })
+
+  it('runs /import-edge with the typed path, spaces included, and needs one', async () => {
+    const { call } = setup()
+    await call(channels.run, 'import-edge', ' ~/Downloads/Edge browsing data.csv ')
+    expect(replay).toHaveBeenCalledWith('/import-edge ~/Downloads/Edge browsing data.csv', [
+      { tool: 'import_browsing_data', input: { path: '~/Downloads/Edge browsing data.csv' } },
+    ])
+    replay.mockClear()
+    expect(await call(channels.run, 'import-edge', '')).toEqual({
+      ok: false,
+      error: 'Missing <file>',
+    })
+    expect(replay).not.toHaveBeenCalled()
   })
 
   it('runs built-ins, deletes macros (UI or assistant) but not built-ins', async () => {

@@ -1,6 +1,6 @@
 # skills
 
-Runs `/name` commands that replay browser tool calls without the model: macros the assistant stores when asked in the prompt ("open a new stack and store it as /ns", with `{{parameters}}` and a hint for each) and the built-in `/reload` and `/stop`; `/config` opens a configuration page listing every system command, built-in skill and macro with the steps it replays. Arguments are typed after the command, constants or `@stack` / `@stack/page` references (resolved to the page's URL by the prompt).
+Runs `/name` commands that replay browser tool calls without the model: macros the assistant stores when asked in the prompt ("open a new stack and store it as /ns", with `{{parameters}}` and a hint for each) and the built-in `/reload`, `/stop` and `/import-edge <file>` (imports an Edge export through the agent's `import_browsing_data`); `/config` opens a configuration page listing every system command, built-in skill and macro with the steps it replays. Arguments are typed after the command, constants or `@stack` / `@stack/page` references (resolved to the page's URL by the prompt).
 
 ## Entry points
 - IPC: `skills:list|delete|run|request-config` (UI → main), `skills:list-changed|open-config` (main → UI) – `ipc.ts`; there is no channel to create or change a macro
@@ -14,6 +14,7 @@ Runs `/name` commands that replay browser tool calls without the model: macros t
 - The configuration page only reads and deletes macros; built-ins have no Delete – `ui/ConfigView.test.tsx`
 - Macros stored without `params` load with parameters from their steps and no hints – `main.test.ts › loads macros stored without params…`
 - The last parameter takes the rest of the line; missing arguments run nothing – `shared/params.test.ts`, `main.test.ts › runs a macro…`
+- `/import-edge` takes the rest of the line as the path (spaces kept) and runs the one-step `import_browsing_data` replay with no approval, as it is the user's own command – `main.test.ts › runs /import-edge…`
 - Replays make no model request, need page access for page steps, ask one approval for any page actions, and stop at the first failing step – `../agent/main/agent.test.ts › Agent.replay`, `e2e/prompt.spec.ts`
 
 ## Dependencies
@@ -31,4 +32,4 @@ Runs `/name` commands that replay browser tool calls without the model: macros t
 |---|---|---|---|
 | – | | | |
 
-Spec: violet-harbinger-p7w3kd, still-meridian-r4v8nc, glass-meridian-f5y2nq, spoken-macro-m4q7zt, ember-console-k5w9tb · ADRs: 0004, 0013
+Spec: violet-harbinger-p7w3kd, still-meridian-r4v8nc, glass-meridian-f5y2nq, spoken-macro-m4q7zt, ember-console-k5w9tb, gentle-ferry-m3x7bq · ADRs: 0004, 0013, 0017
