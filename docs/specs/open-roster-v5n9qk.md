@@ -6,15 +6,15 @@
 | --- | --- |
 | **Feature name** | A `list_stacks` tool and a stack count in `<browser_state>` so the assistant can answer about every open stack; a switcher that looks clickable and opens with a focused search over all stacks and their pages |
 | **Spec ID** | open-roster-v5n9qk |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-10 18:00 +00:00 |
-| **Last updated** | 2026-10-10 18:45 +00:00 |
+| **Last updated** | 2026-10-10 19:40 +00:00 |
 | **Affected features** | agent, stacks |
 | **Target release** | 0.1.0 |
-| **Related links** | specs quiet-speaker-m8v3tz, nested-mention-r6q4zd (stack pages for `@`), spoken-macro-m4q7zt (`new_stack`) |
+| **Related links** | PR #71; specs quiet-speaker-m8v3tz, nested-mention-r6q4zd (stack pages for `@`), spoken-macro-m4q7zt (`new_stack`) |
 
 **Status definitions:**
 - **Draft:** The spec is being written or reviewed. The scope may still change.
