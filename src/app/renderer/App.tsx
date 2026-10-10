@@ -1,6 +1,9 @@
 import { ActingFrame } from '../../features/agent/ui/ActingFrame'
 import { Conversation } from '../../features/agent/ui/Conversation'
 import { DebugPanel } from '../../features/agent/ui/DebugPanel'
+import { AppearanceView } from '../../features/appearance/ui/AppearanceView'
+import { ThemeApplier } from '../../features/appearance/ui/ThemeApplier'
+import { ThemePicker } from '../../features/appearance/ui/ThemePicker'
 import { HistoryView } from '../../features/history/ui/HistoryView'
 import { MapView } from '../../features/history/ui/MapView'
 import { RecallView } from '../../features/history/ui/RecallView'
@@ -18,6 +21,7 @@ export function App() {
   const { chrome, electron } = window.antimony.versions
   return (
     <div className="shell">
+      <ThemeApplier />
       <div className="workspace">
         <ActingFrame>
           <PageArea>
@@ -29,7 +33,8 @@ export function App() {
         <RecallView />
         <MapView />
         <ConfigView />
-        <WelcomeView />
+        <WelcomeView themeStep={<ThemePicker />} />
+        <AppearanceView />
         <DebugPanel />
       </div>
       <AssistantPanel

@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { claudeModels, type AgentSettings, type CliCheck, type CliCheckStep } from '../../agent/ipc'
 
-const steps = [
+const allSteps = [
   { id: 'cli', title: 'Claude Code CLI' },
   { id: 'test', title: 'Test' },
   { id: 'model', title: 'Model' },
+  { id: 'theme', title: 'Theme' },
   { id: 'prompt', title: 'Prompt' },
   { id: 'skills', title: 'Skills' },
 ] as const
-type StepId = (typeof steps)[number]['id']
+type StepId = (typeof allSteps)[number]['id']
 
 type Platform = 'mac' | 'windows' | 'linux'
 
@@ -133,7 +134,9 @@ function CliTest({ check, running }: { check: CliCheck | null; running: boolean 
  * CLI, tests it, picks the model strength and explains the prompt and skills. Opens on the first
  * launch and with /welcome or File → Welcome; closing or finishing it marks it done.
  */
-export function WelcomeView() {
+export function WelcomeView({ themeStep }: { themeStep?: ReactNode } = {}) {
+  // The Theme step's content comes from App.tsx (appearance's picker); without it there's no step.
+  const steps = allSteps.filter((s) => s.id !== 'theme' || themeStep)
   const api = window.antimony
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<StepId>('cli')
@@ -342,6 +345,19 @@ export function WelcomeView() {
                 </label>
               ))}
             </div>
+            {nav()}
+          </section>
+        )}
+        {step === 'theme' && themeStep && (
+          <section aria-labelledby="welcome-theme">
+            <h3 id="welcome-theme">What should the browser look like for you?</h3>
+            <p>
+              Describe what is comfortable for your eyes, or pick a need below. Antimony asks the
+              model for a few themes, makes sure each meets the WCAG 2.2 AA contrast rules, and
+              shows each as a screenshot. Skip this to keep your system&rsquo;s light or dark look;{' '}
+              <code>/settings theme</code> changes it later.
+            </p>
+            {themeStep}
             {nav()}
           </section>
         )}

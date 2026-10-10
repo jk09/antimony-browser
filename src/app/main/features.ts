@@ -1,5 +1,6 @@
 import type { BrowserWindow, MenuItemConstructorOptions, Session } from 'electron'
 import { register as agent } from '../../features/agent/main'
+import { register as appearance } from '../../features/appearance/main'
 import { register as history } from '../../features/history/main'
 import { register as menu } from '../../features/menu/main'
 import { register as navigation } from '../../features/navigation/main'
@@ -30,6 +31,7 @@ export type RegisterFeature = (ctx: MainContext) => void | Promise<void>
 // One entry per feature, sorted by name. Removing a feature removes its entry.
 export const features: RegisterFeature[] = [
   agent,
+  appearance,
   history,
   menu,
   navigation,

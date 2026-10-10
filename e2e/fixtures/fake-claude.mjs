@@ -5,6 +5,7 @@
 // With FAKE_CLAUDE_MODEL_URL it plays the model loop instead: it POSTs { model, hasApiKey, tools,
 // messages } there for each step, prints the returned { content }, calls the tools it names over
 // MCP and sends their results back, until a step calls no tools.
+// Asked for colour themes (appearance), it answers with two fixed candidates.
 // FAKE_CLAUDE_LOGGED_IN=0 plays a logged-out CLI; FAKE_CLAUDE_LOG appends each run's arguments.
 import { appendFileSync, readFileSync } from 'node:fs'
 
@@ -118,6 +119,37 @@ if (modelUrl && configPath) {
     }
     messages.push({ role: 'user', content: results })
   }
+  result({ result: answer })
+} else if ((flag('--system-prompt') ?? '').startsWith('You design colour themes')) {
+  const theme = (name, panel) => ({
+    name,
+    rationale: `${name}: a calm test theme.`,
+    scheme: 'light',
+    colors: {
+      'toolbar-bg': '#e8e6e1',
+      'panel-bg': panel,
+      'card-bg': '#fbfaf6',
+      'field-bg': '#fbfaf6',
+      'code-bg': '#ebe8e1',
+      text: '#26282b',
+      muted: '#555a60',
+      'field-border': '#80858c',
+      accent: '#1f5fa8',
+      'accent-text': '#ffffff',
+      focus: '#1f5fa8',
+      error: '#a3261d',
+      ok: '#22693f',
+      'cloud-0': '#1f5fa8',
+      'cloud-1': '#a35200',
+      'cloud-2': '#22693f',
+      'cloud-3': '#7a3e9d',
+      'cloud-4': '#8a5a00',
+    },
+  })
+  const answer = JSON.stringify({
+    candidates: [theme('Soft daylight', '#f7f5f0'), theme('Warm paper', '#f6efe0')],
+  })
+  assistant([{ type: 'text', text: answer }])
   result({ result: answer })
 } else if (url) {
   assistant([{ type: 'tool_use', id: 'toolu_1', name: 'mcp__antimony__navigate', input: { url } }])

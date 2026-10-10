@@ -2,6 +2,12 @@
 import { vi } from 'vitest'
 import type { AgentSettings, AgentState, CliCheck, DebugEvent } from '../../features/agent/ipc'
 import type {
+  CheckedTheme,
+  OpenRequest as AppearanceOpen,
+  Theme,
+} from '../../features/appearance/ipc'
+import { sampleTheme } from '../../features/appearance/shared/sample-theme'
+import type {
   HistorySettings,
   OpenRequest,
   MapRequest,
@@ -46,6 +52,8 @@ export const builtins: Skill[] = ['reload', 'stop'].map((name) => ({
   builtin: true,
 }))
 
+export { sampleTheme } from '../../features/appearance/shared/sample-theme'
+
 export const workingCli: CliCheck = {
   found: { ok: true },
   loggedIn: { ok: true },
@@ -57,6 +65,8 @@ export function fakeApi(
     settings?: Partial<AgentSettings>
     skills?: Skill[]
     cliCheck?: CliCheck
+    theme?: Theme | null
+    candidates?: CheckedTheme[]
     /** The welcome page was finished before (default true, so it doesn't open in other tests). */
     welcomeDone?: boolean
     menu?: MenuEntry[]
@@ -83,6 +93,9 @@ export function fakeApi(
   const stacks = channel<StacksState>()
   const stackCommand = channel<StackCommand>()
   const welcomeOpen = channel<void>()
+  const themeChanged = channel<Theme | null>()
+  const appearanceOpen = channel<AppearanceOpen>()
+  let theme: Theme | null = options.theme ?? null
   let home: string | null = null
   const currentSettings = { ...defaultSettings, ...options.settings }
 
@@ -188,6 +201,27 @@ export function fakeApi(
       onChanged: stacks.subscribe,
       onCommand: stackCommand.subscribe,
     },
+    appearance: {
+      get: vi.fn(async () => theme),
+      set: vi.fn(async (next: Theme | null) => {
+        theme = next
+        themeChanged.emit(next)
+        return next
+      }),
+      onChanged: themeChanged.subscribe,
+      generate: vi.fn(
+        async (_description: string): Promise<CheckedTheme[]> =>
+          options.candidates ?? [
+            { theme: sampleTheme('Soft daylight'), minTextContrast: 7.1 },
+            { theme: sampleTheme('Warm paper'), minTextContrast: 6.4 },
+          ],
+      ),
+      capture: vi.fn(async () => 'data:image/jpeg;base64,AAAA'),
+      requestOpen: vi.fn(async (request?: AppearanceOpen) =>
+        appearanceOpen.emit(request ?? { description: '' }),
+      ),
+      onOpen: appearanceOpen.subscribe,
+    },
     welcome: {
       state: vi.fn(async () => ({ done: options.welcomeDone ?? true })),
       setDone: vi.fn(async (done: boolean) => ({ done })),
@@ -218,6 +252,8 @@ export function fakeApi(
       stacks: stacks.emit,
       stackCommand: stackCommand.emit,
       welcomeOpen: () => welcomeOpen.emit(),
+      themeChanged: themeChanged.emit,
+      appearanceOpen: appearanceOpen.emit,
     },
   }
 }
