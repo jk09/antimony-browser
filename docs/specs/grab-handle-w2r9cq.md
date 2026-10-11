@@ -6,15 +6,15 @@
 | --- | --- |
 | **Feature name** | Drag a stack in the switcher's list (or Alt+↑/↓ on it) to change the stack order |
 | **Spec ID** | grab-handle-w2r9cq |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-11 10:00 +00:00 |
-| **Last updated** | 2026-10-11 10:30 +00:00 |
+| **Last updated** | 2026-10-11 10:40 +00:00 |
 | **Affected features** | stacks |
 | **Target release** | 0.1.0 |
-| **Related links** | spec settled-row-h4n6tp (the stack order and `move_stack`; this is its follow-up); PR #74 |
+| **Related links** | spec settled-row-h4n6tp (the stack order and `move_stack`; this is its follow-up); PR #74; PR #75 |
 
 **Status definitions:**
 - **Draft:** The spec is being written or reviewed. The scope may still change.
