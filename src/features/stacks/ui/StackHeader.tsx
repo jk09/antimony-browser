@@ -527,7 +527,7 @@ export function StackHeader() {
       setCycle({ ...open, index: (open.index + step + count) % count })
       return
     }
-    const order = (stacks?.stacks ?? []).map((stack) => stack.id)
+    const order = stacks?.recent ?? []
     if (running || order.length < 2) return
     setCycle({ order, index: step === 1 ? 1 : order.length - 1 })
   }

@@ -145,8 +145,10 @@ export interface StackInfo {
 export interface StackPort {
   /** Opens a new stack, like Ctrl/Cmd+N. */
   open(): void
-  /** Every stack, most recently used first. */
+  /** Every stack, in the user's order. */
   list(): StackInfo[]
+  /** Moves the named stack to `position` (1 = top; past the end = last); false if none. */
+  move(name: string, position: number): boolean
   /** Makes the named stack current and focuses its page; false if no open stack has that name. */
   switch(name: string): boolean
   /** Closes the named stack (the current one: the most recent becomes current); false if none. */
@@ -276,7 +278,7 @@ export const toolDefinitions: ToolDefinition[] = [
     kind: 'history',
     replayable: false,
     description:
-      "List the user's open stacks (the browser's tabs), most recently used first, with their root page and number of pages; with stack, list that stack's pages as an outline with their URLs. Use it to count stacks or find which stack holds a page.",
+      "List the user's open stacks (the browser's tabs), in the user's order (move_stack changes it), with their root page and number of pages; with stack, list that stack's pages as an outline with their URLs. Use it to count stacks or find which stack holds a page.",
     input_schema: schema({
       stack: { type: 'string', description: 'A stack name, with or without the @.' },
     }),
@@ -296,6 +298,17 @@ export const toolDefinitions: ToolDefinition[] = [
     description:
       'Close an open stack (a browser tab) with all its pages, by its name. Only when the user asked to close it; the user is asked to approve. Closing the current stack makes the most recently used one current.',
     input_schema: schema({ stack: stackName }, ['stack']),
+  },
+  {
+    name: 'move_stack',
+    kind: 'stack',
+    replayable: true,
+    description:
+      "Move an open stack to a position in the user's order of stacks (as list_stacks and the stack switcher show it): 1 is the top; a position past the end puts it last.",
+    input_schema: schema(
+      { stack: stackName, position: { type: 'integer', description: '1 = top.' } },
+      ['stack', 'position'],
+    ),
   },
   {
     name: 'close_page',
@@ -355,7 +368,7 @@ export const toolDefinitions: ToolDefinition[] = [
     kind: 'macro',
     replayable: false,
     description:
-      "Store a macro the user can run later by typing /name in the prompt, without you. Its steps are browser tool calls replayed in order; only navigate, go_back, go_forward, reload, stop, new_stack, switch_stack, click, type_text, press_key and scroll can be steps, with the same inputs as those tools. A string input may contain {{param}} placeholders, filled from the arguments typed after /name (in order; the last parameter takes the rest of the line; an @stack or @stack/page argument becomes that page's URL). Declare every placeholder in params with a short hint of what to type. Replaces a macro with the same name.",
+      "Store a macro the user can run later by typing /name in the prompt, without you. Its steps are browser tool calls replayed in order; only navigate, go_back, go_forward, reload, stop, new_stack, switch_stack, move_stack, click, type_text, press_key and scroll can be steps, with the same inputs as those tools. A string input may contain {{param}} placeholders, filled from the arguments typed after /name (in order; the last parameter takes the rest of the line; an @stack or @stack/page argument becomes that page's URL). Declare every placeholder in params with a short hint of what to type. Replaces a macro with the same name.",
     input_schema: schema(
       {
         name: macroName,
@@ -562,6 +575,8 @@ export function describeCall(name: string, input: Input, element?: ElementInfo):
       return `Close stack @${String(input['stack']).replace(/^@/, '')}`
     case 'close_page':
       return `Close ${String(input['page'])}`
+    case 'move_stack':
+      return `Move @${String(input['stack']).replace(/^@/, '')} to position ${String(input['position'])}`
     case 'list_stacks':
       return input['stack']
         ? `List the pages of @${String(input['stack']).replace(/^@/, '')}`
@@ -861,7 +876,7 @@ export function formatStackList(stacks: StackInfo[]): string {
       ...(stack.imported ? ['imported'] : []),
     ].join(' – '),
   )
-  return `${stacks.length} open ${stacks.length === 1 ? 'stack' : 'stacks'} (most recently used first):\n${untrusted(lines.join('\n'))}`
+  return `${stacks.length} open ${stacks.length === 1 ? 'stack' : 'stacks'} (in the user's order):\n${untrusted(lines.join('\n'))}`
 }
 
 /** One stack's pages as an outline (list_stacks with a stack). Titles and URLs are untrusted. */
@@ -931,6 +946,23 @@ function closePage(stacks: StackPort | null, input: Input): ToolOutput {
   return { text: `Closed ${target}${below}.` }
 }
 
+/** Moves a stack to a position in the user's order (move_stack). */
+function moveStack(stacks: StackPort | null, input: Input): ToolOutput {
+  if (!stacks) throw new ToolError('Stacks are not available.')
+  const name = String(input['stack']).trim().replace(/^@/, '')
+  const position = input['position'] as number
+  if (position < 1) throw new ToolError('move_stack: position must be 1 or more (1 = top)')
+  const all = stacks.list()
+  const from = all.findIndex((stack) => stack.name === name)
+  if (!name || from < 0) {
+    throw new ToolError(`No stack is named @${name}. Call list_stacks to see them.`)
+  }
+  const to = Math.min(position, all.length)
+  if (from + 1 === to) return { text: `@${name} already is at position ${to} of ${all.length}.` }
+  stacks.move(name, to)
+  return { text: `Moved @${name} to position ${to} of ${all.length}.` }
+}
+
 /** Switches to (switch_stack) or closes (close_stack) a stack by name. */
 function manageStack(
   stacks: StackPort | null,
@@ -981,6 +1013,7 @@ export async function executeTool(
   if (name === 'recall_history') return recallHistory(ports, input)
   if (name === 'list_stacks') return listStacks(ports.stacks ?? null, input)
   if (name === 'close_page') return closePage(ports.stacks ?? null, input)
+  if (name === 'move_stack') return moveStack(ports.stacks ?? null, input)
   if (name === 'switch_stack' || name === 'close_stack') {
     return manageStack(ports.stacks ?? null, browser, name, input)
   }

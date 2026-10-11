@@ -123,6 +123,7 @@ describe('FieldOfView', () => {
     const stacks = {
       current: null,
       stacks: [{ id: 's1', name: 'docs', rootTitle: 'Docs', pages: 2, audio: null }],
+      recent: ['s1'],
     }
     const stackPages = [
       {

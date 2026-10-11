@@ -22,6 +22,21 @@ const stack = (extra: object = {}) => ({
 })
 
 describe('stored stacks', () => {
+  it('keeps the order of version 3 files and orders older ones by last use once', () => {
+    const three = [
+      stack({ id: 'old', lastUsedAt: 1 }),
+      stack({ id: 'new', lastUsedAt: 3 }),
+      stack({ id: 'mid', lastUsedAt: 2 }),
+    ]
+    const ids = (version?: number) =>
+      parseStoredStacks({ version, current: null, stacks: three, home: null }).stacks.map(
+        (s) => s.id,
+      )
+    expect(ids(3)).toEqual(['old', 'new', 'mid'])
+    expect(ids(2)).toEqual(['new', 'mid', 'old'])
+    expect(ids(undefined)).toEqual(['new', 'mid', 'old'])
+  })
+
   it('reads stacks with and without startRoot', () => {
     expect(parseStoredStacks({ current: 's', stacks: [stack()] }).stacks[0]).not.toHaveProperty(
       'startRoot',

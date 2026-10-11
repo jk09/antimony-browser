@@ -274,13 +274,18 @@ describe('stacks main', () => {
     // The shown page takes focus, so keys (Ctrl+Tab) keep reaching a webContents.
     expect(tabs.focused.at(-1)).toBe(1)
     expect(rowsOf()).toEqual(['Home'])
-    expect(state().stacks[0]!.name).toBe('home')
+    // Switching makes it the most recent, but the order stays: new stacks on top.
+    expect(state().recent[0]).toBe(home.id)
+    expect(state().stacks.map((s) => s.name)).toEqual(['later', 'docs', 'home'])
 
+    // Closing the current stack shows the most recently used one left.
+    const next = state().recent.find((id) => id !== home.id)!
+    const tabOf = { docs: 2, later: 3 } as Record<string, number>
     call(channels.close, home.id)
     expect(tabs.calls).toContain('close 1')
-    expect(state().current!.name).toBe('docs')
-    expect(tabs.activeId).toBe(2)
-    expect(tabs.focused.at(-1)).toBe(2)
+    expect(state().current!.id).toBe(next)
+    expect(tabs.activeId).toBe(tabOf[state().current!.name])
+    expect(tabs.focused.at(-1)).toBe(tabOf[state().current!.name])
 
     expect(() => call(channels.switch, 'nope')).toThrow(TypeError)
     expect(() => call(channels.close, 42)).toThrow(TypeError)
@@ -365,6 +370,40 @@ describe('stacks main', () => {
     expect(state().stacks.map((stack) => stack.name)).toEqual(['docs'])
     expect(state().current!.name).toBe('docs')
     expect(tabs.activeId).toBe(2)
+  })
+
+  it('lets the assistant move a stack in the order, which is saved', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'antimony-stacks-'))
+    writeFileSync(
+      join(dir, 'stacks.json'),
+      JSON.stringify({ version: 2, current: null, stacks: [], home: null }),
+    )
+    const { visit, state } = setup(dir)
+    tabs.open.add(1)
+    tabs.activeId = 1
+    visit(1, 'One')
+    for (const [tabId, title] of [
+      [2, 'Two'],
+      [3, 'Three'],
+    ] as const) {
+      fire({ tabId, type: 'opened', openerId: 1, active: false })
+      visit(tabId, title)
+    }
+    const names = () => state().stacks.map((s) => s.name)
+    expect(names()).toEqual(['three', 'two', 'one'])
+    expect(stackPort!.move('nope', 1)).toBe(false)
+    expect(stackPort!.move('one', 1)).toBe(true)
+    expect(names()).toEqual(['one', 'three', 'two'])
+    expect(stackPort!.move('one', 99)).toBe(true)
+    expect(names()).toEqual(['three', 'two', 'one'])
+    expect(stackPort!.list().map((s) => s.name)).toEqual(['three', 'two', 'one'])
+    quitListeners.forEach((listener) => listener())
+    const saved = JSON.parse(readFileSync(join(dir, 'stacks.json'), 'utf8')) as {
+      version: number
+      stacks: { name: string }[]
+    }
+    expect(saved.version).toBe(3)
+    expect(saved.stacks.map((s) => s.name)).toEqual(['three', 'two', 'one'])
   })
 
   it('lets the assistant close a page of any stack by its ref', () => {

@@ -21,6 +21,7 @@ const state = (rows: StackRow[], activeId: number): StacksState => ({
     { id: 's1', name: 'page-1', rootTitle: 'Page 1', pages: rows.length, audio: null },
     { id: 's2', name: 'docs', rootTitle: 'Docs', pages: 1, audio: null },
   ],
+  recent: ['s1', 's2'],
 })
 
 async function renderHeader(stacks: StacksState) {
@@ -164,6 +165,7 @@ describe('StackHeader', () => {
         { id: 's2', name: 'docs', rootTitle: 'Docs', pages: 1, audio: null },
         { id: 's3', name: 'news', rootTitle: 'News', pages: 1, audio: null },
       ],
+      recent: ['s1', 's2', 's3'],
     }
     const { api, emit } = await renderHeader(three)
     const switcher = screen.getByRole('button', { name: /@page-1/ })
@@ -217,6 +219,7 @@ describe('StackHeader', () => {
         { id: 's2', name: 'docs', rootTitle: 'Docs', pages: 2, audio: null },
         { id: 's3', name: 'news', rootTitle: 'Tempest news', pages: 1, audio: null },
       ],
+      recent: ['s1', 's2', 's3'],
     }
     const page = (id: number, title: string, ref: string) => ({
       id,
@@ -313,6 +316,7 @@ describe('StackHeader', () => {
         { id: 's2', name: 'docs', rootTitle: 'Docs', pages: 1, audio: 'muted' },
         { id: 's3', name: 'news', rootTitle: 'News', pages: 1, audio: null },
       ],
+      recent: ['s1', 's2', 's3'],
     })
     // The current stack's indicator sits next to its name.
     fireEvent.click(screen.getByRole('button', { name: 'Mute @page-1' }))
@@ -330,10 +334,35 @@ describe('StackHeader', () => {
     expect(screen.getByRole('dialog', { name: 'Stacks' })).toBeTruthy()
   })
 
+  it('lists stacks in their order but cycles them most recent first', async () => {
+    const ordered: StacksState = {
+      ...state([row(1, 0)], 1),
+      stacks: [
+        { id: 's3', name: 'news', rootTitle: 'News', pages: 1, audio: null },
+        { id: 's1', name: 'page-1', rootTitle: 'Page 1', pages: 1, audio: null },
+        { id: 's2', name: 'docs', rootTitle: 'Docs', pages: 1, audio: null },
+      ],
+      recent: ['s1', 's2', 's3'],
+    }
+    const { api, emit } = await renderHeader(ordered)
+    fireEvent.click(screen.getByRole('button', { name: /^@page-1/ }))
+    await act(async () => {})
+    const names = within(screen.getByRole('dialog', { name: 'Stacks' }))
+      .getAllByRole('listitem')
+      .map((item) => item.textContent!.split(' ')[0])
+    expect(names).toEqual(['@newsNews', '@page-1Page', '@docsDocs'])
+    fireEvent.click(screen.getByTitle(/^All stacks/))
+    // One Ctrl+Tab goes to the previously used stack, not the next one in the list.
+    act(() => emit.stackCommand('cycle-next'))
+    act(() => emit.stackCommand('cycle-end'))
+    expect(api.stacks.switch).toHaveBeenLastCalledWith('s2')
+  })
+
   it('does not cycle with a single stack', async () => {
     const { api, emit } = await renderHeader({
       ...state([row(1, 0)], 1),
       stacks: [{ id: 's1', name: 'page-1', rootTitle: 'Page 1', pages: 1, audio: null }],
+      recent: ['s1'],
     })
     act(() => emit.stackCommand('cycle-next'))
     expect(screen.queryByRole('dialog', { name: 'Stacks' })).toBeNull()
@@ -342,7 +371,7 @@ describe('StackHeader', () => {
   })
 
   it('shows "New tab" without a stack', async () => {
-    await renderHeader({ current: null, stacks: [] })
+    await renderHeader({ current: null, stacks: [], recent: [] })
     expect(screen.getByRole('button', { name: /New tab/ })).toBeTruthy()
     expect(screen.queryByRole('tree')).toBeNull()
   })

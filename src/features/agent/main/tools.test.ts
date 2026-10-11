@@ -74,6 +74,7 @@ describe('toolsFor', () => {
       'list_stacks',
       'switch_stack',
       'close_stack',
+      'move_stack',
       'close_page',
       'get_page_state',
       'search_history',
@@ -122,6 +123,7 @@ describe('switch_stack and close_stack', () => {
       switch: (name: string) => switched.push(name) > 0,
       close: (name: string) => closed.push(name) > 0,
       closePage: () => true,
+      move: () => true,
     }
     expect(toolNamed('switch_stack')).toMatchObject({ kind: 'stack', replayable: true })
     expect(toolNamed('close_stack')).toMatchObject({ kind: 'stack', replayable: false })
@@ -145,6 +147,51 @@ describe('switch_stack and close_stack', () => {
     await expect(executeTool(null, 'close_stack', { stack: 'news' }, {})).rejects.toThrow(
       'Stacks are not available',
     )
+  })
+})
+
+describe('move_stack', () => {
+  it('moves a stack to a position, clamped to the end; validates the position and name', async () => {
+    const info = (name: string): StackInfo => ({
+      name,
+      rootTitle: name,
+      current: false,
+      imported: false,
+      pages: [],
+    })
+    const moved: [string, number][] = []
+    const port = {
+      open: () => {},
+      list: () => [info('a'), info('b'), info('c')],
+      switch: () => true,
+      close: () => true,
+      closePage: () => true,
+      move: (name: string, position: number) => moved.push([name, position]) > 0,
+    }
+    expect(toolNamed('move_stack')).toMatchObject({ kind: 'stack', replayable: true })
+    expect(describeCall('move_stack', { stack: '@c', position: 1 })).toBe('Move @c to position 1')
+    expect(
+      (await executeTool(null, 'move_stack', { stack: '@c', position: 1 }, { stacks: port })).text,
+    ).toBe('Moved @c to position 1 of 3.')
+    expect(
+      (await executeTool(null, 'move_stack', { stack: 'a', position: 9 }, { stacks: port })).text,
+    ).toBe('Moved @a to position 3 of 3.')
+    expect(
+      (await executeTool(null, 'move_stack', { stack: 'b', position: 2 }, { stacks: port })).text,
+    ).toBe('@b already is at position 2 of 3.')
+    expect(moved).toEqual([
+      ['c', 1],
+      ['a', 3],
+    ])
+    expect(() => validateInput('move_stack', { stack: 'a', position: 1.5 })).toThrow(
+      'position must be a integer',
+    )
+    await expect(
+      executeTool(null, 'move_stack', { stack: 'a', position: 0 }, { stacks: port }),
+    ).rejects.toThrow('position must be 1 or more')
+    await expect(
+      executeTool(null, 'move_stack', { stack: 'nope', position: 1 }, { stacks: port }),
+    ).rejects.toThrow('No stack is named @nope')
   })
 })
 
@@ -184,6 +231,7 @@ describe('close_page', () => {
       switch: () => true,
       close: () => true,
       closePage: (name: string, ref: string) => closed.push([name, ref]) > 0,
+      move: () => true,
     }
     expect(
       (await executeTool(null, 'close_page', { page: '@docs/faq' }, { stacks: port })).text,
@@ -228,6 +276,7 @@ describe('list_stacks', () => {
     switch: () => true,
     close: () => true,
     closePage: () => true,
+    move: () => true,
   }
 
   it('is a history tool that needs no page and is not replayable', () => {
@@ -236,10 +285,10 @@ describe('list_stacks', () => {
     expect(describeCall('list_stacks', { stack: '@docs' })).toBe('List the pages of @docs')
   })
 
-  it('lists all stacks, most recently used first, as untrusted content', async () => {
+  it("lists all stacks in the user's order, as untrusted content", async () => {
     const { text } = await executeTool(null, 'list_stacks', {}, { stacks: port })
     expect(text).toBe(
-      `3 open stacks (most recently used first):\n${untrusted(
+      `3 open stacks (in the user's order):\n${untrusted(
         [
           '@docs – Docs <b> – 2 pages – current',
           'New tab – Bing – 0 pages',
@@ -285,6 +334,7 @@ describe('list_stacks', () => {
           switch: () => true,
           close: () => true,
           closePage: () => true,
+          move: () => true,
         },
       },
     )

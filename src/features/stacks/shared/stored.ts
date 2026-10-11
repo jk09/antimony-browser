@@ -3,11 +3,12 @@ import { DEFAULT_HOME, type Stack, type StackNode } from '../ipc'
 
 /**
  * The stacks.json format. Version 2 files store the home page the user chose, null included;
- * older ones without a home page get the default.
+ * older ones without a home page get the default. Version 3 files keep the stacks in the user's
+ * order; older ones are put in most-recently-used order once.
  */
-export const STACKS_FILE_VERSION = 2
+export const STACKS_FILE_VERSION = 3
 
-/** stacks.json: the stacks, which one is current and the home page new stacks open at. */
+/** stacks.json: the stacks in their order, which one is current and the home page new stacks open at. */
 export interface StoredStacks {
   version: typeof STACKS_FILE_VERSION
   current: string | null
@@ -87,11 +88,13 @@ function parseStack(raw: unknown): Stack {
 export function parseStoredStacks(raw: unknown): StoredStacks {
   if (!isRecord(raw) || !Array.isArray(raw['stacks'])) fail('expected { current, stacks }')
   const stacks = raw['stacks'].map(parseStack)
+  const version = typeof raw['version'] === 'number' ? raw['version'] : 1
+  if (version < 3) stacks.sort((a, b) => b.lastUsedAt - a.lastUsedAt)
   const current = raw['current']
   if (current !== null && typeof current !== 'string') fail('current is not a stack id')
   // Before version 2 a missing home page was saved as null, which isn't a choice: the default.
   // One that isn't a web URL is dropped.
-  const chosen = raw['version'] === STACKS_FILE_VERSION
+  const chosen = version >= 2
   const home = isWebUrl(raw['home']) ? raw['home'] : chosen ? null : DEFAULT_HOME
   return {
     version: STACKS_FILE_VERSION,

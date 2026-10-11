@@ -95,6 +95,15 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
   const targets = new Map<string, number>()
 
   const byName = (name: string) => [...stacks.values()].find((stack) => stack.name === name)
+  /** The stacks in the user's order: the map's order, which is the order stacks.json stores. */
+  const inOrder = () => [...stacks.values()]
+  /** Puts `stack` at `index` of the order (0 = top; past the end = last). */
+  const place = (stack: Stack, index: number) => {
+    const others = inOrder().filter((s) => s !== stack)
+    others.splice(Math.min(index, others.length), 0, stack)
+    stacks.clear()
+    for (const s of others) stacks.set(s.id, s)
+  }
   const byRecentUse = () => [...stacks.values()].sort((a, b) => b.lastUsedAt - a.lastUsedAt)
   const current = () => (currentId === null ? null : (stacks.get(currentId) ?? null))
 
@@ -119,13 +128,14 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
         rows: rows(stack),
         activeId: stack.activeId,
       },
-      stacks: byRecentUse().map((s) => ({
+      stacks: inOrder().map((s) => ({
         id: s.id,
         name: s.name ?? '',
         rootTitle: rootTitle(s),
         pages: nodeCount(s),
         audio: audioOf(s),
       })),
+      recent: byRecentUse().map((s) => s.id),
     }
   }
 
@@ -170,7 +180,8 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
 
   const addStack = (): Stack => {
     const stack = newStack(randomUUID(), Date.now())
-    stacks.set(stack.id, stack)
+    // New stacks go on top of the order.
+    place(stack, 0)
     // Keep at most MAX_STACKS: the least recently used other stacks go.
     const others = byRecentUse().filter((s) => s !== stack && s.id !== currentId)
     while (stacks.size > MAX_STACKS && others.length > 0) closeStack(others.pop()!)
@@ -344,6 +355,7 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
         continue
       }
       const stack = stackFromImport(randomUUID(), group, takenNames(newStack('', 0)), importedAt)
+      // Imported stacks go to the bottom of the order, behind the user's own.
       stacks.set(stack.id, stack)
       group.pages.forEach((page) => known.add(addressOf(page.url)))
       created++
@@ -463,7 +475,7 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
   provideStacks({
     open: openNewStack,
     list: (): StackInfo[] =>
-      byRecentUse().map((stack) => ({
+      inOrder().map((stack) => ({
         name: stack.name ?? '',
         rootTitle: rootTitle(stack),
         current: stack.id === currentId,
@@ -476,6 +488,13 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
           active: row.id === stack.activeId,
         })),
       })),
+    move: (name, position) => {
+      const stack = byName(name)
+      if (!stack) return false
+      place(stack, Math.max(0, position - 1))
+      changed()
+      return true
+    },
     switch: (name) => {
       const stack = byName(name)
       if (stack) switchTo(stack)
