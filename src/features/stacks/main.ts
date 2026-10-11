@@ -37,7 +37,9 @@ import {
   removeBranch,
   rows,
   setTitle,
+  slug,
   trimToActive,
+  uniqueName,
 } from './shared/tree'
 
 const PUBLISH_DELAY_MS = 16
@@ -500,6 +502,17 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
           active: row.id === stack.activeId,
         })),
       })),
+    // A new name the user asked for: slugged like derived names, made unique with -2, -3…
+    rename: (name, wanted) => {
+      const stack = byName(name)
+      if (!stack) return null
+      const asked = slug(wanted)
+      if (asked && asked !== stack.name) {
+        stack.name = uniqueName(asked, takenNames(stack))
+        changed()
+      }
+      return { name: stack.name!, asked }
+    },
     move: (name, position) => {
       const stack = byName(name)
       if (!stack) return false

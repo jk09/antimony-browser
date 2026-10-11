@@ -414,6 +414,41 @@ describe('stacks main', () => {
     expect(saved.stacks.map((s) => s.name)).toEqual(['two', 'three', 'one'])
   })
 
+  it('lets the assistant rename a stack: slugged, made unique, kept after more visits', () => {
+    const { visit, state } = setup()
+    tabs.open.add(1)
+    tabs.activeId = 1
+    visit(1, 'Home')
+    fire({ tabId: 2, type: 'opened', openerId: 1, active: true })
+    tabs.open.add(2)
+    tabs.activate(2)
+    visit(2, 'Docs')
+    const names = () => state().stacks.map((s) => s.name)
+
+    expect(stackPort!.rename('nope', 'x')).toBeNull()
+    expect(stackPort!.rename('docs', 'My Work Stuff!')).toEqual({
+      name: 'my-work-stuff',
+      asked: 'my-work-stuff',
+    })
+    expect(stackPort!.rename('home', 'my work stuff')).toEqual({
+      name: 'my-work-stuff-2',
+      asked: 'my-work-stuff',
+    })
+    // Nothing usable in the name, or the same name: nothing changes.
+    expect(stackPort!.rename('my-work-stuff-2', '!!!')).toEqual({
+      name: 'my-work-stuff-2',
+      asked: '',
+    })
+    expect(stackPort!.rename('my-work-stuff', 'My work stuff')).toEqual({
+      name: 'my-work-stuff',
+      asked: 'my-work-stuff',
+    })
+    expect(stackPort!.rename('my-work-stuff', 'x'.repeat(40))!.name).toBe('x'.repeat(32))
+    // Later visits don't rename it back.
+    visit(2, 'Elsewhere')
+    expect(names()).toEqual(['x'.repeat(32), 'my-work-stuff-2'])
+  })
+
   it('lets the assistant close a page of any stack by its ref', () => {
     const { visit, state } = setup()
     tabs.open.add(1)

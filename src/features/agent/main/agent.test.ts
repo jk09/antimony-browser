@@ -601,6 +601,7 @@ describe('macros', () => {
       close: vi.fn(),
       closePage: vi.fn(),
       move: vi.fn(),
+      rename: vi.fn(() => null),
     }
     const { agent, browser } = setup(
       [
@@ -638,6 +639,7 @@ describe('macros', () => {
       close: vi.fn(),
       closePage: vi.fn(),
       move: vi.fn(),
+      rename: vi.fn(() => null),
     }
     const { agent, requests } = setup(
       [
@@ -667,6 +669,7 @@ describe('macros', () => {
       close: vi.fn(),
       closePage: vi.fn(),
       move: vi.fn(),
+      rename: vi.fn(() => null),
     }
     const { agent, requests } = setup([async () => response([{ type: 'text', text: 'ok' }])], {
       stacks,
@@ -696,6 +699,7 @@ describe('macros', () => {
       }),
       closePage: vi.fn(() => true),
       move: vi.fn(() => true),
+      rename: vi.fn(() => null),
     }
     const { agent } = setup(
       [
@@ -754,6 +758,7 @@ describe('macros', () => {
       close: vi.fn(),
       closePage: vi.fn(() => true),
       move: vi.fn(() => true),
+      rename: vi.fn(() => null),
     }
     const { agent, requests } = setup(
       [
@@ -778,6 +783,30 @@ describe('macros', () => {
     expect(requests[2]!.messages.at(-1)!.content[0]).toMatchObject({ is_error: true })
   })
 
+  it('renames stacks without approval', async () => {
+    const stacks: StackPort = {
+      open: vi.fn(),
+      list: vi.fn(() => []),
+      switch: vi.fn(),
+      close: vi.fn(),
+      closePage: vi.fn(),
+      move: vi.fn(),
+      rename: vi.fn(() => ({ name: 'work', asked: 'work' })),
+    }
+    const { agent, requests } = setup(
+      [
+        async () =>
+          response([toolUse('t1', 'rename_stack', { stack: '@docs', name: 'Work' })], 'tool_use'),
+        async () => response([{ type: 'text', text: 'ok' }]),
+      ],
+      { stacks, historyAccess: false },
+    )
+    await agent.run(input('call the docs stack work'))
+    expect(stacks.rename).toHaveBeenCalledWith('docs', 'Work')
+    expect(agent.state().approval).toBeNull()
+    expect(JSON.stringify(requests[1]!.messages.at(-1))).toContain('Renamed @docs to @work.')
+  })
+
   it('moves stacks without approval', async () => {
     const stacks: StackPort = {
       open: vi.fn(),
@@ -789,6 +818,7 @@ describe('macros', () => {
       close: vi.fn(),
       closePage: vi.fn(),
       move: vi.fn(() => true),
+      rename: vi.fn(() => null),
     }
     const { agent } = setup(
       [
@@ -815,6 +845,7 @@ describe('macros', () => {
       close: vi.fn(() => true),
       closePage: vi.fn(() => true),
       move: vi.fn(() => true),
+      rename: vi.fn(() => null),
     }
     const { agent } = setup([], { stacks })
     expect(await agent.replay('/n', [{ tool: 'switch_stack', input: { stack: 'news' } }])).toEqual({
@@ -831,6 +862,7 @@ describe('macros', () => {
       close: vi.fn(),
       closePage: vi.fn(),
       move: vi.fn(),
+      rename: vi.fn(() => null),
     }
     const { agent } = setup([], { stacks })
     expect(await agent.replay('/ns', [{ tool: 'new_stack', input: {} }])).toEqual({ ok: true })
