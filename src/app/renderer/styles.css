@@ -474,9 +474,27 @@ textarea {
   cursor: pointer;
 }
 
-.stack-list-close {
+.stack-list-close,
+.stack-list-rename {
   width: 24px;
   height: 24px;
+}
+
+/* The pencil shows on the row under the pointer or with focus inside, so rows stay calm. */
+.stack-list-rename {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.stack-list li:hover .stack-list-rename,
+.stack-list li:focus-within .stack-list-rename,
+.stack-list-rename:focus-visible {
+  opacity: 1;
 }
 
 /* A stack's sound indicator; a click mutes or unmutes its tab. */

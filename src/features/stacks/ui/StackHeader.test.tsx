@@ -279,7 +279,7 @@ describe('StackHeader', () => {
         .getAllByRole('listitem')
         .map((item) => `${item.getAttribute('aria-selected')}:${item.textContent}`)
     expect(options()).toEqual([
-      'true:@newsTempest news · 1 page×',
+      'true:@newsTempest news · 1 page✎×',
       'false:Tempest manual@docs · https://site.example/manual',
       'false:Tempest news@news · https://site.example/tn',
     ])
@@ -465,6 +465,25 @@ describe('StackHeader', () => {
     fireEvent.keyDown(within(list).getByRole('textbox', { name: /New name/ }), { key: 'Escape' })
     expect(api.stacks.rename).toHaveBeenCalledTimes(1)
     expect(screen.getByRole('dialog', { name: 'Stacks' })).toBeTruthy()
+  })
+
+  it('renames from the pencil button, without switching; not while the assistant runs', async () => {
+    const { api, emit } = await renderHeader(state([row(1, 0)], 1))
+    fireEvent.click(screen.getByTitle(/^All stacks/))
+    await act(async () => {})
+    const list = screen.getByRole('dialog', { name: 'Stacks' })
+    fireEvent.click(within(list).getByRole('button', { name: 'Rename @docs' }))
+    const field = within(list).getByRole('textbox', { name: 'New name for @docs' })
+    // The pencil gives way to the field while renaming.
+    expect(within(list).queryByRole('button', { name: 'Rename @docs' })).toBeNull()
+    fireEvent.change(field, { target: { value: 'Reading' } })
+    fireEvent.keyDown(field, { key: 'Enter' })
+    expect(api.stacks.rename).toHaveBeenCalledWith('s2', 'Reading')
+    expect(api.stacks.switch).not.toHaveBeenCalled()
+
+    act(() => emit.state({ ...idleState, status: 'running' }))
+    const pencil = within(list).getByRole('button', { name: 'Rename @docs' }) as HTMLButtonElement
+    expect(pencil.disabled).toBe(true)
   })
 
   it('switches after a single mouse click, but not when a double-click renames', async () => {
