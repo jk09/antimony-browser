@@ -74,6 +74,7 @@ describe('toolsFor', () => {
       'list_stacks',
       'switch_stack',
       'close_stack',
+      'rename_stack',
       'move_stack',
       'close_page',
       'get_page_state',
@@ -124,6 +125,7 @@ describe('switch_stack and close_stack', () => {
       close: (name: string) => closed.push(name) > 0,
       closePage: () => true,
       move: () => true,
+      rename: () => null,
     }
     expect(toolNamed('switch_stack')).toMatchObject({ kind: 'stack', replayable: true })
     expect(toolNamed('close_stack')).toMatchObject({ kind: 'stack', replayable: false })
@@ -150,6 +152,39 @@ describe('switch_stack and close_stack', () => {
   })
 })
 
+describe('rename_stack', () => {
+  it('renames through the port and says when the name was taken or unusable', async () => {
+    const results: Record<string, { name: string; asked: string } | null> = {
+      work: { name: 'work-2', asked: 'work' },
+      play: { name: 'fun', asked: 'fun' },
+      same: { name: 'same', asked: 'same' },
+      empty: { name: 'empty', asked: '' },
+    }
+    const port = {
+      open: () => {},
+      list: () => [],
+      switch: () => true,
+      close: () => true,
+      closePage: () => true,
+      move: () => true,
+      rename: (name: string) => results[name] ?? null,
+    }
+    const run = (stack: string) =>
+      executeTool(null, 'rename_stack', { stack, name: 'x' }, { stacks: port })
+    expect(toolNamed('rename_stack')).toMatchObject({ kind: 'stack', replayable: false })
+    expect(describeCall('rename_stack', { stack: '@a', name: 'My Work' })).toBe(
+      'Rename @a to "My Work"',
+    )
+    expect((await run('@play')).text).toBe('Renamed @play to @fun.')
+    expect((await run('work')).text).toBe(
+      'Renamed @work to @work-2 (@work is taken by another stack).',
+    )
+    expect((await run('same')).text).toBe('@same already has that name.')
+    await expect(run('empty')).rejects.toThrow('needs letters or digits')
+    await expect(run('nope')).rejects.toThrow('No stack is named @nope')
+  })
+})
+
 describe('move_stack', () => {
   it('moves a stack to a position, clamped to the end; validates the position and name', async () => {
     const info = (name: string): StackInfo => ({
@@ -167,6 +202,7 @@ describe('move_stack', () => {
       close: () => true,
       closePage: () => true,
       move: (name: string, position: number) => moved.push([name, position]) > 0,
+      rename: () => null,
     }
     expect(toolNamed('move_stack')).toMatchObject({ kind: 'stack', replayable: true })
     expect(describeCall('move_stack', { stack: '@c', position: 1 })).toBe('Move @c to position 1')
@@ -232,6 +268,7 @@ describe('close_page', () => {
       close: () => true,
       closePage: (name: string, ref: string) => closed.push([name, ref]) > 0,
       move: () => true,
+      rename: () => null,
     }
     expect(
       (await executeTool(null, 'close_page', { page: '@docs/faq' }, { stacks: port })).text,
@@ -277,6 +314,7 @@ describe('list_stacks', () => {
     close: () => true,
     closePage: () => true,
     move: () => true,
+    rename: () => null,
   }
 
   it('is a history tool that needs no page and is not replayable', () => {
@@ -335,6 +373,7 @@ describe('list_stacks', () => {
           close: () => true,
           closePage: () => true,
           move: () => true,
+          rename: () => null,
         },
       },
     )

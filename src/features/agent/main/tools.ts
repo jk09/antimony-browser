@@ -147,6 +147,12 @@ export interface StackPort {
   open(): void
   /** Every stack, in the user's order. */
   list(): StackInfo[]
+  /**
+   * Renames a stack: `wanted` is slugged and made unique (-2, -3…). Returns the name it now has and
+   * the slug asked for ('' if `wanted` has no letters or digits: nothing changes); null if no stack
+   * has that name.
+   */
+  rename(name: string, wanted: string): { name: string; asked: string } | null
   /** Moves the named stack to `position` (1 = top; past the end = last); false if none. */
   move(name: string, position: number): boolean
   /** Makes the named stack current and focuses its page; false if no open stack has that name. */
@@ -298,6 +304,17 @@ export const toolDefinitions: ToolDefinition[] = [
     description:
       'Close an open stack (a browser tab) with all its pages, by its name. Only when the user asked to close it; the user is asked to approve. Closing the current stack makes the most recently used one current.',
     input_schema: schema({ stack: stackName }, ['stack']),
+  },
+  {
+    name: 'rename_stack',
+    kind: 'stack',
+    replayable: false,
+    description:
+      'Rename an open stack. The new name becomes lowercase letters, digits and dashes ("My Work" → @my-work, at most 32 characters); if another stack has it, -2, -3… is added. The user then refers to the stack by the new @name.',
+    input_schema: schema(
+      { stack: stackName, name: { type: 'string', description: 'The new name.' } },
+      ['stack', 'name'],
+    ),
   },
   {
     name: 'move_stack',
@@ -575,6 +592,8 @@ export function describeCall(name: string, input: Input, element?: ElementInfo):
       return `Close stack @${String(input['stack']).replace(/^@/, '')}`
     case 'close_page':
       return `Close ${String(input['page'])}`
+    case 'rename_stack':
+      return `Rename @${String(input['stack']).replace(/^@/, '')} to "${String(input['name'])}"`
     case 'move_stack':
       return `Move @${String(input['stack']).replace(/^@/, '')} to position ${String(input['position'])}`
     case 'list_stacks':
@@ -946,6 +965,20 @@ function closePage(stacks: StackPort | null, input: Input): ToolOutput {
   return { text: `Closed ${target}${below}.` }
 }
 
+/** Renames a stack (rename_stack). */
+function renameStack(stacks: StackPort | null, input: Input): ToolOutput {
+  if (!stacks) throw new ToolError('Stacks are not available.')
+  const old = String(input['stack']).trim().replace(/^@/, '')
+  const result = stacks.rename(old, String(input['name']))
+  if (!result) throw new ToolError(`No stack is named @${old}. Call list_stacks to see them.`)
+  if (!result.asked) {
+    throw new ToolError('rename_stack: the name needs letters or digits (a-z, 0-9).')
+  }
+  if (result.name === old) return { text: `@${old} already has that name.` }
+  const taken = result.name !== result.asked ? ` (@${result.asked} is taken by another stack)` : ''
+  return { text: `Renamed @${old} to @${result.name}${taken}.` }
+}
+
 /** Moves a stack to a position in the user's order (move_stack). */
 function moveStack(stacks: StackPort | null, input: Input): ToolOutput {
   if (!stacks) throw new ToolError('Stacks are not available.')
@@ -1014,6 +1047,7 @@ export async function executeTool(
   if (name === 'list_stacks') return listStacks(ports.stacks ?? null, input)
   if (name === 'close_page') return closePage(ports.stacks ?? null, input)
   if (name === 'move_stack') return moveStack(ports.stacks ?? null, input)
+  if (name === 'rename_stack') return renameStack(ports.stacks ?? null, input)
   if (name === 'switch_stack' || name === 'close_stack') {
     return manageStack(ports.stacks ?? null, browser, name, input)
   }
