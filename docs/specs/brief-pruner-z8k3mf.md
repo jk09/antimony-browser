@@ -6,15 +6,15 @@
 | --- | --- |
 | **Feature name** | `close_page` tool: the assistant closes one page of a stack with its branch |
 | **Spec ID** | brief-pruner-z8k3mf |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-11 08:10 +00:00 |
-| **Last updated** | 2026-10-11 08:40 +00:00 |
+| **Last updated** | 2026-10-11 08:50 +00:00 |
 | **Affected features** | agent, stacks |
 | **Target release** | 0.1.0 |
-| **Related links** | specs steady-helm-q2w7xd (`switch_stack`, `close_stack`; this is its follow-up), open-roster-v5n9qk (`list_stacks`, page refs); PRs #71, #72 |
+| **Related links** | PR #73; specs steady-helm-q2w7xd (`switch_stack`, `close_stack`; this is its follow-up), open-roster-v5n9qk (`list_stacks`, page refs); PRs #71, #72 |
 
 **Status definitions:**
 - **Draft:** The spec is being written or reviewed. The scope may still change.
