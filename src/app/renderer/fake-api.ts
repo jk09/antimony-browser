@@ -185,7 +185,7 @@ export function fakeApi(
       onOpenConfig: openConfig.subscribe,
     },
     stacks: {
-      state: vi.fn(async () => options.stacks ?? { current: null, stacks: [] }),
+      state: vi.fn(async () => options.stacks ?? { current: null, stacks: [], recent: [] }),
       goToNode: vi.fn(async (_nodeId: number) => {}),
       switch: vi.fn(async (_stackId: string) => {}),
       create: vi.fn(async () => {}),

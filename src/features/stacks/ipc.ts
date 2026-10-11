@@ -128,8 +128,10 @@ export interface StackPages {
 export interface StacksState {
   /** The current stack; null with no stack at all ("New tab"). */
   current: { id: string; name: string; rows: StackRow[]; activeId: number | null } | null
-  /** All stacks, most recently used first. */
+  /** All stacks in the user's order (new ones on top; the assistant's move_stack changes it). */
   stacks: StackSummary[]
+  /** The stack ids, most recently used first (Ctrl+Tab). */
+  recent: string[]
 }
 
 export interface StacksApi {

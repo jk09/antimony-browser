@@ -600,6 +600,7 @@ describe('macros', () => {
       switch: vi.fn(),
       close: vi.fn(),
       closePage: vi.fn(),
+      move: vi.fn(),
     }
     const { agent, browser } = setup(
       [
@@ -636,6 +637,7 @@ describe('macros', () => {
       switch: vi.fn(),
       close: vi.fn(),
       closePage: vi.fn(),
+      move: vi.fn(),
     }
     const { agent, requests } = setup(
       [
@@ -664,6 +666,7 @@ describe('macros', () => {
       switch: vi.fn(),
       close: vi.fn(),
       closePage: vi.fn(),
+      move: vi.fn(),
     }
     const { agent, requests } = setup([async () => response([{ type: 'text', text: 'ok' }])], {
       stacks,
@@ -692,6 +695,7 @@ describe('macros', () => {
         return true
       }),
       closePage: vi.fn(() => true),
+      move: vi.fn(() => true),
     }
     const { agent } = setup(
       [
@@ -749,6 +753,7 @@ describe('macros', () => {
       switch: vi.fn(),
       close: vi.fn(),
       closePage: vi.fn(() => true),
+      move: vi.fn(() => true),
     }
     const { agent, requests } = setup(
       [
@@ -773,6 +778,33 @@ describe('macros', () => {
     expect(requests[2]!.messages.at(-1)!.content[0]).toMatchObject({ is_error: true })
   })
 
+  it('moves stacks without approval', async () => {
+    const stacks: StackPort = {
+      open: vi.fn(),
+      list: vi.fn(() => [
+        { name: 'a', rootTitle: 'A', current: true, imported: false, pages: [] },
+        { name: 'b', rootTitle: 'B', current: false, imported: false, pages: [] },
+      ]),
+      switch: vi.fn(),
+      close: vi.fn(),
+      closePage: vi.fn(),
+      move: vi.fn(() => true),
+    }
+    const { agent } = setup(
+      [
+        async () =>
+          response([toolUse('t1', 'move_stack', { stack: '@b', position: 1 })], 'tool_use'),
+        async () => response([{ type: 'text', text: 'ok' }]),
+      ],
+      { stacks, historyAccess: false },
+    )
+    await agent.run(input('move b to the top'))
+    expect(stacks.move).toHaveBeenCalledWith('b', 1)
+    expect(agent.state().items).toContainEqual(
+      expect.objectContaining({ summary: 'Move @b to position 1', status: 'ok' }),
+    )
+  })
+
   it('replays switch_stack steps', async () => {
     const stacks: StackPort = {
       open: vi.fn(),
@@ -782,6 +814,7 @@ describe('macros', () => {
       switch: vi.fn(() => true),
       close: vi.fn(() => true),
       closePage: vi.fn(() => true),
+      move: vi.fn(() => true),
     }
     const { agent } = setup([], { stacks })
     expect(await agent.replay('/n', [{ tool: 'switch_stack', input: { stack: 'news' } }])).toEqual({
@@ -797,6 +830,7 @@ describe('macros', () => {
       switch: vi.fn(),
       close: vi.fn(),
       closePage: vi.fn(),
+      move: vi.fn(),
     }
     const { agent } = setup([], { stacks })
     expect(await agent.replay('/ns', [{ tool: 'new_stack', input: {} }])).toEqual({ ok: true })

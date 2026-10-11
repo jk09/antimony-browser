@@ -90,6 +90,7 @@ describe('Prompt', () => {
       { id: 's1', name: 'hacker-news', rootTitle: 'Hacker News', pages: 3, audio: null },
       { id: 's2', name: 'rust-docs', rootTitle: 'Rust', pages: 2, audio: null },
     ],
+    recent: ['s1', 's2'],
   }
   const row = (id: number, title: string, depth: number, last: boolean, ref: string) => ({
     id,
