@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type DragEvent,
+  type MouseEvent as ReactMouseEvent,
   type KeyboardEvent,
   type ReactNode,
 } from 'react'
@@ -19,7 +20,7 @@ import type {
   StackSummary,
 } from '../ipc'
 import { shortcutLabel } from '../shared/keys'
-import { collapse, type CollapsedItem } from '../shared/tree'
+import { collapse, slug, uniqueName, type CollapsedItem } from '../shared/tree'
 import { matchRanges, queryWords, searchPages, urlPrefixLength } from '../shared/search'
 
 export const MAX_ROWS = 8
@@ -27,6 +28,8 @@ export const MAX_HEIGHT_SHARE = 0.35
 export const ROW_HEIGHT = 22
 /** Pages of all stacks the stack list's search shows at most. */
 export const MAX_PAGE_HITS = 50
+/** How long a mouse click on a stack waits for a second click (rename) before switching. */
+export const RENAME_CLICK_MS = 250
 const INDENT_PX = 12
 const MAX_INDENT_DEPTH = 8
 
@@ -426,6 +429,10 @@ export function StackHeader() {
   const [listSelected, setListSelected] = useState(0)
   /** The stack being dragged in the list and the gap it would drop into (0 = above the first). */
   const [drag, setDrag] = useState<{ id: string; gap: number | null } | null>(null)
+  /** The stack whose name is being edited in the list, and the text typed so far. */
+  const [renaming, setRenaming] = useState<{ id: string; text: string } | null>(null)
+  /** A mouse click's switch waits briefly, so a double-click can rename instead. */
+  const pendingSwitch = useRef<ReturnType<typeof setTimeout> | null>(null)
   /** A stack moved with Alt+↑/↓: its row's button takes focus again once the list re-renders. */
   const refocusStack = useRef<string | null>(null)
   const [allPages, setAllPages] = useState<StackPages[]>([])
@@ -678,6 +685,41 @@ export function StackHeader() {
     setListOpen(false)
     api.stacks.switch(stack.id).catch(report)
   }
+  const cancelPendingSwitch = () => {
+    if (pendingSwitch.current !== null) clearTimeout(pendingSwitch.current)
+    pendingSwitch.current = null
+  }
+  useEffect(() => cancelPendingSwitch, [])
+  // A click from the keyboard (detail 0) switches at once; a mouse click waits for a second one.
+  const onRowClick = (event: ReactMouseEvent, stack: StackSummary) => {
+    cancelPendingSwitch()
+    if (event.detail === 0 || !canRename) return switchStack(stack)
+    if (event.detail === 1) {
+      pendingSwitch.current = setTimeout(() => {
+        pendingSwitch.current = null
+        switchStack(stack)
+      }, RENAME_CLICK_MS)
+    }
+  }
+  // Renaming (double-click or F2): like switching, not while the assistant runs or during Ctrl+Tab.
+  const canRename = !running && !cycle
+  const startRename = (stack: StackSummary) => {
+    cancelPendingSwitch()
+    if (canRename) setRenaming({ id: stack.id, text: stack.name })
+  }
+  const endRename = (save: boolean) => {
+    const edit = renaming
+    if (!edit) return
+    setRenaming(null)
+    refocusStack.current = edit.id
+    if (save && slug(edit.text)) api.stacks.rename(edit.id, edit.text).catch(report)
+  }
+  /** The @name the typed text would give: slugged, -2… when another stack has it. */
+  const renamePreview = (edit: { id: string; text: string }) => {
+    const asked = slug(edit.text)
+    const others = new Set(allStacks.filter((s) => s.id !== edit.id).map((s) => s.name))
+    return asked ? uniqueName(asked, others) : ''
+  }
   const openStackPage = (stackId: string, row: StackPageRow) => {
     if (running) return
     setListOpen(false)
@@ -874,27 +916,81 @@ export function StackHeader() {
                   }
                   onMouseMove={() => listWords.length > 0 && n !== listIndex && setListSelected(n)}
                 >
-                  <button
-                    type="button"
-                    className="stack-list-item"
-                    aria-current={stack.id === current?.id ? 'true' : undefined}
-                    disabled={running}
-                    title={canReorder ? 'Drag or press Alt+↑/↓ to reorder' : undefined}
-                    aria-keyshortcuts={canReorder ? 'Alt+ArrowUp Alt+ArrowDown' : undefined}
-                    onClick={() => switchStack(stack)}
-                    onKeyDown={(event) => onRowKey(event, stack, n)}
-                  >
-                    <span className="stack-list-name">
-                      <Highlight
-                        text={stack.name ? `@${stack.name}` : 'New tab'}
-                        query={listQuery}
+                  {renaming?.id === stack.id ? (
+                    <span className="stack-list-item stack-rename">
+                      <input
+                        className="stack-rename-input"
+                        aria-label={`New name for ${stack.name ? `@${stack.name}` : 'New tab'}`}
+                        aria-describedby={`${listId}-rename-note`}
+                        value={renaming.text}
+                        spellCheck={false}
+                        autoComplete="off"
+                        // Takes focus with the name selected, ready to be typed over.
+                        ref={(input) => {
+                          if (input && document.activeElement !== input) {
+                            input.focus()
+                            input.select()
+                          }
+                        }}
+                        onChange={(event) => setRenaming({ ...renaming, text: event.target.value })}
+                        onKeyDown={(event) => {
+                          event.stopPropagation()
+                          if (event.key === 'Enter') {
+                            event.preventDefault()
+                            endRename(true)
+                          } else if (event.key === 'Escape') {
+                            event.preventDefault()
+                            endRename(false)
+                          }
+                        }}
+                        onBlur={() => endRename(false)}
                       />
+                      <span id={`${listId}-rename-note`} className="stack-list-detail">
+                        {renamePreview(renaming)
+                          ? `Enter: @${renamePreview(renaming)} · Escape: cancel`
+                          : 'Use letters or digits · Escape: cancel'}
+                      </span>
                     </span>
-                    <span className="stack-list-detail">
-                      <Highlight text={stack.rootTitle} query={listQuery} /> · {stack.pages}{' '}
-                      {stack.pages === 1 ? 'page' : 'pages'}
-                    </span>
-                  </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="stack-list-item"
+                      aria-current={stack.id === current?.id ? 'true' : undefined}
+                      disabled={running}
+                      title={
+                        [
+                          canRename && 'Double-click or F2 to rename',
+                          canReorder && 'drag or Alt+↑/↓ to reorder',
+                        ]
+                          .filter(Boolean)
+                          .join('; ') || undefined
+                      }
+                      aria-keyshortcuts={
+                        [canRename && 'F2', canReorder && 'Alt+ArrowUp Alt+ArrowDown']
+                          .filter(Boolean)
+                          .join(' ') || undefined
+                      }
+                      onClick={(event) => onRowClick(event, stack)}
+                      onDoubleClick={() => startRename(stack)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'F2') {
+                          event.preventDefault()
+                          startRename(stack)
+                        } else onRowKey(event, stack, n)
+                      }}
+                    >
+                      <span className="stack-list-name">
+                        <Highlight
+                          text={stack.name ? `@${stack.name}` : 'New tab'}
+                          query={listQuery}
+                        />
+                      </span>
+                      <span className="stack-list-detail">
+                        <Highlight text={stack.rootTitle} query={listQuery} /> · {stack.pages}{' '}
+                        {stack.pages === 1 ? 'page' : 'pages'}
+                      </span>
+                    </button>
+                  )}
                   <AudioButton stack={stack} label={stack.name ? `@${stack.name}` : 'New tab'} />
                   <button
                     type="button"

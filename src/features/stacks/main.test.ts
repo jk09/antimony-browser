@@ -415,7 +415,7 @@ describe('stacks main', () => {
   })
 
   it('lets the assistant rename a stack: slugged, made unique, kept after more visits', () => {
-    const { visit, state } = setup()
+    const { call, visit, state } = setup()
     tabs.open.add(1)
     tabs.activeId = 1
     visit(1, 'Home')
@@ -444,6 +444,13 @@ describe('stacks main', () => {
       asked: 'my-work-stuff',
     })
     expect(stackPort!.rename('my-work-stuff', 'x'.repeat(40))!.name).toBe('x'.repeat(32))
+    // The switcher renames by id and resolves with the name the stack got.
+    const id = state().stacks.find((s) => s.name === 'my-work-stuff-2')!.id
+    expect(call(channels.rename, { stackId: id, name: 'Home Again' })).toBe('home-again')
+    expect(() => call(channels.rename, { stackId: 'nope', name: 'x' })).toThrow(TypeError)
+    expect(() => call(channels.rename, { stackId: id, name: 3 })).toThrow(TypeError)
+    expect(() => call(channels.rename, { stackId: id, name: 'x'.repeat(201) })).toThrow(TypeError)
+    expect(stackPort!.rename('home-again', 'my-work-stuff-2')!.name).toBe('my-work-stuff-2')
     // Later visits don't rename it back.
     visit(2, 'Elsewhere')
     expect(names()).toEqual(['x'.repeat(32), 'my-work-stuff-2'])
