@@ -368,6 +368,23 @@ textarea {
   text-transform: uppercase;
 }
 
+/* Reordering by drag-and-drop: the dragged row fades, a line marks where it will land. */
+.stack-list li[draggable='true'] {
+  cursor: grab;
+}
+
+.stack-list li.dragging {
+  opacity: 0.4;
+}
+
+.stack-list li.drop-before {
+  box-shadow: inset 0 2px 0 var(--focus);
+}
+
+.stack-list li.drop-after {
+  box-shadow: inset 0 -2px 0 var(--focus);
+}
+
 .stack-list li.selected {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
 }

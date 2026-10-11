@@ -379,6 +379,18 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
     goToNode(stack, value)
   })
   ipc.handle(channels.switch, (value) => switchTo(parseStackId(channels.switch, value)))
+  // Drag-and-drop and Alt+↑/↓ in the switcher's list; the same order move_stack changes.
+  ipc.handle(channels.move, (value) => {
+    const { stackId, index } = (typeof value === 'object' && value !== null ? value : {}) as {
+      stackId?: unknown
+      index?: unknown
+    }
+    if (typeof index !== 'number' || !Number.isInteger(index) || index < 0) {
+      throw new TypeError(`${channels.move} expects { stackId, index: integer ≥ 0 }`)
+    }
+    place(parseStackId(channels.move, stackId), index)
+    changed()
+  })
 
   // A spare tab waits at the home page in the background, so a new stack shows it at once.
   // Navigation holds its events until it's shown: history and the tree don't see it before.

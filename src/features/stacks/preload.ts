@@ -10,6 +10,7 @@ export const stacksBridge: StacksApi = {
   outline: (name) => ipcRenderer.invoke(channels.outline, name),
   pages: () => ipcRenderer.invoke(channels.pages),
   openPage: (stackId, nodeId) => ipcRenderer.invoke(channels.openPage, { stackId, nodeId }),
+  move: (stackId, index) => ipcRenderer.invoke(channels.move, { stackId, index }),
   closeNode: (nodeId) => ipcRenderer.invoke(channels.closeNode, nodeId),
   home: () => ipcRenderer.invoke(channels.home),
   setHome: (url) => ipcRenderer.invoke(channels.setHome, url),

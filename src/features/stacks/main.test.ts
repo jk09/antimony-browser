@@ -378,7 +378,7 @@ describe('stacks main', () => {
       join(dir, 'stacks.json'),
       JSON.stringify({ version: 2, current: null, stacks: [], home: null }),
     )
-    const { visit, state } = setup(dir)
+    const { call, visit, state } = setup(dir)
     tabs.open.add(1)
     tabs.activeId = 1
     visit(1, 'One')
@@ -397,13 +397,21 @@ describe('stacks main', () => {
     expect(stackPort!.move('one', 99)).toBe(true)
     expect(names()).toEqual(['three', 'two', 'one'])
     expect(stackPort!.list().map((s) => s.name)).toEqual(['three', 'two', 'one'])
+    // The switcher's drag-and-drop moves by id and index.
+    const two = state().stacks.find((s) => s.name === 'two')!
+    call(channels.move, { stackId: two.id, index: 0 })
+    expect(names()).toEqual(['two', 'three', 'one'])
+    expect(() => call(channels.move, { stackId: 'nope', index: 0 })).toThrow(TypeError)
+    expect(() => call(channels.move, { stackId: two.id, index: -1 })).toThrow(TypeError)
+    expect(() => call(channels.move, { stackId: two.id, index: 1.5 })).toThrow(TypeError)
+    expect(() => call(channels.move, null)).toThrow(TypeError)
     quitListeners.forEach((listener) => listener())
     const saved = JSON.parse(readFileSync(join(dir, 'stacks.json'), 'utf8')) as {
       version: number
       stacks: { name: string }[]
     }
     expect(saved.version).toBe(3)
-    expect(saved.stacks.map((s) => s.name)).toEqual(['three', 'two', 'one'])
+    expect(saved.stacks.map((s) => s.name)).toEqual(['two', 'three', 'one'])
   })
 
   it('lets the assistant close a page of any stack by its ref', () => {

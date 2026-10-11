@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type DragEvent,
   type KeyboardEvent,
   type ReactNode,
 } from 'react'
@@ -423,6 +424,10 @@ export function StackHeader() {
   const listId = useId()
   const [listQuery, setListQuery] = useState('')
   const [listSelected, setListSelected] = useState(0)
+  /** The stack being dragged in the list and the gap it would drop into (0 = above the first). */
+  const [drag, setDrag] = useState<{ id: string; gap: number | null } | null>(null)
+  /** A stack moved with Alt+↑/↓: its row's button takes focus again once the list re-renders. */
+  const refocusStack = useRef<string | null>(null)
   const [allPages, setAllPages] = useState<StackPages[]>([])
   const height = useWindowHeight()
 
@@ -624,6 +629,50 @@ export function StackHeader() {
     setListOpen(false)
     switcher.current?.focus()
   }
+  // Reordering (drag-and-drop, Alt+↑/↓) works on the whole list: not while it is filtered or
+  // while Ctrl+Tab highlights a stack. It stays on while the assistant runs: moving loses nothing.
+  const canReorder = listWords.length === 0 && !cycle
+  /** Moves a stack from position `from` to the gap `gap` of the shown order (as main will). */
+  const moveStack = (id: string, from: number, gap: number) => {
+    const to = gap > from ? gap - 1 : gap
+    if (to !== from) api.stacks.move(id, to).catch(report)
+  }
+  const onRowDragOver = (event: DragEvent<HTMLLIElement>, n: number) => {
+    if (!drag) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    const rect = event.currentTarget.getBoundingClientRect()
+    const gap = event.clientY < rect.top + rect.height / 2 ? n : n + 1
+    if (gap !== drag.gap) setDrag({ ...drag, gap })
+  }
+  const onRowDrop = (event: DragEvent<HTMLLIElement>) => {
+    event.preventDefault()
+    if (drag && drag.gap !== null) {
+      const from = allStacks.findIndex((stack) => stack.id === drag.id)
+      if (from >= 0) moveStack(drag.id, from, drag.gap)
+    }
+    setDrag(null)
+  }
+  const onRowKey = (event: KeyboardEvent<HTMLButtonElement>, stack: StackSummary, n: number) => {
+    const step = { ArrowUp: -1, ArrowDown: 1 }[event.key]
+    if (!canReorder || !event.altKey || step === undefined) return
+    event.preventDefault()
+    const to = n + step
+    if (to < 0 || to >= allStacks.length) return
+    refocusStack.current = stack.id
+    api.stacks.move(stack.id, to).catch(report)
+  }
+  useEffect(() => {
+    const id = refocusStack.current
+    if (id === null) return
+    const button = list.current?.querySelector<HTMLElement>(
+      `[data-stack-id="${CSS.escape(id)}"] .stack-list-item`,
+    )
+    if (!button) return
+    refocusStack.current = null
+    button.focus()
+  })
+
   const switchStack = (stack: StackSummary) => {
     if (running) return
     setListOpen(false)
@@ -794,11 +843,24 @@ export function StackHeader() {
                 <li
                   key={stack.id}
                   id={listOptionId(n)}
+                  data-stack-id={stack.id}
+                  draggable={canReorder}
+                  onDragStart={(event) => {
+                    event.dataTransfer.effectAllowed = 'move'
+                    event.dataTransfer.setData('text/plain', stack.name ? `@${stack.name}` : '')
+                    setDrag({ id: stack.id, gap: null })
+                  }}
+                  onDragOver={(event) => onRowDragOver(event, n)}
+                  onDrop={onRowDrop}
+                  onDragEnd={() => setDrag(null)}
                   className={
                     [
                       stack.id === current?.id && 'current',
                       stack.id === target && 'target',
                       listWords.length > 0 && n === listIndex && 'selected',
+                      drag?.id === stack.id && 'dragging',
+                      drag?.gap === n && 'drop-before',
+                      drag?.gap === n + 1 && n === shownStacks.length - 1 && 'drop-after',
                     ]
                       .filter(Boolean)
                       .join(' ') || undefined
@@ -817,7 +879,10 @@ export function StackHeader() {
                     className="stack-list-item"
                     aria-current={stack.id === current?.id ? 'true' : undefined}
                     disabled={running}
+                    title={canReorder ? 'Drag or press Alt+↑/↓ to reorder' : undefined}
+                    aria-keyshortcuts={canReorder ? 'Alt+ArrowUp Alt+ArrowDown' : undefined}
                     onClick={() => switchStack(stack)}
+                    onKeyDown={(event) => onRowKey(event, stack, n)}
                   >
                     <span className="stack-list-name">
                       <Highlight
