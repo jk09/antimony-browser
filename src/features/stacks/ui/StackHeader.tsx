@@ -992,6 +992,20 @@ export function StackHeader() {
                     </button>
                   )}
                   <AudioButton stack={stack} label={stack.name ? `@${stack.name}` : 'New tab'} />
+                  {renaming?.id !== stack.id && (
+                    <button
+                      type="button"
+                      className="stack-list-rename"
+                      aria-label={`Rename ${stack.name ? `@${stack.name}` : 'New tab'}`}
+                      title="Rename (F2)"
+                      disabled={!canRename}
+                      // Keeps the click from reaching the row: it would switch to the stack.
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => startRename(stack)}
+                    >
+                      ✎
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="stack-list-close"
