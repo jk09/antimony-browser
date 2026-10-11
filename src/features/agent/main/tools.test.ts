@@ -71,6 +71,8 @@ describe('toolsFor', () => {
       'stop',
       'new_stack',
       'list_stacks',
+      'switch_stack',
+      'close_stack',
       'get_page_state',
       'search_history',
       'recall_history',
@@ -104,6 +106,45 @@ describe('toolsFor', () => {
   })
 })
 
+describe('switch_stack and close_stack', () => {
+  it('switch by name and report; close reports the stacks left; unknown names fail', async () => {
+    const open: StackInfo[] = [
+      { name: 'docs', rootTitle: 'Docs', current: true, imported: false, pages: [] },
+      { name: 'news', rootTitle: 'News', current: false, imported: false, pages: [] },
+    ]
+    const switched: string[] = []
+    const closed: string[] = []
+    const port = {
+      open: () => {},
+      list: () => open.filter((stack) => !closed.includes(stack.name)),
+      switch: (name: string) => switched.push(name) > 0,
+      close: (name: string) => closed.push(name) > 0,
+    }
+    expect(toolNamed('switch_stack')).toMatchObject({ kind: 'stack', replayable: true })
+    expect(toolNamed('close_stack')).toMatchObject({ kind: 'stack', replayable: false })
+    expect(describeCall('switch_stack', { stack: '@news' })).toBe('Switch to @news')
+    expect(describeCall('close_stack', { stack: 'news' })).toBe('Close stack @news')
+
+    const { browser } = fakeBrowser()
+    const result = await executeTool(browser, 'switch_stack', { stack: '@news' }, { stacks: port })
+    expect(switched).toEqual(['news'])
+    expect(result.text).toMatch(/^Switched to @news\.\n/)
+    expect(
+      (await executeTool(null, 'switch_stack', { stack: 'docs' }, { stacks: port })).text,
+    ).toBe('@docs already is the current stack.')
+    await expect(
+      executeTool(null, 'switch_stack', { stack: 'nope' }, { stacks: port }),
+    ).rejects.toThrow('No stack is named @nope')
+
+    expect((await executeTool(null, 'close_stack', { stack: 'news' }, { stacks: port })).text).toBe(
+      'Closed @news. 1 stack is open.',
+    )
+    await expect(executeTool(null, 'close_stack', { stack: 'news' }, {})).rejects.toThrow(
+      'Stacks are not available',
+    )
+  })
+})
+
 describe('list_stacks', () => {
   const stacks: StackInfo[] = [
     {
@@ -125,7 +166,7 @@ describe('list_stacks', () => {
       pages: [{ title: 'News', url: 'https://news.example/', depth: 0, ref: 'news', active: true }],
     },
   ]
-  const port = { open: () => {}, list: () => stacks }
+  const port = { open: () => {}, list: () => stacks, switch: () => true, close: () => true }
 
   it('is a history tool that needs no page and is not replayable', () => {
     expect(toolNamed('list_stacks')).toMatchObject({ kind: 'history', replayable: false })
@@ -175,7 +216,7 @@ describe('list_stacks', () => {
       null,
       'list_stacks',
       { stack: 'docs' },
-      { stacks: { open: () => {}, list: () => [big] } },
+      { stacks: { open: () => {}, list: () => [big], switch: () => true, close: () => true } },
     )
     expect(text).toContain('… 5 more')
     expect(formatStackCount(stacks)).toBe('Open stacks: 3 (current: @docs)')

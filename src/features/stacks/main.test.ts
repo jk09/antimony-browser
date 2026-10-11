@@ -342,6 +342,31 @@ describe('stacks main', () => {
     ])
   })
 
+  it('lets the assistant switch and close stacks by name', () => {
+    const { visit, state } = setup()
+    tabs.open.add(1)
+    tabs.activeId = 1
+    visit(1, 'Home')
+    fire({ tabId: 2, type: 'opened', openerId: 1, active: true })
+    tabs.open.add(2)
+    tabs.activate(2)
+    visit(2, 'Docs')
+    expect(state().current!.name).toBe('docs')
+
+    expect(stackPort!.switch('nope')).toBe(false)
+    expect(stackPort!.switch('home')).toBe(true)
+    expect(state().current!.name).toBe('home')
+    expect(tabs.activeId).toBe(1)
+    expect(tabs.focused.at(-1)).toBe(1)
+
+    // Closing the current stack makes the most recent other one current.
+    expect(stackPort!.close('nope')).toBe(false)
+    expect(stackPort!.close('home')).toBe(true)
+    expect(state().stacks.map((stack) => stack.name)).toEqual(['docs'])
+    expect(state().current!.name).toBe('docs')
+    expect(tabs.activeId).toBe(2)
+  })
+
   it('closes a page with its branch; the root closes the stack', () => {
     const { call, visit, rowsOf, activeTitle, idOf, state, nav } = setup()
     tabs.open.add(1)

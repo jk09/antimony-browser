@@ -94,6 +94,7 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
   /** The node a navigation was started from, per stack, until it commits or fails. */
   const targets = new Map<string, number>()
 
+  const byName = (name: string) => [...stacks.values()].find((stack) => stack.name === name)
   const byRecentUse = () => [...stacks.values()].sort((a, b) => b.lastUsedAt - a.lastUsedAt)
   const current = () => (currentId === null ? null : (stacks.get(currentId) ?? null))
 
@@ -457,7 +458,8 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
   }
   ipc.handle(channels.create, openNewStack)
   // The assistant's new_stack tool (and macros replaying it) open stacks like Ctrl/Cmd+N;
-  // list_stacks and the stack count in its browser state read them.
+  // list_stacks and the stack count in its browser state read them; switch_stack and close_stack
+  // act like the switcher's rows and ×.
   provideStacks({
     open: openNewStack,
     list: (): StackInfo[] =>
@@ -474,6 +476,16 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
           active: row.id === stack.activeId,
         })),
       })),
+    switch: (name) => {
+      const stack = byName(name)
+      if (stack) switchTo(stack)
+      return stack !== undefined
+    },
+    close: (name) => {
+      const stack = byName(name)
+      if (stack) closeAndSwitch(stack)
+      return stack !== undefined
+    },
   })
   const closeAndSwitch = (stack: Stack) => {
     const wasCurrent = stack.id === currentId

@@ -37,7 +37,7 @@ export const SYSTEM_PROMPT = `You are the assistant built into Antimony, a web b
 
 Browser
 - Each user message starts with a <browser_state> block: the current page, how many stacks are open, page and history access, and the saved macros.
-- The browser's tabs are called stacks. new_stack opens one (also for "open a new window/tab"), optionally at a URL; navigate loads a page in the current stack. list_stacks lists all open stacks, or one stack's pages, for questions about stacks other than the current page (it needs history access).
+- The browser's tabs are called stacks. new_stack opens one (also for "open a new window/tab"), optionally at a URL; navigate loads a page in the current stack. list_stacks lists all open stacks, or one stack's pages, for questions about stacks other than the current page (it needs history access). switch_stack makes a stack current; close_stack closes one, only when the user asked to.
 - For pages the user visited before ("that article I read last week", "search my history for …"), use search_history; it works without page access but not while history access is off (/history-access on). To find a page by a picture the user attached ("a page with an image like this"), or to show the user what they read about a topic as a cloud, use recall_history.
 - With page access on, read_page shows the page text and its interactive elements with CSS selectors for click and type_text; find_in_page, scroll and screenshot help too. Without page access you only know the URL and title; if the request needs the page content, tell the user to turn page access on (/page-access on).
 - When the user asks to import the file Edge's "Export browsing data" created, call import_browsing_data with the path they gave, or without a path to let them choose the file in a dialog; they approve it. Never import a file they didn't name.
@@ -50,7 +50,7 @@ Acting
 
 Macros
 - A macro is a stored script the user runs by typing /name in the prompt; it replays browser tool calls without you. Typing a macro runs it directly, so you only see macros when the user asks you to create, change, explain or delete one.
-- "… and store/save it as /name" (or "make a macro /name that …"): first do what was asked if it is an action, then call save_macro with the steps that reproduce it. Steps are the replayable tools only: navigate, go_back, go_forward, reload, stop, new_stack, click, type_text, press_key, scroll – not reading tools.
+- "… and store/save it as /name" (or "make a macro /name that …"): first do what was asked if it is an action, then call save_macro with the steps that reproduce it. Steps are the replayable tools only: navigate, go_back, go_forward, reload, stop, new_stack, switch_stack, click, type_text, press_key, scroll – not reading tools.
 - Values the user wants to give each time become parameters: write {{param}} in the step inputs and declare each parameter with a short hint of what to type (e.g. "search term"). Arguments may be @stack or @stack/page references, which become that page's URL. Prefer URL steps with parameters over clicks, and stable selectors (ids, names, labels) when clicks are needed.
 - To change a macro, save it again under the same name (list_macros shows its steps); to remove one, delete_macro. Say what you saved and how to call it, e.g. "Saved /wiki <term>".
 - Macro names can't be built-in commands (new, model, welcome, menu, history, skills, forget, …).
@@ -461,9 +461,12 @@ export class Agent {
           'History access is off; the user has to turn it on (/history-access on).',
         )
       }
-      // History search, macros and imports don't touch the page.
+      // History search, macros, imports and stack switching don't need a page.
       const browser =
-        tool.kind === 'history' || tool.kind === 'macro' || tool.kind === 'import'
+        tool.kind === 'history' ||
+        tool.kind === 'macro' ||
+        tool.kind === 'import' ||
+        tool.kind === 'stack'
           ? this.deps.browser()
           : this.requireBrowser()
 
@@ -489,8 +492,10 @@ export class Agent {
       const steeredMacro = tool.kind === 'macro' && call.name !== 'list_macros' && flags.readPage
       // Reading a file the model named is never covered by "Allow for this run".
       const readsFile = tool.kind === 'import'
+      // Closing a stack loses its pages: the user approves it like a page action.
+      const closesStack = call.name === 'close_stack'
       if (
-        (tool.kind === 'action' || leavesSite || steeredMacro || readsFile) &&
+        (tool.kind === 'action' || leavesSite || steeredMacro || readsFile || closesStack) &&
         (readsFile || !flags.allowAll)
       ) {
         const decision = await this.ask(run, summary, signal)
