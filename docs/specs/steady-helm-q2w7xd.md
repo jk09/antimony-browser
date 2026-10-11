@@ -6,15 +6,15 @@
 | --- | --- |
 | **Feature name** | `switch_stack` and `close_stack` tools for the assistant |
 | **Spec ID** | steady-helm-q2w7xd |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-10 20:30 +00:00 |
-| **Last updated** | 2026-10-10 20:50 +00:00 |
+| **Last updated** | 2026-10-11 08:00 +00:00 |
 | **Affected features** | agent, stacks |
 | **Target release** | 0.1.0 |
-| **Related links** | spec open-roster-v5n9qk (`list_stacks`, its follow-up); PR #71 |
+| **Related links** | PR #72; spec open-roster-v5n9qk (`list_stacks`, its follow-up); PR #71 |
 
 **Status definitions:**
 - **Draft:** The spec is being written or reviewed. The scope may still change.
