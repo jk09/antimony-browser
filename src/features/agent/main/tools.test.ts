@@ -5,6 +5,7 @@ import {
   executeTool,
   formatState,
   toolNamed,
+  describeClosePage,
   formatStackCount,
   MAX_LISTED_PAGES,
   toolsFor,
@@ -73,6 +74,7 @@ describe('toolsFor', () => {
       'list_stacks',
       'switch_stack',
       'close_stack',
+      'close_page',
       'get_page_state',
       'search_history',
       'recall_history',
@@ -119,6 +121,7 @@ describe('switch_stack and close_stack', () => {
       list: () => open.filter((stack) => !closed.includes(stack.name)),
       switch: (name: string) => switched.push(name) > 0,
       close: (name: string) => closed.push(name) > 0,
+      closePage: () => true,
     }
     expect(toolNamed('switch_stack')).toMatchObject({ kind: 'stack', replayable: true })
     expect(toolNamed('close_stack')).toMatchObject({ kind: 'stack', replayable: false })
@@ -145,6 +148,59 @@ describe('switch_stack and close_stack', () => {
   })
 })
 
+describe('close_page', () => {
+  const page = (ref: string, depth: number) => ({
+    title: ref,
+    url: `https://docs.example/${ref}`,
+    depth,
+    ref,
+    active: false,
+  })
+  const stacks: StackInfo[] = [
+    {
+      name: 'docs',
+      rootTitle: 'Docs',
+      current: true,
+      imported: false,
+      pages: [page('home', 0), page('manual', 1), page('ch1', 2), page('faq', 1)],
+    },
+  ]
+
+  it('names the branch it closes; the root closes the stack', () => {
+    expect(toolNamed('close_page')).toMatchObject({ kind: 'stack', replayable: false })
+    expect(describeClosePage(stacks, '@docs/manual')).toBe('Close @docs/manual and 1 page below it')
+    expect(describeClosePage(stacks, 'docs/faq')).toBe('Close @docs/faq')
+    expect(describeClosePage(stacks, '@docs/home')).toBe(
+      'Close @docs/home, the first page: the whole stack @docs',
+    )
+    expect(describeClosePage(stacks, '@docs/nope')).toBe('Close @docs/nope')
+  })
+
+  it('closes through the port and reports; unknown pages fail', async () => {
+    const closed: string[][] = []
+    const port = {
+      open: () => {},
+      list: () => stacks,
+      switch: () => true,
+      close: () => true,
+      closePage: (name: string, ref: string) => closed.push([name, ref]) > 0,
+    }
+    expect(
+      (await executeTool(null, 'close_page', { page: '@docs/faq' }, { stacks: port })).text,
+    ).toBe('Closed @docs/faq.')
+    expect(
+      (await executeTool(null, 'close_page', { page: '@docs/home' }, { stacks: port })).text,
+    ).toBe('Closed @docs/home, the first page, with the whole stack.')
+    expect(closed).toEqual([
+      ['docs', 'faq'],
+      ['docs', 'home'],
+    ])
+    await expect(
+      executeTool(null, 'close_page', { page: '@news/x' }, { stacks: port }),
+    ).rejects.toThrow('No page @news/x')
+  })
+})
+
 describe('list_stacks', () => {
   const stacks: StackInfo[] = [
     {
@@ -166,7 +222,13 @@ describe('list_stacks', () => {
       pages: [{ title: 'News', url: 'https://news.example/', depth: 0, ref: 'news', active: true }],
     },
   ]
-  const port = { open: () => {}, list: () => stacks, switch: () => true, close: () => true }
+  const port = {
+    open: () => {},
+    list: () => stacks,
+    switch: () => true,
+    close: () => true,
+    closePage: () => true,
+  }
 
   it('is a history tool that needs no page and is not replayable', () => {
     expect(toolNamed('list_stacks')).toMatchObject({ kind: 'history', replayable: false })
@@ -216,7 +278,15 @@ describe('list_stacks', () => {
       null,
       'list_stacks',
       { stack: 'docs' },
-      { stacks: { open: () => {}, list: () => [big], switch: () => true, close: () => true } },
+      {
+        stacks: {
+          open: () => {},
+          list: () => [big],
+          switch: () => true,
+          close: () => true,
+          closePage: () => true,
+        },
+      },
     )
     expect(text).toContain('… 5 more')
     expect(formatStackCount(stacks)).toBe('Open stacks: 3 (current: @docs)')
