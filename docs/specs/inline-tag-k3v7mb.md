@@ -6,15 +6,15 @@
 | --- | --- |
 | **Feature name** | Double-click a stack (or F2) in the switcher's list to rename it |
 | **Spec ID** | inline-tag-k3v7mb |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-11 12:00 +00:00 |
-| **Last updated** | 2026-10-11 12:40 +00:00 |
+| **Last updated** | 2026-10-11 12:50 +00:00 |
 | **Affected features** | stacks |
 | **Target release** | 0.1.0 |
-| **Related links** | spec fresh-label-n5j8ve (`rename_stack`; this is its follow-up); PR #76 |
+| **Related links** | spec fresh-label-n5j8ve (`rename_stack`; this is its follow-up); PR #76; PR #77 |
 
 **Status definitions:**
 - **Draft:** The spec is being written or reviewed. The scope may still change.
