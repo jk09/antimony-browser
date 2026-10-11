@@ -27,6 +27,7 @@ import {
   type HistoryPort,
   type MacroPort,
   type ImportPort,
+  describeClosePage,
   formatStackCount,
   type StackPort,
   type ToolOutput,
@@ -37,7 +38,7 @@ export const SYSTEM_PROMPT = `You are the assistant built into Antimony, a web b
 
 Browser
 - Each user message starts with a <browser_state> block: the current page, how many stacks are open, page and history access, and the saved macros.
-- The browser's tabs are called stacks. new_stack opens one (also for "open a new window/tab"), optionally at a URL; navigate loads a page in the current stack. list_stacks lists all open stacks, or one stack's pages, for questions about stacks other than the current page (it needs history access). switch_stack makes a stack current; close_stack closes one, only when the user asked to.
+- The browser's tabs are called stacks. new_stack opens one (also for "open a new window/tab"), optionally at a URL; navigate loads a page in the current stack. list_stacks lists all open stacks, or one stack's pages, for questions about stacks other than the current page (it needs history access). switch_stack makes a stack current; close_stack closes one and close_page one page with its branch (@stack/ref from list_stacks), only when the user asked to.
 - For pages the user visited before ("that article I read last week", "search my history for …"), use search_history; it works without page access but not while history access is off (/history-access on). To find a page by a picture the user attached ("a page with an image like this"), or to show the user what they read about a topic as a cloud, use recall_history.
 - With page access on, read_page shows the page text and its interactive elements with CSS selectors for click and type_text; find_in_page, scroll and screenshot help too. Without page access you only know the URL and title; if the request needs the page content, tell the user to turn page access on (/page-access on).
 - When the user asks to import the file Edge's "Export browsing data" created, call import_browsing_data with the path they gave, or without a path to let them choose the file in a dialog; they approve it. Never import a file they didn't name.
@@ -470,7 +471,10 @@ export class Agent {
           ? this.deps.browser()
           : this.requireBrowser()
 
-      let summary = describeCall(call.name, input)
+      let summary =
+        call.name === 'close_page'
+          ? describeClosePage(this.deps.stacks()?.list() ?? [], String(input['page']))
+          : describeCall(call.name, input)
       if (browser && tool.kind === 'action' && typeof input['selector'] === 'string') {
         const element = await abortable(inspect(browser, input['selector']), signal)
         if (call.name === 'type_text' && element.sensitive) {
@@ -492,8 +496,8 @@ export class Agent {
       const steeredMacro = tool.kind === 'macro' && call.name !== 'list_macros' && flags.readPage
       // Reading a file the model named is never covered by "Allow for this run".
       const readsFile = tool.kind === 'import'
-      // Closing a stack loses its pages: the user approves it like a page action.
-      const closesStack = call.name === 'close_stack'
+      // Closing a stack or a page loses pages: the user approves it like a page action.
+      const closesStack = call.name === 'close_stack' || call.name === 'close_page'
       if (
         (tool.kind === 'action' || leavesSite || steeredMacro || readsFile || closesStack) &&
         (readsFile || !flags.allowAll)

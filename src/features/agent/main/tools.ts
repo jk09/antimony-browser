@@ -151,6 +151,11 @@ export interface StackPort {
   switch(name: string): boolean
   /** Closes the named stack (the current one: the most recent becomes current); false if none. */
   close(name: string): boolean
+  /**
+   * Closes the page `ref` of the named stack with its branch (the root: the whole stack); false if
+   * there is no such page.
+   */
+  closePage(name: string, ref: string): boolean
 }
 
 /** History's search, provided by the history feature (provideHistorySearch in main.ts). */
@@ -181,7 +186,8 @@ export interface ImportPort {
  * content was read in the run.
  * import: reads a file on the user's computer into history and stacks; no page access, needs no
  * browser; the user approves it when the model calls it (a typed skill is the user's own request).
- * stack: switches or closes stacks by name; no page access; closing asks the user (like an action).
+ * stack: switches or closes stacks or their pages by name; no page access; closing asks the user
+ * (like an action).
  * read: needs page access. action: needs page access and the user's approval.
  */
 export type ToolKind = 'navigation' | 'history' | 'macro' | 'import' | 'stack' | 'read' | 'action'
@@ -290,6 +296,17 @@ export const toolDefinitions: ToolDefinition[] = [
     description:
       'Close an open stack (a browser tab) with all its pages, by its name. Only when the user asked to close it; the user is asked to approve. Closing the current stack makes the most recently used one current.',
     input_schema: schema({ stack: stackName }, ['stack']),
+  },
+  {
+    name: 'close_page',
+    kind: 'stack',
+    replayable: false,
+    description:
+      "Close one page of a stack together with the pages opened from it (its branch), like the page's × in the stack's tree, by its @stack/ref from list_stacks. Closing a stack's first page closes the whole stack; closing the page a stack shows loads its parent. Only when the user asked to close it; the user is asked to approve.",
+    input_schema: schema(
+      { page: { type: 'string', description: 'The page as @stack/ref, e.g. @docs/manual.' } },
+      ['page'],
+    ),
   },
   {
     name: 'get_page_state',
@@ -543,6 +560,8 @@ export function describeCall(name: string, input: Input, element?: ElementInfo):
       return `Switch to @${String(input['stack']).replace(/^@/, '')}`
     case 'close_stack':
       return `Close stack @${String(input['stack']).replace(/^@/, '')}`
+    case 'close_page':
+      return `Close ${String(input['page'])}`
     case 'list_stacks':
       return input['stack']
         ? `List the pages of @${String(input['stack']).replace(/^@/, '')}`
@@ -871,6 +890,47 @@ function listStacks(stacks: StackPort | null, input: Input): ToolOutput {
   return { text: formatStackPages(stack) }
 }
 
+/** The page an `@stack/ref` names and how many pages its branch has below it, or null. */
+export function pageBranch(
+  stacks: StackInfo[],
+  page: string,
+): { stack: StackInfo; ref: string; root: boolean; below: number } | null {
+  const [name = '', ref = ''] = page.trim().replace(/^@/, '').split('/', 2)
+  const stack = stacks.find((s) => s.name === name)
+  const index = stack?.pages.findIndex((p) => p.ref === ref) ?? -1
+  if (!stack || index < 0) return null
+  const depth = stack.pages[index]!.depth
+  let below = 0
+  while (stack.pages[index + 1 + below] && stack.pages[index + 1 + below]!.depth > depth) below++
+  return { stack, ref, root: depth === 0, below }
+}
+
+/** The approval line for close_page, with what else it closes. */
+export function describeClosePage(stacks: StackInfo[], page: string): string {
+  const branch = pageBranch(stacks, page)
+  if (!branch) return `Close ${page}`
+  const target = `@${branch.stack.name}/${branch.ref}`
+  if (branch.root) return `Close ${target}, the first page: the whole stack @${branch.stack.name}`
+  if (branch.below === 0) return `Close ${target}`
+  return `Close ${target} and ${branch.below} ${branch.below === 1 ? 'page' : 'pages'} below it`
+}
+
+function closePage(stacks: StackPort | null, input: Input): ToolOutput {
+  if (!stacks) throw new ToolError('Stacks are not available.')
+  const page = String(input['page'])
+  const branch = pageBranch(stacks.list(), page)
+  if (!branch)
+    throw new ToolError(`No page ${page}. Call list_stacks with the stack to see its pages.`)
+  stacks.closePage(branch.stack.name, branch.ref)
+  const target = `@${branch.stack.name}/${branch.ref}`
+  if (branch.root) return { text: `Closed ${target}, the first page, with the whole stack.` }
+  const below =
+    branch.below === 0
+      ? ''
+      : ` and ${branch.below} ${branch.below === 1 ? 'page' : 'pages'} below it`
+  return { text: `Closed ${target}${below}.` }
+}
+
 /** Switches to (switch_stack) or closes (close_stack) a stack by name. */
 function manageStack(
   stacks: StackPort | null,
@@ -920,6 +980,7 @@ export async function executeTool(
   if (name === 'search_history') return searchHistory(ports.history ?? null, input)
   if (name === 'recall_history') return recallHistory(ports, input)
   if (name === 'list_stacks') return listStacks(ports.stacks ?? null, input)
+  if (name === 'close_page') return closePage(ports.stacks ?? null, input)
   if (name === 'switch_stack' || name === 'close_stack') {
     return manageStack(ports.stacks ?? null, browser, name, input)
   }

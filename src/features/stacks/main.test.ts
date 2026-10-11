@@ -367,6 +367,35 @@ describe('stacks main', () => {
     expect(tabs.activeId).toBe(2)
   })
 
+  it('lets the assistant close a page of any stack by its ref', () => {
+    const { visit, state } = setup()
+    tabs.open.add(1)
+    tabs.activeId = 1
+    visit(1, 'Home')
+    visit(1, 'Page')
+    fire({ tabId: 2, type: 'opened', openerId: 1, active: true })
+    tabs.open.add(2)
+    tabs.activate(2)
+    visit(2, 'Docs')
+
+    expect(stackPort!.closePage('home', 'nope')).toBe(false)
+    expect(stackPort!.closePage('nope', 'page')).toBe(false)
+    // The active page of another (live) stack: its parent loads there; the current one stays.
+    tabs.calls.length = 0
+    expect(stackPort!.closePage('home', 'page')).toBe(true)
+    expect(tabs.calls).toEqual(['load 1 https://site.example/Home'])
+    expect(state().current!.name).toBe('docs')
+    expect(
+      stackPort!
+        .list()
+        .find((s) => s.name === 'home')!
+        .pages.map((p) => p.ref),
+    ).toEqual(['home'])
+    // The root closes the stack.
+    expect(stackPort!.closePage('home', 'home')).toBe(true)
+    expect(state().stacks.map((stack) => stack.name)).toEqual(['docs'])
+  })
+
   it('closes a page with its branch; the root closes the stack', () => {
     const { call, visit, rowsOf, activeTitle, idOf, state, nav } = setup()
     tabs.open.add(1)

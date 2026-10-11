@@ -594,7 +594,13 @@ describe('macros', () => {
   })
 
   it('opens a new stack, optionally at a URL', async () => {
-    const stacks = { open: vi.fn(), list: vi.fn(() => []), switch: vi.fn(), close: vi.fn() }
+    const stacks = {
+      open: vi.fn(),
+      list: vi.fn(() => []),
+      switch: vi.fn(),
+      close: vi.fn(),
+      closePage: vi.fn(),
+    }
     const { agent, browser } = setup(
       [
         async () => response([toolUse('t1', 'new_stack', {})], 'tool_use'),
@@ -624,7 +630,13 @@ describe('macros', () => {
       },
       { name: 'news', rootTitle: 'News', current: false, imported: true, pages: [] },
     ]
-    const stacks = { open: vi.fn(), list: vi.fn(() => listed), switch: vi.fn(), close: vi.fn() }
+    const stacks = {
+      open: vi.fn(),
+      list: vi.fn(() => listed),
+      switch: vi.fn(),
+      close: vi.fn(),
+      closePage: vi.fn(),
+    }
     const { agent, requests } = setup(
       [
         async () => response([toolUse('t1', 'list_stacks', {})], 'tool_use'),
@@ -646,7 +658,13 @@ describe('macros', () => {
   })
 
   it('offers no list_stacks while history access is off', async () => {
-    const stacks = { open: vi.fn(), list: vi.fn(() => []), switch: vi.fn(), close: vi.fn() }
+    const stacks = {
+      open: vi.fn(),
+      list: vi.fn(() => []),
+      switch: vi.fn(),
+      close: vi.fn(),
+      closePage: vi.fn(),
+    }
     const { agent, requests } = setup([async () => response([{ type: 'text', text: 'ok' }])], {
       stacks,
       historyAccess: false,
@@ -673,6 +691,7 @@ describe('macros', () => {
         open = open.filter((stack) => stack.name !== name)
         return true
       }),
+      closePage: vi.fn(() => true),
     }
     const { agent } = setup(
       [
@@ -702,6 +721,58 @@ describe('macros', () => {
     )
   })
 
+  it('closes a page only after approval, naming what else closes with it', async () => {
+    const page = (ref: string, depth: number) => ({
+      title: ref,
+      url: `https://docs.example/${ref}`,
+      depth,
+      ref,
+      active: false,
+    })
+    const stacks: StackPort = {
+      open: vi.fn(),
+      list: vi.fn(() => [
+        {
+          name: 'docs',
+          rootTitle: 'Docs',
+          current: true,
+          imported: false,
+          pages: [
+            page('home', 0),
+            page('manual', 1),
+            page('ch1', 2),
+            page('ch2', 2),
+            page('faq', 1),
+          ],
+        },
+      ]),
+      switch: vi.fn(),
+      close: vi.fn(),
+      closePage: vi.fn(() => true),
+    }
+    const { agent, requests } = setup(
+      [
+        async () => response([toolUse('t1', 'close_page', { page: '@docs/manual' })], 'tool_use'),
+        async () => response([toolUse('t2', 'close_page', { page: '@docs/nope' })], 'tool_use'),
+        async () => response([{ type: 'text', text: 'ok' }]),
+      ],
+      { stacks },
+    )
+    const running = agent.run(input('close the manual'))
+    await waitFor(() => agent.state().status === 'awaiting-approval')
+    expect(agent.state().approval!.description).toBe('Close @docs/manual and 2 pages below it')
+    expect(stacks.closePage).not.toHaveBeenCalled()
+    agent.approve('allow-run')
+    await running
+    expect(stacks.closePage).toHaveBeenCalledWith('docs', 'manual')
+    expect(JSON.stringify(requests[1]!.messages.at(-1))).toContain(
+      'Closed @docs/manual and 2 pages below it.',
+    )
+    // An unknown page is an error; nothing else closes.
+    expect(stacks.closePage).toHaveBeenCalledTimes(1)
+    expect(requests[2]!.messages.at(-1)!.content[0]).toMatchObject({ is_error: true })
+  })
+
   it('replays switch_stack steps', async () => {
     const stacks: StackPort = {
       open: vi.fn(),
@@ -710,6 +781,7 @@ describe('macros', () => {
       ]),
       switch: vi.fn(() => true),
       close: vi.fn(() => true),
+      closePage: vi.fn(() => true),
     }
     const { agent } = setup([], { stacks })
     expect(await agent.replay('/n', [{ tool: 'switch_stack', input: { stack: 'news' } }])).toEqual({
@@ -719,7 +791,13 @@ describe('macros', () => {
   })
 
   it('replays new_stack steps', async () => {
-    const stacks = { open: vi.fn(), list: vi.fn(() => []), switch: vi.fn(), close: vi.fn() }
+    const stacks = {
+      open: vi.fn(),
+      list: vi.fn(() => []),
+      switch: vi.fn(),
+      close: vi.fn(),
+      closePage: vi.fn(),
+    }
     const { agent } = setup([], { stacks })
     expect(await agent.replay('/ns', [{ tool: 'new_stack', input: {} }])).toEqual({ ok: true })
     expect(stacks.open).toHaveBeenCalled()

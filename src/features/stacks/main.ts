@@ -458,8 +458,8 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
   }
   ipc.handle(channels.create, openNewStack)
   // The assistant's new_stack tool (and macros replaying it) open stacks like Ctrl/Cmd+N;
-  // list_stacks and the stack count in its browser state read them; switch_stack and close_stack
-  // act like the switcher's rows and ×.
+  // list_stacks and the stack count in its browser state read them; switch_stack, close_stack and
+  // close_page act like the switcher's rows and × and the tree's ×.
   provideStacks({
     open: openNewStack,
     list: (): StackInfo[] =>
@@ -485,6 +485,20 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
       const stack = byName(name)
       if (stack) closeAndSwitch(stack)
       return stack !== undefined
+    },
+    // Like the page's × in the tree, in any stack: the root closes the stack; a stack without a
+    // live tab only moves its active page (its tab loads it when switched to).
+    closePage: (name, ref) => {
+      const stack = byName(name)
+      const row = stack && pageRefs(rows(stack)).find((candidate) => candidate.ref === ref)
+      if (!stack || !row) return false
+      if (row.id === stack.rootId) {
+        closeAndSwitch(stack)
+        return true
+      }
+      if (removeBranch(stack, row.id) && tabOfStack.has(stack.id)) goToNode(stack, stack.activeId!)
+      changed()
+      return true
     },
   })
   const closeAndSwitch = (stack: Stack) => {
