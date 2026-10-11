@@ -6,15 +6,15 @@
 | --- | --- |
 | **Feature name** | ✎ button on each row of the switcher's stack list that starts renaming |
 | **Spec ID** | quick-quill-p6d2xs |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-11 13:00 +00:00 |
-| **Last updated** | 2026-10-11 13:20 +00:00 |
+| **Last updated** | 2026-10-11 13:30 +00:00 |
 | **Affected features** | stacks |
 | **Target release** | 0.1.0 |
-| **Related links** | spec inline-tag-k3v7mb (rename by double-click or F2; this adds the option offered there); PR #77 |
+| **Related links** | spec inline-tag-k3v7mb (rename by double-click or F2; this adds the option offered there); PR #77; PR #78 |
 
 **Status definitions:**
 - **Draft:** The spec is being written or reviewed. The scope may still change.
