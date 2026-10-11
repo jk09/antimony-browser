@@ -368,6 +368,26 @@ textarea {
   text-transform: uppercase;
 }
 
+/* A stack's name being edited in the list (double-click or F2). */
+.stack-rename {
+  cursor: text;
+}
+
+.stack-rename-input {
+  width: 100%;
+  height: 22px;
+  box-sizing: border-box;
+  margin-bottom: 2px;
+  padding: 0 6px;
+  border: 1px solid var(--focus);
+  border-radius: 4px;
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
+  background: var(--field-bg);
+  color: var(--text);
+  font: inherit;
+}
+
 /* Reordering by drag-and-drop: the dragged row fades, a line marks where it will land. */
 .stack-list li[draggable='true'] {
   cursor: grab;

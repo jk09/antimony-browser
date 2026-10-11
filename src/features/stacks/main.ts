@@ -193,6 +193,19 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
   const takenNames = (except: Stack) =>
     new Set([...stacks.values()].flatMap((s) => (s !== except && s.name !== null ? [s.name] : [])))
 
+  /**
+   * A new name the user asked for (the switcher or the assistant): slugged like derived names, made
+   * unique with -2, -3…; nothing changes when it has no letters or digits.
+   */
+  const rename = (stack: Stack, wanted: string) => {
+    const asked = slug(wanted)
+    if (asked && asked !== stack.name) {
+      stack.name = uniqueName(asked, takenNames(stack))
+      changed()
+    }
+    return { name: stack.name ?? '', asked }
+  }
+
   /** The stack of a tab; a tab main didn't create here (the first typed URL) gets one. */
   const stackFor = (tabId: number): Stack => {
     const known = stackOfTab.get(tabId)
@@ -381,6 +394,16 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
     goToNode(stack, value)
   })
   ipc.handle(channels.switch, (value) => switchTo(parseStackId(channels.switch, value)))
+  ipc.handle(channels.rename, (value) => {
+    const { stackId, name } = (typeof value === 'object' && value !== null ? value : {}) as {
+      stackId?: unknown
+      name?: unknown
+    }
+    if (typeof name !== 'string' || name.length > 200) {
+      throw new TypeError(`${channels.rename} expects { stackId, name: string }`)
+    }
+    return rename(parseStackId(channels.rename, stackId), name).name
+  })
   // Drag-and-drop and Alt+↑/↓ in the switcher's list; the same order move_stack changes.
   ipc.handle(channels.move, (value) => {
     const { stackId, index } = (typeof value === 'object' && value !== null ? value : {}) as {
@@ -502,16 +525,9 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
           active: row.id === stack.activeId,
         })),
       })),
-    // A new name the user asked for: slugged like derived names, made unique with -2, -3…
     rename: (name, wanted) => {
       const stack = byName(name)
-      if (!stack) return null
-      const asked = slug(wanted)
-      if (asked && asked !== stack.name) {
-        stack.name = uniqueName(asked, takenNames(stack))
-        changed()
-      }
-      return { name: stack.name!, asked }
+      return stack ? rename(stack, wanted) : null
     },
     move: (name, position) => {
       const stack = byName(name)

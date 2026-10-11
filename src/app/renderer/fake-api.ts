@@ -194,6 +194,7 @@ export function fakeApi(
       pages: vi.fn(async () => options.stackPages ?? []),
       openPage: vi.fn(async (_stackId: string, _nodeId: number) => {}),
       move: vi.fn(async (_stackId: string, _index: number) => {}),
+      rename: vi.fn(async (_stackId: string, name: string) => name),
       closeNode: vi.fn(async (_nodeId: number) => {}),
       home: vi.fn(async () => home),
       setHome: vi.fn(async (url: string | null) => {

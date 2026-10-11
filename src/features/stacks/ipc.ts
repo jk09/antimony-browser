@@ -12,6 +12,7 @@ export const channels = {
   pages: 'stacks:pages',
   openPage: 'stacks:open-page',
   move: 'stacks:move',
+  rename: 'stacks:rename',
   stateChanged: 'stacks:state-changed',
   // A shortcut or File menu item (main → UI), not a state change; the UI runs it like its button.
   command: 'stacks:command',
@@ -163,6 +164,11 @@ export interface StacksApi {
   openPage(stackId: string, nodeId: number): Promise<void>
   /** Moves a stack to `index` of the order (0 = top; past the end = last). */
   move(stackId: string, index: number): Promise<void>
+  /**
+   * Renames a stack: `name` is slugged and made unique (-2, -3…); one without letters or digits
+   * changes nothing. Resolves with the name the stack has now.
+   */
+  rename(stackId: string, name: string): Promise<string>
   /** Called whenever stacks or the current tree change. Returns an unsubscribe function. */
   onChanged(listener: (state: StacksState) => void): () => void
   /** Called when a stack shortcut is pressed. Returns an unsubscribe function. */

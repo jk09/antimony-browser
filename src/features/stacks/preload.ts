@@ -11,6 +11,7 @@ export const stacksBridge: StacksApi = {
   pages: () => ipcRenderer.invoke(channels.pages),
   openPage: (stackId, nodeId) => ipcRenderer.invoke(channels.openPage, { stackId, nodeId }),
   move: (stackId, index) => ipcRenderer.invoke(channels.move, { stackId, index }),
+  rename: (stackId, name) => ipcRenderer.invoke(channels.rename, { stackId, name }),
   closeNode: (nodeId) => ipcRenderer.invoke(channels.closeNode, nodeId),
   home: () => ipcRenderer.invoke(channels.home),
   setHome: (url) => ipcRenderer.invoke(channels.setHome, url),

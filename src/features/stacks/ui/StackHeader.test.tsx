@@ -8,10 +8,10 @@ import {
   screen,
   within,
 } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fakeApi, idleState } from '../../../app/renderer/fake-api'
 import type { StackRow, StacksState } from '../ipc'
-import { maxRowsFor, StackHeader } from './StackHeader'
+import { maxRowsFor, RENAME_CLICK_MS, StackHeader } from './StackHeader'
 
 afterEach(cleanup)
 
@@ -428,6 +428,68 @@ describe('StackHeader', () => {
       target: { value: 'doc' },
     })
     expect(rows()[0]!.getAttribute('draggable')).toBe('false')
+  })
+
+  it('renames a stack by double-click or F2, previewing the name it will get', async () => {
+    const { api } = await renderHeader(state([row(1, 0)], 1))
+    fireEvent.click(screen.getByTitle(/^All stacks/))
+    await act(async () => {})
+    const list = screen.getByRole('dialog', { name: 'Stacks' })
+    const docs = within(list).getByRole('button', { name: /^@docs/ })
+    expect(docs.title).toContain('Double-click or F2 to rename')
+
+    // Double-click: a field with the name selected; the note shows the slug and -2 when taken.
+    fireEvent.doubleClick(docs)
+    const field = within(list).getByRole('textbox', {
+      name: 'New name for @docs',
+    }) as HTMLInputElement
+    expect(document.activeElement).toBe(field)
+    expect([field.selectionStart, field.selectionEnd]).toEqual([0, 4])
+    fireEvent.change(field, { target: { value: 'Page 1' } })
+    expect(within(list).getByText('Enter: @page-1-2 · Escape: cancel')).toBeTruthy()
+    fireEvent.change(field, { target: { value: '!!' } })
+    expect(within(list).getByText('Use letters or digits · Escape: cancel')).toBeTruthy()
+    // Nothing usable: Enter only ends the edit.
+    fireEvent.keyDown(field, { key: 'Enter' })
+    expect(api.stacks.rename).not.toHaveBeenCalled()
+
+    // F2, a new name, Enter: renamed; focus goes back to the row.
+    fireEvent.keyDown(within(list).getByRole('button', { name: /^@docs/ }), { key: 'F2' })
+    const again = within(list).getByRole('textbox', { name: 'New name for @docs' })
+    fireEvent.change(again, { target: { value: 'My Work' } })
+    fireEvent.keyDown(again, { key: 'Enter' })
+    expect(api.stacks.rename).toHaveBeenCalledWith('s2', 'My Work')
+    expect(document.activeElement).toBe(within(list).getByRole('button', { name: /^@docs/ }))
+    // The list stays open while renaming; Escape cancels without renaming.
+    fireEvent.keyDown(within(list).getByRole('button', { name: /^@docs/ }), { key: 'F2' })
+    fireEvent.keyDown(within(list).getByRole('textbox', { name: /New name/ }), { key: 'Escape' })
+    expect(api.stacks.rename).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('dialog', { name: 'Stacks' })).toBeTruthy()
+  })
+
+  it('switches after a single mouse click, but not when a double-click renames', async () => {
+    vi.useFakeTimers()
+    try {
+      const { api } = await renderHeader(state([row(1, 0)], 1))
+      fireEvent.click(screen.getByTitle(/^All stacks/))
+      await act(async () => {})
+      const docs = () =>
+        within(screen.getByRole('dialog', { name: 'Stacks' })).getByRole('button', {
+          name: /^@docs/,
+        })
+      fireEvent.click(docs(), { detail: 1 })
+      expect(api.stacks.switch).not.toHaveBeenCalled()
+      fireEvent.click(docs(), { detail: 2 })
+      fireEvent.doubleClick(docs())
+      act(() => vi.advanceTimersByTime(RENAME_CLICK_MS))
+      expect(api.stacks.switch).not.toHaveBeenCalled()
+      fireEvent.keyDown(screen.getByRole('textbox', { name: /New name/ }), { key: 'Escape' })
+      fireEvent.click(docs(), { detail: 1 })
+      act(() => vi.advanceTimersByTime(RENAME_CLICK_MS))
+      expect(api.stacks.switch).toHaveBeenCalledWith('s2')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('does not cycle with a single stack', async () => {
