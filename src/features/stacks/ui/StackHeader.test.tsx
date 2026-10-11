@@ -1,5 +1,13 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  createEvent,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { fakeApi, idleState } from '../../../app/renderer/fake-api'
 import type { StackRow, StacksState } from '../ipc'
@@ -356,6 +364,70 @@ describe('StackHeader', () => {
     act(() => emit.stackCommand('cycle-next'))
     act(() => emit.stackCommand('cycle-end'))
     expect(api.stacks.switch).toHaveBeenLastCalledWith('s2')
+  })
+
+  it('reorders stacks by drag-and-drop and Alt+arrows, not while filtered', async () => {
+    const ordered: StacksState = {
+      ...state([row(1, 0)], 1),
+      stacks: [
+        { id: 's1', name: 'page-1', rootTitle: 'Page 1', pages: 1, audio: null },
+        { id: 's2', name: 'docs', rootTitle: 'Docs', pages: 1, audio: null },
+        { id: 's3', name: 'news', rootTitle: 'News', pages: 1, audio: null },
+      ],
+      recent: ['s1', 's2', 's3'],
+    }
+    const { api } = await renderHeader(ordered)
+    fireEvent.click(screen.getByTitle(/^All stacks/))
+    await act(async () => {})
+    const rows = () =>
+      within(screen.getByRole('dialog', { name: 'Stacks' })).getAllByRole('listitem')
+    // Each row is 20 px high: the upper half drops above it, the lower half below.
+    rows().forEach((item, n) => {
+      item.getBoundingClientRect = () =>
+        ({ top: n * 20, height: 20, bottom: n * 20 + 20 }) as DOMRect
+    })
+    const [first, , last] = rows()
+    expect(first!.getAttribute('draggable')).toBe('true')
+    // jsdom has no DragEvent: the pointer position is set on the event by hand.
+    const dragOver = (item: HTMLElement, clientY: number) => {
+      const event = createEvent.dragOver(item, { dataTransfer: { dropEffect: '' } })
+      Object.defineProperty(event, 'clientY', { value: clientY })
+      fireEvent(item, event)
+    }
+
+    // Drag @news (3rd) above @page-1 (1st).
+    fireEvent.dragStart(last!, { dataTransfer: { setData: () => {}, effectAllowed: '' } })
+    dragOver(first!, 5)
+    expect(first!.className).toContain('drop-before')
+    fireEvent.drop(first!, { dataTransfer: {} })
+    expect(api.stacks.move).toHaveBeenLastCalledWith('s3', 0)
+
+    // Drag @page-1 below @news: index 2 (last); dropping where it already is moves nothing.
+    fireEvent.dragStart(first!, { dataTransfer: { setData: () => {}, effectAllowed: '' } })
+    dragOver(last!, 55)
+    expect(last!.className).toContain('drop-after')
+    fireEvent.drop(last!, { dataTransfer: {} })
+    expect(api.stacks.move).toHaveBeenLastCalledWith('s1', 2)
+    fireEvent.dragStart(first!, { dataTransfer: { setData: () => {}, effectAllowed: '' } })
+    dragOver(first!, 15)
+    fireEvent.drop(first!, { dataTransfer: {} })
+    expect(api.stacks.move).toHaveBeenCalledTimes(2)
+
+    // Alt+↓ on a focused row moves it one place; Alt+↑ on the first does nothing.
+    const docs = within(rows()[1]!).getByRole('button', { name: /^@docs/ })
+    fireEvent.keyDown(docs, { key: 'ArrowDown', altKey: true })
+    expect(api.stacks.move).toHaveBeenLastCalledWith('s2', 2)
+    fireEvent.keyDown(within(first!).getByRole('button', { name: /^@page-1/ }), {
+      key: 'ArrowUp',
+      altKey: true,
+    })
+    expect(api.stacks.move).toHaveBeenCalledTimes(3)
+
+    // A filtered list can't be reordered.
+    fireEvent.change(screen.getByRole('combobox', { name: 'Search stacks and pages' }), {
+      target: { value: 'doc' },
+    })
+    expect(rows()[0]!.getAttribute('draggable')).toBe('false')
   })
 
   it('does not cycle with a single stack', async () => {

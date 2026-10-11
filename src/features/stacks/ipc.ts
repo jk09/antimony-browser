@@ -11,6 +11,7 @@ export const channels = {
   setMuted: 'stacks:set-muted',
   pages: 'stacks:pages',
   openPage: 'stacks:open-page',
+  move: 'stacks:move',
   stateChanged: 'stacks:state-changed',
   // A shortcut or File menu item (main → UI), not a state change; the UI runs it like its button.
   command: 'stacks:command',
@@ -160,6 +161,8 @@ export interface StacksApi {
   pages(): Promise<StackPages[]>
   /** Makes a stack current (if it isn't) and loads one of its pages; focuses the page. */
   openPage(stackId: string, nodeId: number): Promise<void>
+  /** Moves a stack to `index` of the order (0 = top; past the end = last). */
+  move(stackId: string, index: number): Promise<void>
   /** Called whenever stacks or the current tree change. Returns an unsubscribe function. */
   onChanged(listener: (state: StacksState) => void): () => void
   /** Called when a stack shortcut is pressed. Returns an unsubscribe function. */
