@@ -6,15 +6,15 @@
 | --- | --- |
 | **Feature name** | `rename_stack` tool: the assistant gives a stack a new `@name` |
 | **Spec ID** | fresh-label-n5j8ve |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-11 11:00 +00:00 |
-| **Last updated** | 2026-10-11 11:30 +00:00 |
+| **Last updated** | 2026-10-11 11:40 +00:00 |
 | **Affected features** | agent, stacks |
 | **Target release** | 0.1.0 |
-| **Related links** | the other stack tools: specs open-roster-v5n9qk, steady-helm-q2w7xd, brief-pruner-z8k3mf, settled-row-h4n6tp; PRs #71–#75 |
+| **Related links** | the other stack tools: specs open-roster-v5n9qk, steady-helm-q2w7xd, brief-pruner-z8k3mf, settled-row-h4n6tp; PRs #71–#75; PR #76 |
 
 **Status definitions:**
 - **Draft:** The spec is being written or reviewed. The scope may still change.
