@@ -6,15 +6,15 @@
 | --- | --- |
 | **Feature name** | Stacks keep an order of their own (shown in the switcher and `list_stacks`); the assistant's `move_stack` tool changes it |
 | **Spec ID** | settled-row-h4n6tp |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-11 09:00 +00:00 |
-| **Last updated** | 2026-10-11 09:40 +00:00 |
+| **Last updated** | 2026-10-11 09:50 +00:00 |
 | **Affected features** | stacks, agent |
 | **Target release** | 0.1.0 |
-| **Related links** | specs open-roster-v5n9qk, steady-helm-q2w7xd, brief-pruner-z8k3mf (the other stack tools); PRs #71–#73 |
+| **Related links** | specs open-roster-v5n9qk, steady-helm-q2w7xd, brief-pruner-z8k3mf (the other stack tools); PRs #71–#73; PR #74 |
 
 **Status definitions:**
 - **Draft:** The spec is being written or reviewed. The scope may still change.
