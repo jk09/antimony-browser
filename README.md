@@ -20,6 +20,8 @@ Antimony is a desktop web browser organised around an AI assistant instead of a 
 - **Macros.** Ask the assistant to store a sequence of browser actions as a `/name` command, then replay it instantly, without calling the model.
 - **Tabs as a tree.** Each tab's navigation is shown as a branching tree of breadcrumbs, so you can go back to any earlier page and follow a different link without losing the path you were on.
 
+![A stack of 20 pages shown as a branching tree: each page nests under the page it was reached from, and the open page is highlighted](docs/images/stack-tree.png)
+
 **Privacy and security:** browsing history and settings stay on your device. Web pages run in sandboxed views with no access to the browser's internals, and the assistant sends page content to Claude (through your Claude Code CLI) only when you turn page access on. Antimony stores no API key.
 
 **Status:** early-stage and under active development; see [docs/features.md](docs/features.md) for what exists today.
