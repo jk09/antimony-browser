@@ -26,6 +26,10 @@ The assistant works in the open: it says what it is doing, and every action on a
 
 ![A stack of 20 pages shown as a branching tree: each page nests under the page it was reached from, and the open page is highlighted](docs/images/stack-tree.png)
 
+`/history` searches every page you have visited by address or the words it contained (here, "sourdough" finds a page that only mentions it in passing), with matches marked; a note turns a page into a bookmark.
+
+![The history search for "sourdough": three matching pages with the matched words in bold and a pinned note on one of them](docs/images/history.png)
+
 Macros the assistant stores are listed on the `/config` page with their parameters and the steps they replay, `{{parameters}}` marked; typing `/wiki lions` replays one instantly, without calling the model.
 
 ![The configuration page listing macros /gh, /ns and /wiki with their parameters, numbered steps and Delete buttons](docs/images/macros.png)
