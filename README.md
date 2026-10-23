@@ -30,6 +30,10 @@ The assistant works in the open: it says what it is doing, and every action on a
 
 ![The history search for "sourdough": three matching pages with the matched words in bold and a pinned note on one of them](docs/images/history.png)
 
+`/history-map` draws the pages you visited as groups (one site, or shared keywords) joined by the links you followed, so you can see where a session went.
+
+![The history map: four groups (kitchen, travel, cycling, programming) of pages, with arrows for followed links between pages and groups](docs/images/history-map.png)
+
 Macros the assistant stores are listed on the `/config` page with their parameters and the steps they replay, `{{parameters}}` marked; typing `/wiki lions` replays one instantly, without calling the model.
 
 ![The configuration page listing macros /gh, /ns and /wiki with their parameters, numbered steps and Delete buttons](docs/images/macros.png)
