@@ -2,6 +2,8 @@
 
 A minimal Chromium-based web browser, built on [Electron](https://www.electronjs.org/) with TypeScript and React.
 
+![Antimony: a web page with the tab tree and the single prompt docked on the right](docs/images/screenshot.png)
+
 ## What it is
 
 Antimony is a desktop web browser organised around an AI assistant instead of a toolbar. Where mainstream browsers add AI as a side feature on top of tabs, menus and settings pages, Antimony has a single prompt: type a URL to open a page, `/command` to run a command, or plain language to ask the assistant to do something.
