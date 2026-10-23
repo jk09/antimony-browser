@@ -26,6 +26,10 @@ The assistant works in the open: it says what it is doing, and every action on a
 
 ![A stack of 20 pages shown as a branching tree: each page nests under the page it was reached from, and the open page is highlighted](docs/images/stack-tree.png)
 
+Macros the assistant stores are listed on the `/config` page with their parameters and the steps they replay, `{{parameters}}` marked; typing `/wiki lions` replays one instantly, without calling the model.
+
+![The configuration page listing macros /gh, /ns and /wiki with their parameters, numbered steps and Delete buttons](docs/images/macros.png)
+
 On first launch a welcome page checks that the Claude Code CLI works, then lets you pick the model and a theme (here, describing what you need to get themes that meet WCAG 2.2 AA contrast):
 
 ![The welcome page on its Theme step: describe what you need or pick a preset such as light for astigmatism, dark with low glare or high contrast](docs/images/welcome.png)
