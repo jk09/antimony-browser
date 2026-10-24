@@ -6,15 +6,15 @@
 | --- | --- |
 | **Feature name** | Mountain app icon, a light and a dark version that follow the system theme |
 | **Spec ID** | summit-mark-v4n7qe |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-24 10:10 +00:00 |
-| **Last updated** | 2026-10-24 10:30 +00:00 |
+| **Last updated** | 2026-10-24 10:40 +00:00 |
 | **Affected features** | – (app shell: `src/app/main/`, new `resources/icons/`) |
 | **Target release** | 0.1.0 |
-| **Related links** | Design: the three-tile mountain image attached in the session (left tile = light, centre tile = dark) |
+| **Related links** | Design: the three-tile mountain image attached in the session (left tile = light, centre tile = dark); PR https://github.com/jk09/antimony-browser/pull/89 |
 
 **Status definitions:**
 - **Draft:** The spec is being written or reviewed. The scope may still change.
