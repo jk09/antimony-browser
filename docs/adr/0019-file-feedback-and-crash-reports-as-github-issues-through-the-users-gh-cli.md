@@ -1,6 +1,6 @@
 # 0019. File feedback and crash reports as GitHub issues through the user's gh CLI
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Features: feedback, prompt
 - Spec: candid-signal-f4r8kz
