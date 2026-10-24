@@ -6,15 +6,15 @@
 | --- | --- |
 | **Feature name** | Packaging icons: `antimony.ico` (Windows) and `antimony.icns` (macOS) built from the dark mountain tile |
 | **Spec ID** | folded-crest-q8m3wd |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-24 11:07 +00:00 |
-| **Last updated** | 2026-10-24 11:20 +00:00 |
+| **Last updated** | 2026-10-24 11:30 +00:00 |
 | **Affected features** | – (app shell: `resources/icons/`, `scripts/render-icons.mjs`) |
 | **Target release** | 0.1.0 |
-| **Related links** | spec summit-mark-v4n7qe (runtime icon, follow-up item); PR https://github.com/jk09/antimony-browser/pull/89 |
+| **Related links** | spec summit-mark-v4n7qe (runtime icon, follow-up item); PR https://github.com/jk09/antimony-browser/pull/89; PR https://github.com/jk09/antimony-browser/pull/92 |
 
 **Status definitions:**
 - **Draft:** The spec is being written or reviewed. The scope may still change.
