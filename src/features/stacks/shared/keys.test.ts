@@ -18,6 +18,10 @@ describe('stack shortcuts', () => {
     expect(stackCommandFor(key('N'), 'win32')).toBe('new')
     expect(stackCommandFor(key('w'), 'linux')).toBe('close-page')
     expect(stackCommandFor(key('E'), 'linux')).toBe('focus-tree')
+    expect(stackCommandFor(key('t'), 'win32')).toBe('new-page')
+    expect(stackCommandFor(key('T', { control: false, meta: true }), 'darwin')).toBe('new-page')
+    expect(stackCommandFor(key('t', { shift: true }), 'linux')).toBeNull()
+    expect(stackCommandFor(key('t', { alt: true }), 'linux')).toBeNull()
     expect(stackCommandFor(key('w'), 'darwin')).toBeNull()
     expect(stackCommandFor(key('w', { control: false, meta: true }), 'darwin')).toBe('close-page')
   })
@@ -34,6 +38,7 @@ describe('stack shortcuts', () => {
   it('labels the shortcuts per platform', () => {
     expect(shortcutLabel('reload', 'linux')).toBe('Ctrl+R')
     expect(shortcutLabel('new', 'darwin')).toBe('Cmd+N')
+    expect(shortcutLabel('new-page', 'linux')).toBe('Ctrl+T')
     expect(shortcutLabel('close-page', 'win32')).toBe('Ctrl+W')
     expect(shortcutLabel('focus-tree', 'darwin')).toBe('Cmd+E')
   })

@@ -132,6 +132,34 @@ describe('StackHeader', () => {
     expect(api.stacks.create).toHaveBeenCalledTimes(2)
   })
 
+  it('adds the home page to the current stack with Ctrl+T, or starts a stack when there is none', async () => {
+    const { api, emit } = await renderHeader(state([row(1, 0), row(2, 1)], 2))
+    // No home page: nothing to add.
+    act(() => emit.stackCommand('new-page'))
+    await act(async () => {})
+    expect(api.navigation.go).not.toHaveBeenCalled()
+    expect(api.stacks.create).not.toHaveBeenCalled()
+
+    await api.stacks.setHome('https://home.example/')
+    act(() => emit.stackCommand('new-page'))
+    await act(async () => {})
+    expect(api.navigation.go).toHaveBeenCalledWith('https://home.example/')
+    expect(api.stacks.create).not.toHaveBeenCalled()
+
+    // The assistant is running: nothing.
+    act(() => emit.state({ ...idleState, status: 'running' }))
+    act(() => emit.stackCommand('new-page'))
+    await act(async () => {})
+    expect(api.navigation.go).toHaveBeenCalledTimes(1)
+  })
+
+  it('starts a stack with Ctrl+T when the current stack has no page', async () => {
+    const { api, emit } = await renderHeader({ ...state([], 0), current: null })
+    act(() => emit.stackCommand('new-page'))
+    expect(api.stacks.create).toHaveBeenCalledTimes(1)
+    expect(api.navigation.go).not.toHaveBeenCalled()
+  })
+
   it('closes a page from its × or Delete, and the active one with the shortcut', async () => {
     const { api, emit } = await renderHeader(state([row(1, 0), row(2, 1), row(3, 1)], 3))
     const active = screen.getByRole('button', { name: 'Close Page 3' })

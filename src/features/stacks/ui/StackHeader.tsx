@@ -513,6 +513,17 @@ export function StackHeader() {
     setListOpen(false)
     api.stacks.create().catch(report)
   }
+  // Ctrl/Cmd+T: the home page as a new branch of the current stack (nothing without a home page);
+  // an empty or missing stack is New stack's business.
+  const newPage = () => {
+    if (running) return
+    setListOpen(false)
+    if (activeId === null) return newStack()
+    api.stacks
+      .home()
+      .then((home) => (home === null ? undefined : api.navigation.go(home)))
+      .catch(report)
+  }
   const closeRow = running
     ? undefined
     : (row: StackRow) => {
@@ -579,11 +590,19 @@ export function StackHeader() {
     }
   }
 
-  // Ctrl/Cmd+R, +N, +W, +E and Ctrl+Tab from main (caught in the page or the chrome UI) do what the
+  // Ctrl/Cmd+R, +N, +T, +W, +E and Ctrl+Tab from main (caught in the page or the chrome UI) do what the
   // buttons and the stack list do.
-  const commands = useRef({ reload, newStack, closeActive, focusTree, cycleStep, cycleEnd })
+  const commands = useRef({
+    reload,
+    newStack,
+    newPage,
+    closeActive,
+    focusTree,
+    cycleStep,
+    cycleEnd,
+  })
   useEffect(() => {
-    commands.current = { reload, newStack, closeActive, focusTree, cycleStep, cycleEnd }
+    commands.current = { reload, newStack, newPage, closeActive, focusTree, cycleStep, cycleEnd }
   })
   useEffect(
     () =>
@@ -591,6 +610,7 @@ export function StackHeader() {
         const run = commands.current
         if (command === 'reload') run.reload()
         else if (command === 'new') run.newStack()
+        else if (command === 'new-page') run.newPage()
         else if (command === 'close-page') run.closeActive()
         else if (command === 'focus-tree') run.focusTree()
         else if (command === 'cycle-next') run.cycleStep(1)

@@ -6,12 +6,12 @@
 | --- | --- |
 | **Feature name** | Ctrl/Cmd+T adds a new page at the home page to the current stack (or fills / opens a stack when there is none to add to) |
 | **Spec ID** | keen-pennant-t5r8bn |
-| **Status** | Draft <!-- one of: Draft, Active, Done --> |
+| **Status** | Active <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-24 10:09 +00:00 |
-| **Last updated** | 2026-10-24 10:09 +00:00 |
+| **Last updated** | 2026-10-24 10:30 +00:00 |
 | **Affected features** | stacks |
 | **Target release** | 0.1.0 |
 | **Related links** | specs branching-trail-k4w9zp, swift-carousel-t6m2xa (new stack, home page), ADR 0008 |
@@ -57,7 +57,7 @@
    - the assistant is running → nothing (like New stack);
    - the current stack has a page (its tree is not empty) and a home page is set → the tab loads the home page through `navigation.go`, so it becomes a new child of the active page (a branch, per the tree rules) and the page gets focus; the stack list is closed;
    - the current stack has no page, or there is no current stack → same as `stacks.create` (New stack);
-   - there is no home page and the stack has a page → the prompt is focused (`api.stacks.create` is not called, no page is added).
+   - there is no home page and the stack has a page → nothing is added (the key already moved focus to the chrome UI).
 4. If the active page already is the home page, no node is added (the tree never duplicates a page); the page keeps focus.
 5. Ctrl/Cmd+N and its behavior are unchanged.
 
@@ -74,26 +74,26 @@
 
 - User flow: read a page → Ctrl+T → the home page appears as a branch below it in the tree, focused → type or follow a link; click the parent in the tree to go back.
 - Visual considerations: none; the tree shows the new branch like any other.
-- Edge cases: the active page is the home page (no node added); no home page; the assistant runs; the current stack is unopened (imported): New stack's behavior applies only when it has no page, otherwise its tab exists once switched to.
+- Edge cases: the active page is the home page (no node added); no home page (nothing is added); the assistant runs; the current stack is unopened (imported): New stack's behavior applies only when it has no page, otherwise its tab exists once switched to.
 
 ## 10. Technical Notes
 
 - Proposed approach: add `t: 'new-page'` to `KEYS` in `shared/keys.ts` and `'new-page'` to `StackCommand` in `ipc.ts`; add the File menu item in `main.ts`; in `StackHeader.tsx` add `newPage` beside `newStack`, register it in the `commands` ref and dispatch it in `onCommand`. It reads the home page via the existing `stacks:home` channel and navigates via the existing `navigation:go`.
 - Process split: main catches the key and menu item → `stacks:command` (existing channel) → UI → existing `navigation:go` / `stacks:create` / `stacks:home`.
-- Dependencies: navigation (`go`), prompt (focus when no home page).
+- Dependencies: navigation (`go`).
 - Risks / unknowns: `shortcutLabel` finds a key by its command, so the new key is added without breaking `n`; Ctrl+T must not be taken by the page first (hence `before-input-event`).
 - Open questions: none.
 
 ## 11. Acceptance Criteria
 
-- [ ] `stackCommandFor` maps Ctrl+T (Cmd+T on macOS) to `new-page`, and ignores it with Alt, Shift, key repeat or the wrong modifier.
-- [ ] Ctrl+T in the chrome UI or a page sends `new-page` and is consumed; File → New Page shows `Ctrl+T` / `Cmd+T` and sends the same command.
-- [ ] With a page in the current stack and a home page, the UI loads the home page, which becomes a child of the active page; `stacks.create` is not called.
-- [ ] With an empty or missing current stack, it calls `stacks.create`.
-- [ ] While the assistant runs nothing happens.
-- [ ] On the home page already, the tree gets no duplicate node.
-- [ ] Ctrl+N still starts a new stack.
-- [ ] `npm run check` passes and the stacks README and `docs/features.md` are updated.
+- [x] `stackCommandFor` maps Ctrl+T (Cmd+T on macOS) to `new-page`, and ignores it with Alt, Shift, key repeat or the wrong modifier.
+- [x] Ctrl+T in the chrome UI or a page sends `new-page` and is consumed; File → New Page shows `Ctrl+T` / `Cmd+T` and sends the same command.
+- [x] With a page in the current stack and a home page, the UI loads the home page, which becomes a child of the active page; `stacks.create` is not called.
+- [x] With an empty or missing current stack, it calls `stacks.create`.
+- [x] While the assistant runs nothing happens.
+- [x] On the home page already, the tree gets no duplicate node.
+- [x] Ctrl+N still starts a new stack.
+- [x] `npm run check` passes and the stacks README and `docs/features.md` are updated.
 
 ## 12. Testing / Verification
 
@@ -108,4 +108,4 @@
 
 ## 14. Changes during implementation
 
-None yet.
+- No home page and a stack with a page: nothing is added instead of focusing the prompt (the UI has no way to focus it; the key press already focuses the chrome UI).

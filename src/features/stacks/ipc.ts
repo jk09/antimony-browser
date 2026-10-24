@@ -19,12 +19,13 @@ export const channels = {
 } as const
 
 /**
- * What Ctrl/Cmd+R, +N, +W and +E (and their File menu items) ask the UI to do, and the steps of
+ * What Ctrl/Cmd+R, +N, +T, +W and +E (and their File menu items) ask the UI to do, and the steps of
  * Ctrl+[Shift+]Tab: start or step a cycle through the stacks, then switch (end) or not (cancel).
  */
 export type StackCommand =
   | 'reload'
   | 'new'
+  | 'new-page'
   | 'close-page'
   | 'focus-tree'
   | 'cycle-next'
