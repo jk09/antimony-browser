@@ -158,6 +158,15 @@ export async function runCommand(
     case 'config':
       await api.skills.requestConfig()
       return { close: true }
+    case 'feedback': {
+      if (!args.trim()) return error('Type your feedback after /feedback, then press Enter.')
+      const sent = await api.feedback.send(args)
+      return info(
+        sent.via === 'gh'
+          ? `Thanks! Sent as ${sent.url}`
+          : 'GitHub’s new issue form opened in your browser with your feedback. Submit it there.',
+      )
+    }
     case 'forget':
       if (!skills.some((skill) => skill.name === args && !skill.builtin)) {
         return error(`No macro /${args}.`)

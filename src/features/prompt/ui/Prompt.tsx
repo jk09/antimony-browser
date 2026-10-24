@@ -678,6 +678,26 @@ export function Prompt({
         </button>
         <button
           type="button"
+          className="prompt-icon"
+          title="Send feedback"
+          aria-label="Send feedback"
+          onClick={() => {
+            edit('/feedback ')
+            input.current?.focus()
+          }}
+        >
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+            <path
+              d="M2.5 3h11a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1H7l-3 2.5v-2.5H2.5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+        <button
+          type="button"
           className="prompt-toggle"
           aria-pressed={settings?.pageAccess ?? false}
           title="Let the assistant read this page and, with your approval, act on it"
