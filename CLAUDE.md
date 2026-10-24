@@ -2,7 +2,7 @@ Antimony is a minimal Chromium-based browser: Electron + TypeScript, chrome UI i
 
 ## Commands
 
-- `npm run dev` – run with hot reload · `npm run check` – lint, format, typecheck, unit tests · `npm run test:e2e` – build + Playwright end-to-end (Linux without a display: `xvfb-run -a npm run test:e2e`).
+- `npm run dev` – run with hot reload · `npm run check` – lint, format, typecheck, unit tests · `npm run test:e2e` – build + Playwright end-to-end (Linux without a display: `xvfb-run -a npm run test:e2e`) · `npm run dist` – installable packages for this platform (electron-builder).
 - Cloud sessions install dependencies and the Electron binary (SessionStart hook), so `test:e2e` runs there with `xvfb-run -a`; if the binary download is blocked, CI runs the e2e tests. Chromium's sandbox may need `kernel.apparmor_restrict_unprivileged_userns=0` (as in CI); it isn't needed in this container.
 
 ## Workflow

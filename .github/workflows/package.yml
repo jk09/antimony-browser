@@ -1,0 +1,54 @@
+name: Package
+
+# Builds installable packages (electron-builder.yml) on every platform when a v* tag is pushed, the
+# workflow is run by hand or a pull request changes the packaging; the packages are uploaded as
+# workflow artifacts (ADR 0020).
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - electron-builder.yml
+      - package.json
+      - package-lock.json
+      - resources/**
+      - .github/workflows/package.yml
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux
+          - os: windows-latest
+            name: windows
+          - os: macos-latest
+            name: macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run dist
+        env:
+          # Unsigned builds: don't look for signing certificates in the keychain.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: antimony-${{ matrix.name }}
+          if-no-files-found: error
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.zip
+            dist/*.AppImage
+            dist/*.deb

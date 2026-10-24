@@ -58,6 +58,15 @@ npm run test:e2e   # build and run Playwright against the app
 npm run build      # production build into out/
 ```
 
+Packages ([ADR 0020](docs/adr/0020-package-with-electron-builder-unsigned-built-in-ci-on-tags.md), config in `electron-builder.yml`):
+
+```sh
+npm run dist       # installable packages for this platform into dist/
+npm run dist:dir   # unpacked app only (quick check)
+```
+
+Windows gets an NSIS installer, macOS a `.dmg` and `.zip` (Intel and Apple silicon), Linux an AppImage and a `.deb`. The **Package** workflow builds all of them on Windows, macOS and Linux runners when a `v*` tag is pushed (or when run by hand) and attaches them to the run as artifacts. Builds are unsigned: on macOS open the app the first time with right-click → Open; on Windows choose "More info → Run anyway".
+
 | Path | What |
 |---|---|
 | `src/app/main/` | Main process entry: window, security defaults, feature registration |

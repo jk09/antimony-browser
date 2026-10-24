@@ -1,0 +1,51 @@
+# Packaging (spec sealed-crate-n6v2pk, ADR 0020). Build with `npm run dist` (this platform) or
+# `npm run dist:dir` (unpacked, quick check); CI builds every platform on v* tags (package.yml).
+appId: io.github.jk09.antimony
+productName: Antimony
+copyright: Copyright © 2026 jk09
+directories:
+  output: dist
+  buildResources: resources
+# Only the electron-vite build and the runtime icons; the app has no runtime dependencies.
+files:
+  - out/**
+  - resources/icons/*.png
+  - package.json
+asar: true
+npmRebuild: false
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: resources/icons/antimony.ico
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: ${productName}-Setup-${version}.${ext}
+
+mac:
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+    - target: zip
+      arch: [x64, arm64]
+  icon: resources/icons/antimony.icns
+  category: public.app-category.productivity
+  # Unsigned until certificates exist; see ADR 0020.
+  identity: null
+
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+  icon: resources/icons/antimony-dark.png
+  executableName: antimony
+  # Sets desktopName in the packaged package.json so the window links to its .desktop entry.
+  syncDesktopName: true
+  category: Network;WebBrowser
+  maintainer: jk09 <3989698+jk09@users.noreply.github.com>
+  synopsis: A minimal Chromium-based web browser
