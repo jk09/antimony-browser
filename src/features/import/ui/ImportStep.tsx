@@ -42,7 +42,12 @@ export function ImportStep() {
         </button>
       </div>
       <div role="status" aria-live="polite" className="import-status">
-        {outcome.state === 'running' && <p>Importing {outcome.path}…</p>}
+        {outcome.state === 'running' && (
+          <p className="import-running">
+            <span className="import-spinner" aria-hidden="true" />
+            Importing {outcome.path}…
+          </p>
+        )}
         {outcome.state === 'done' && (
           <>
             <p>{describeResult(outcome.result)}</p>
