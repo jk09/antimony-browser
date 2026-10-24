@@ -17,6 +17,7 @@ import type {
   RecallResult,
   RecallShown,
 } from '../../features/history/ipc'
+import type { SendResult } from '../../features/feedback/ipc'
 import type { MenuEntry, RunResult } from '../../features/menu/ipc'
 import type { NavigationState } from '../../features/navigation/ipc'
 import { toUrl } from '../../features/navigation/shared/to-url'
@@ -203,6 +204,12 @@ export function fakeApi(
       setMuted: vi.fn(async (_stackId: string, _muted: boolean) => {}),
       onChanged: stacks.subscribe,
       onCommand: stackCommand.subscribe,
+    },
+    feedback: {
+      send: vi.fn(async (_text: string): Promise<SendResult> => ({
+        via: 'gh',
+        url: 'https://github.com/jk09/antimony-browser/issues/1',
+      })),
     },
     appearance: {
       get: vi.fn(async () => theme),

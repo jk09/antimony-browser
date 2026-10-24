@@ -1,6 +1,7 @@
 import type { BrowserWindow, MenuItemConstructorOptions, Session } from 'electron'
 import { register as agent } from '../../features/agent/main'
 import { register as appearance } from '../../features/appearance/main'
+import { register as feedback } from '../../features/feedback/main'
 import { register as history } from '../../features/history/main'
 import { register as importFeature } from '../../features/import/main'
 import { register as menu } from '../../features/menu/main'
@@ -33,6 +34,7 @@ export type RegisterFeature = (ctx: MainContext) => void | Promise<void>
 export const features: RegisterFeature[] = [
   agent,
   appearance,
+  feedback,
   history,
   importFeature,
   menu,

@@ -261,6 +261,34 @@ describe('Prompt', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
+  it('the feedback icon fills in /feedback; Enter sends the text and says where it went', async () => {
+    const { api, box } = await openPrompt()
+    fireEvent.click(screen.getByRole('button', { name: 'Send feedback' }))
+    expect(box.value).toBe('/feedback ')
+    expect(document.activeElement).toBe(box)
+    press(box, 'Escape')
+    press(box, 'Enter')
+    await act(async () => {})
+    expect(api.feedback.send).not.toHaveBeenCalled()
+    expect(screen.getByRole('alert').textContent).toContain('Type your feedback')
+
+    type(box, '/feedback Tabs are great')
+    press(box, 'Escape')
+    press(box, 'Enter')
+    await act(async () => {})
+    expect(api.feedback.send).toHaveBeenCalledWith('Tabs are great')
+    expect(screen.getByRole('status').textContent).toContain(
+      'https://github.com/jk09/antimony-browser/issues/1',
+    )
+
+    api.feedback.send.mockResolvedValueOnce({ via: 'form', url: 'https://github.com/x' })
+    type(box, '/feedback again')
+    press(box, 'Escape')
+    press(box, 'Enter')
+    await act(async () => {})
+    expect(screen.getByRole('status').textContent).toContain('new issue form opened')
+  })
+
   it('reports unknown commands without calling anything', async () => {
     const { api, box } = await openPrompt()
     type(box, '/relaod')

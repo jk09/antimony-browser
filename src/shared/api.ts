@@ -1,5 +1,6 @@
 import type { AgentApi } from '../features/agent/ipc'
 import type { AppearanceApi } from '../features/appearance/ipc'
+import type { FeedbackApi } from '../features/feedback/ipc'
 import type { HistoryApi } from '../features/history/ipc'
 import type { ImportApi } from '../features/import/ipc'
 import type { MenuApi } from '../features/menu/ipc'
@@ -18,6 +19,7 @@ export interface AntimonyApi {
   versions: { chrome: string; electron: string }
   agent: AgentApi
   appearance: AppearanceApi
+  feedback: FeedbackApi
   history: HistoryApi
   import: ImportApi
   menu: MenuApi
