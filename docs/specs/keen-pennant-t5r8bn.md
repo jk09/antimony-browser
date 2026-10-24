@@ -6,12 +6,12 @@
 | --- | --- |
 | **Feature name** | Ctrl/Cmd+T adds a new page at the home page to the current stack (or fills / opens a stack when there is none to add to) |
 | **Spec ID** | keen-pennant-t5r8bn |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-24 10:09 +00:00 |
-| **Last updated** | 2026-10-24 10:30 +00:00 |
+| **Last updated** | 2026-10-24 10:40 +00:00 |
 | **Affected features** | stacks |
 | **Target release** | 0.1.0 |
 | **Related links** | specs branching-trail-k4w9zp, swift-carousel-t6m2xa (new stack, home page), ADR 0008 |
