@@ -72,17 +72,17 @@ describe('skills main', () => {
       'skills:list',
       'skills:delete',
       'skills:run',
-      'skills:request-config',
+      'skills:request-open',
       'skills:list-changed',
-      'skills:open-config',
+      'skills:open',
     ])
   })
 
-  it('relays /config to the chrome UI and reserves the name', () => {
+  it('relays /skills to the chrome UI and reserves the name', () => {
     const { ctx, call, macros } = setup()
-    call(channels.requestConfig)
-    expect(ctx.ipc.send).toHaveBeenCalledWith(channels.openConfig, null)
-    expect(() => macros.save({ ...macro, name: 'config' })).toThrow('built-in command')
+    call(channels.requestOpen)
+    expect(ctx.ipc.send).toHaveBeenCalledWith(channels.open, null)
+    expect(() => macros.save({ ...macro, name: 'skills' })).toThrow('built-in command')
     expect(() => macros.save({ ...macro, name: 'history-map' })).toThrow('built-in command')
   })
 

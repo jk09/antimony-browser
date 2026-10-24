@@ -3,7 +3,7 @@
 Walks new users through setup on a welcome page over the page area: asks whether the Claude Code CLI is installed (with install and login commands for their system if not), tests that it starts, is logged in and answers, lets them pick the model strength and a theme for their needs (appearance's picker), offers to import their Edge browsing data (import's step, which says what is sent to the assistant for grouping by topic), and explains the prompt and skills. It opens on a profile's first launch and again with `/welcome` or File → Welcome.
 
 ## Entry points
-- UI: `ui/WelcomeView.tsx` (mounted next to the configuration page in `App.tsx`) – seven steps (Claude Code CLI · Test · Model · Theme · Import · Prompt · Skills) with Back / Next; the Theme step shows the `themeStep` slot `App.tsx` fills with appearance's `ThemePicker`, the Import step the `importStep` slot filled with import's `ImportStep` (no slot, no step); both can be skipped; the page view is hidden while it shows; ×, Escape or Start browsing closes it
+- UI: `ui/WelcomeView.tsx` (mounted next to the skills page in `App.tsx`) – seven steps (Claude Code CLI · Test · Model · Theme · Import · Prompt · Skills) with Back / Next; the Theme step shows the `themeStep` slot `App.tsx` fills with appearance's `ThemePicker`, the Import step the `importStep` slot filled with import's `ImportStep` (no slot, no step); both can be skipped; the page view is hidden while it shows; ×, Escape or Start browsing closes it
 - IPC: `welcome:state|set-done|request-open` (UI → main), `welcome:open` (main → UI) – `ipc.ts`
 - Main: `register` in `main.ts` – the done flag's store, File → Welcome
 

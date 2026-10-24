@@ -9,7 +9,7 @@ import { MapView } from '../../features/history/ui/MapView'
 import { RecallView } from '../../features/history/ui/RecallView'
 import { PageArea } from '../../features/navigation/ui/PageArea'
 import { AssistantPanel } from '../../features/prompt/ui/AssistantPanel'
-import { ConfigView } from '../../features/skills/ui/ConfigView'
+import { SkillsView } from '../../features/skills/ui/SkillsView'
 import { StackHeader } from '../../features/stacks/ui/StackHeader'
 import { ImportStep } from '../../features/import/ui/ImportStep'
 import { WelcomeView } from '../../features/welcome/ui/WelcomeView'
@@ -33,7 +33,7 @@ export function App() {
         </ActingFrame>
         <RecallView />
         <MapView />
-        <ConfigView />
+        <SkillsView />
         <WelcomeView themeStep={<ThemePicker />} importStep={<ImportStep />} />
         <AppearanceView />
         <DebugPanel />

@@ -436,8 +436,8 @@ export function WelcomeView({
                 become parameters: <code>/wiki tigers</code>.
               </li>
               <li>
-                <code>/skills</code> lists your macros, <code>/config</code> shows every command,
-                skill and macro with its steps, and <code>/forget name</code> deletes one.
+                <code>/skills</code> shows every command, skill and macro with its steps, and{' '}
+                <code>/forget name</code> deletes one.
               </li>
               <li>
                 <code>/welcome</code> brings this page back.

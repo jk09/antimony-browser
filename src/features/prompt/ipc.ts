@@ -77,12 +77,7 @@ export const promptCommands: CommandInfo[] = [
   {
     name: 'skills',
     usage: '',
-    description: 'List macros (ask the assistant to make one: "… and store it as /name")',
-  },
-  {
-    name: 'config',
-    usage: '',
-    description: 'Show all commands, skills and macros with their scripts',
+    description: 'Show system commands, built-in skills and your macros with their scripts',
   },
   {
     name: 'feedback',

@@ -37,6 +37,8 @@ export interface Suggestion {
   depth?: number
   last?: boolean
   current?: boolean
+  /** A nested option with no further level: accepting it picks the final value. */
+  leaf?: boolean
 }
 
 export const SUGGESTION_LIMIT = 8
@@ -159,6 +161,7 @@ function suggestNested(
         text: `/${name} ${path.map((n) => n.name).join(' ')}${node.children ? ' ' : ''}`,
         label: `${path.map((n) => n.label).join(' › ')}${node.children ? ' ›' : ''}`,
         detail: node.detail ?? (node.children ? 'Menu' : command.description),
+        ...(!node.children && { leaf: true }),
       }
     })
     .filter((suggestion) => suggestion.text !== input.trimEnd())

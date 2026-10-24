@@ -34,9 +34,9 @@ The assistant works in the open: it says what it is doing, and every action on a
 
 ![The history map: four groups (kitchen, travel, cycling, programming) of pages, with arrows for followed links between pages and groups](docs/images/history-map.png)
 
-Macros the assistant stores are listed on the `/config` page with their parameters and the steps they replay, `{{parameters}}` marked; typing `/wiki lions` replays one instantly, without calling the model.
+Macros the assistant stores are listed on the `/skills` page with their parameters and the steps they replay, `{{parameters}}` marked; typing `/wiki lions` replays one instantly, without calling the model.
 
-![The configuration page listing macros /gh, /ns and /wiki with their parameters, numbered steps and Delete buttons](docs/images/macros.png)
+![The skills page listing macros /gh, /ns and /wiki with their parameters, numbered steps and Delete buttons](docs/images/macros.png)
 
 On first launch a welcome page checks that the Claude Code CLI works, then lets you pick the model and a theme (here, describing what you need to get themes that meet WCAG 2.2 AA contrast):
 

@@ -56,6 +56,7 @@ export function SuggestionList({
             ? `prompt-suggestion-${suggestion.kind}`
             : '',
           suggestion.current ? 'current' : '',
+          suggestion.leaf ? 'leaf' : '',
           index === selected ? 'selected' : '',
         ].filter(Boolean)
         return (
