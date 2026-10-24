@@ -6,15 +6,15 @@
 | --- | --- |
 | **Feature name** | electron-builder config and `npm run dist`, plus a CI workflow that builds Windows, macOS and Linux packages on version tags |
 | **Spec ID** | sealed-crate-n6v2pk |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-24 11:19 +00:00 |
-| **Last updated** | 2026-10-24 11:35 +00:00 |
+| **Last updated** | 2026-10-24 11:40 +00:00 |
 | **Affected features** | – (build and app shell: `package.json`, `electron-builder.yml`, `.github/workflows/`) |
 | **Target release** | 0.1.0 |
-| **Related links** | specs summit-mark-v4n7qe, folded-crest-q8m3wd (icons); ADR 0020 |
+| **Related links** | specs summit-mark-v4n7qe, folded-crest-q8m3wd (icons); ADR 0020; PR https://github.com/jk09/antimony-browser/pull/94 |
 
 **Status definitions:**
 - **Draft:** The spec is being written or reviewed. The scope may still change.
@@ -87,7 +87,7 @@
 - [x] `npm run dist:dir` on Linux produces an unpacked app that starts, loads the chrome UI and finds its icons in the asar.
 - [x] `npm run dist` on Linux produces an AppImage and a `.deb` with the app inside.
 - [x] The config defines the Windows and macOS targets and icons listed above.
-- [ ] The workflow builds on `v*` tags and manual dispatch on three OSes and uploads the packages.
+- [x] The workflow builds on `v*` tags and manual dispatch on three OSes and uploads the packages.
 - [x] `npm run check` passes; README, architecture doc and ADR 0020 describe packaging.
 
 ## 12. Testing / Verification
@@ -106,3 +106,4 @@
 - The Package workflow also runs on pull requests that change the packaging files (config, `package.json`, lockfile, `resources/`, the workflow), so Windows and macOS builds are checked before merge; Linux was verified locally.
 - `desktopName: antimony.desktop` in `package.json` and `linux.syncDesktopName`, so Linux desktops link the window to its `.desktop` entry; the Linux executable is `antimony`.
 - Verified locally: `dist:dir` and the AppImage start, load the chrome UI from the asar and read both icon PNGs from it; the `.deb` installs to `/opt/Antimony` with `antimony.desktop` and a 512 px hicolor icon. `npm run check` and the e2e suite pass.
+- On PR #94 the Package workflow built the Windows, macOS and Linux packages successfully (each job fails if it finds no package files).
