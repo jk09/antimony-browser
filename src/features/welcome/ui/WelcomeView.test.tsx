@@ -106,7 +106,7 @@ describe('WelcomeView', () => {
     click('Next')
     expect(within(page()).getByText('Skills and macros')).toBeTruthy()
     expect(page().textContent).toContain('store it as /wiki')
-    expect(page().textContent).toContain('/config')
+    expect(page().textContent).toContain('/skills')
     click('Start browsing')
     expect(screen.queryByRole('region', { name: 'Welcome' })).toBeNull()
     expect(api.welcome.setDone).toHaveBeenCalledWith(true)

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { builtins, fakeApi } from '../../../app/renderer/fake-api'
 import { promptCommands } from '../../prompt/ipc'
 import type { Skill } from '../ipc'
-import { ConfigView } from './ConfigView'
+import { SkillsView } from './SkillsView'
 
 const macro: Skill = {
   name: 'dash',
@@ -17,24 +17,24 @@ const macro: Skill = {
   builtin: false,
 }
 
-async function openConfig(skills: Skill[] = [...builtins, macro]) {
+async function open(skills: Skill[] = [...builtins, macro]) {
   const { api, emit } = fakeApi({ skills })
-  render(<ConfigView />)
-  expect(screen.queryByRole('region', { name: 'Configuration' })).toBeNull()
-  await act(async () => emit.openConfig())
-  return { api, emit, page: screen.getByRole('region', { name: 'Configuration' }) }
+  render(<SkillsView />)
+  expect(screen.queryByRole('region', { name: 'Skills' })).toBeNull()
+  await act(async () => emit.openSkills())
+  return { api, emit, page: screen.getByRole('region', { name: 'Skills' }) }
 }
 
-describe('ConfigView', () => {
+describe('SkillsView', () => {
   afterEach(cleanup)
 
   it('lists every command, the built-in skills and macros with their scripts', async () => {
-    const { page } = await openConfig()
+    const { page } = await open()
     const system = within(page).getByRole('region', { name: 'System' })
     for (const command of promptCommands) {
       expect(within(system).getByText(`/${command.name}`)).toBeTruthy()
     }
-    expect(within(system).getByText('/config')).toBeTruthy()
+    expect(within(system).getAllByText('macro').length).toBe(builtins.length)
     expect(within(system).getByText('/reload')).toBeTruthy()
     expect(within(system).queryByRole('button', { name: /Delete/ })).toBeNull()
 
@@ -53,12 +53,12 @@ describe('ConfigView', () => {
   })
 
   it('shows an empty state without macros', async () => {
-    const { page } = await openConfig(builtins)
+    const { page } = await open(builtins)
     expect(within(page).getByText(/No macros yet/)).toBeTruthy()
   })
 
   it('filters by name or description', async () => {
-    const { page } = await openConfig()
+    const { page } = await open()
     const filter = within(page).getByRole('searchbox', { name: 'Filter commands and skills' })
     fireEvent.change(filter, { target: { value: 'dashboard' } })
     expect(within(page).getByText('/dash')).toBeTruthy()
@@ -69,7 +69,7 @@ describe('ConfigView', () => {
   })
 
   it('deletes a macro and follows list changes', async () => {
-    const { api, emit, page } = await openConfig()
+    const { api, emit, page } = await open()
     fireEvent.click(within(page).getByRole('button', { name: 'Delete /dash' }))
     expect(api.skills.delete).toHaveBeenCalledWith('dash')
     await act(async () => emit.skills(builtins))
@@ -77,11 +77,11 @@ describe('ConfigView', () => {
   })
 
   it('closes with Escape and ×', async () => {
-    const { emit, page } = await openConfig()
+    const { emit, page } = await open()
     fireEvent.keyDown(page, { key: 'Escape' })
-    expect(screen.queryByRole('region', { name: 'Configuration' })).toBeNull()
-    await act(async () => emit.openConfig())
-    fireEvent.click(screen.getByRole('button', { name: 'Close configuration' }))
-    expect(screen.queryByRole('region', { name: 'Configuration' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Skills' })).toBeNull()
+    await act(async () => emit.openSkills())
+    fireEvent.click(screen.getByRole('button', { name: 'Close skills' }))
+    expect(screen.queryByRole('region', { name: 'Skills' })).toBeNull()
   })
 })

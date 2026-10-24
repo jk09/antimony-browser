@@ -121,6 +121,8 @@ describe('suggest', () => {
     const [zoomIn, , more] = suggest('/menu view ', history, commands)
     expect(zoomIn).toMatchObject({ kind: 'value', label: 'View › Zoom In', detail: 'Ctrl+Plus' })
     expect(more).toMatchObject({ label: 'View › More ›', detail: 'Menu' })
+    expect(zoomIn!.leaf).toBe(true)
+    expect(more!.leaf).toBeUndefined()
     expect(suggest('/menu view zoom-o', history, commands)[0]!.detail).toBe('Run a menu item')
   })
 

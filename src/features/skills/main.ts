@@ -145,7 +145,7 @@ export function register({ ipc }: MainContext): void {
 
   ipc.handle(channels.list, () => list())
   ipc.handle(channels.delete, (name) => remove(name))
-  ipc.handle(channels.requestConfig, () => ipc.send(channels.openConfig, null))
+  ipc.handle(channels.requestOpen, () => ipc.send(channels.open, null))
   ipc.handle(channels.run, async (name, args) => {
     const skill = find(name)
     if (!skill) throw new TypeError(`Unknown skill /${String(name)}`)

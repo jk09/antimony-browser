@@ -994,6 +994,10 @@ textarea {
   background: var(--hover);
 }
 
+.prompt-suggestions li.leaf {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
 .prompt-suggestion-icon {
   width: 16px;
   color: var(--muted);
@@ -1835,16 +1839,16 @@ textarea {
   }
 }
 
-/* Configuration (skills): every /command, skill and macro with its script, over the page area. */
+/* Skills (skills): every /command, skill and macro with its script, over the page area. */
 
-.workspace:has(> .config-view) > .acting-frame {
+.workspace:has(> .skills-view) > .acting-frame {
   flex: 0 0 0;
   min-width: 0;
   padding: 0;
   overflow: hidden;
 }
 
-.config-view {
+.skills-view {
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -1856,18 +1860,18 @@ textarea {
   background: var(--panel-bg);
 }
 
-.config-header {
+.skills-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-.config-header h2 {
+.skills-header h2 {
   margin: 0;
   font-size: 14px;
 }
 
-.config-filter {
+.skills-filter {
   box-sizing: border-box;
   width: 100%;
   padding: 6px 8px;
@@ -1877,13 +1881,32 @@ textarea {
   color: var(--text);
 }
 
-.config-body {
+.skills-body {
   flex: 1;
   min-height: 0;
   overflow: auto;
 }
 
-.config-body h3 {
+.skills-group {
+  margin-bottom: 12px;
+  padding: 0 10px 10px;
+  border-radius: 8px;
+}
+
+/* System entries sit on a faintly tinted ground, apart from the user's own macros. */
+.skills-system {
+  background: var(--hover);
+}
+
+.skills-tag {
+  padding: 0 6px;
+  border: 1px solid var(--field-border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.skills-body h3 {
   margin: 12px 0 6px;
   color: var(--muted);
   font-size: 12px;
@@ -1891,7 +1914,7 @@ textarea {
   letter-spacing: 0.04em;
 }
 
-.config-list {
+.skills-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1900,28 +1923,28 @@ textarea {
   list-style: none;
 }
 
-.config-item {
+.skills-item {
   padding: 8px 10px;
   border: 1px solid var(--field-border);
   border-radius: 6px;
   background: var(--card-bg);
 }
 
-.config-item p {
+.skills-item p {
   margin: 4px 0 0;
 }
 
-.config-name {
+.skills-name {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.config-name code {
+.skills-name code {
   font-weight: 600;
 }
 
-.config-name button {
+.skills-name button {
   margin-left: auto;
   padding: 2px 8px;
   border: 1px solid var(--field-border);
@@ -1932,43 +1955,43 @@ textarea {
   font-size: 12px;
 }
 
-.config-usage,
-.config-note,
-.config-notice {
+.skills-usage,
+.skills-note,
+.skills-notice {
   color: var(--muted);
   font-size: 12px;
 }
 
-.config-notice {
+.skills-notice {
   margin: 0;
 }
 
-.config-notice.error {
+.skills-notice.error {
   color: var(--error);
 }
 
-.config-params {
+.skills-params {
   display: grid;
   gap: 2px;
   margin: 6px 0 0;
   font-size: 12px;
 }
 
-.config-params div {
+.skills-params div {
   display: flex;
   gap: 8px;
 }
 
-.config-params dt {
+.skills-params dt {
   font-family: ui-monospace, monospace;
 }
 
-.config-params dd {
+.skills-params dd {
   margin: 0;
   color: var(--muted);
 }
 
-.config-script {
+.skills-script {
   margin: 6px 0 0;
   padding: 6px 6px 6px 28px;
   border-radius: 4px;
@@ -1976,16 +1999,16 @@ textarea {
   font-size: 12px;
 }
 
-.config-script code {
+.skills-script code {
   overflow-wrap: anywhere;
 }
 
-.config-tool {
+.skills-tool {
   color: var(--accent);
   font-weight: 600;
 }
 
-.config-script mark {
+.skills-script mark {
   background: none;
   color: var(--focus);
   font-weight: 600;

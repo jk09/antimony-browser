@@ -1,7 +1,6 @@
 import { claudeModels, findModel, type AgentSettings } from '../../agent/ipc'
 import { themeNeeds } from '../../appearance/ipc'
 import type { Skill } from '../../skills/ipc'
-import { paramLabel } from '../../skills/shared/params'
 import { DEFAULT_HOME } from '../../stacks/ipc'
 import { promptCommands } from '../ipc'
 
@@ -11,8 +10,6 @@ export interface CommandResult {
   /** Clear the message and key field (navigation commands). */
   close?: boolean
 }
-
-const signatureOf = (skill: Skill) => [`/${skill.name}`, ...skill.params.map(paramLabel)].join(' ')
 
 /**
  * Runs a built-in command or a skill. Never calls the model. `resolveArgs` turns a macro's `@`
@@ -142,21 +139,8 @@ export async function runCommand(
       if (!result.ok) return error(result.error)
       return { close: true }
     }
-    case 'skills': {
-      const saved = skills.filter((skill) => !skill.builtin)
-      return info(
-        saved.length === 0
-          ? 'No macros yet. Ask the assistant, e.g. "open a new stack and store it as /ns".'
-          : saved
-              .map(
-                (skill) =>
-                  `${signatureOf(skill)}${skill.description ? ` – ${skill.description}` : ''}`,
-              )
-              .join('\n'),
-      )
-    }
-    case 'config':
-      await api.skills.requestConfig()
+    case 'skills':
+      await api.skills.requestOpen()
       return { close: true }
     case 'feedback': {
       if (!args.trim()) return error('Type your feedback after /feedback, then press Enter.')

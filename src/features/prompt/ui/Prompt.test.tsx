@@ -354,7 +354,7 @@ describe('Prompt', () => {
     expect(api.history.suggest).not.toHaveBeenCalled()
   })
 
-  it('/history opens the history view, /config the configuration page; /note notes the current page', async () => {
+  it('/history opens the history view, /skills the skills page; /note notes the current page', async () => {
     const { api, box } = await openPrompt()
     type(box, '/history sqlite wal')
     press(box, 'Enter')
@@ -362,9 +362,9 @@ describe('Prompt', () => {
       expect(api.history.requestOpen).toHaveBeenCalledWith({ query: 'sqlite wal' }),
     )
 
-    type(box, '/config')
+    type(box, '/skills')
     press(box, 'Enter')
-    await waitFor(() => expect(api.skills.requestConfig).toHaveBeenCalled())
+    await waitFor(() => expect(api.skills.requestOpen).toHaveBeenCalled())
 
     type(box, '/recall show all pages about lions')
     press(box, 'Enter')
