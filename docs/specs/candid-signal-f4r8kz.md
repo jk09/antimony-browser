@@ -6,15 +6,15 @@
 | --- | --- |
 | **Feature name** | `/feedback` and a feedback icon in the prompt, and a popup offering to send a crash report; both create an issue in the app's GitHub repository |
 | **Spec ID** | candid-signal-f4r8kz |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-24 10:00 +00:00 |
-| **Last updated** | 2026-10-24 11:30 +00:00 |
+| **Last updated** | 2026-10-24 11:45 +00:00 |
 | **Affected features** | feedback (new), prompt |
 | **Target release** | 0.1.0 |
-| **Related links** | https://github.com/jk09/antimony-browser/issues; ADR 0019 |
+| **Related links** | https://github.com/jk09/antimony-browser/issues; ADR 0019; PR https://github.com/jk09/antimony-browser/pull/85 |
 
 **Status definitions:**
 - **Draft:** The spec is being written or reviewed. The scope may still change.
