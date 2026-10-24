@@ -168,6 +168,14 @@ test('closes pages with × and Ctrl+W and opens new stacks at the home page with
     await expect.poll(() => shownUrl(app)).toBe(`${origin}/c2`)
     await expect.poll(titles).toEqual(['Page C2'])
 
+    // Ctrl+T adds the home page to the current stack as a branch of its active page.
+    await prompt.fill(`${origin}/a`)
+    await prompt.press('Enter')
+    await expect.poll(titles).toEqual(['Page C2', 'Page A'])
+    await pressCtrl(app, 'T', 'page')
+    await expect.poll(() => shownUrl(app)).toBe(`${origin}/c2`)
+    await expect.poll(titles).toEqual(['Page C2', 'Page A', 'Page C2'])
+
     // A second later a spare tab waits at the home page: the next Ctrl+N shows it, focused.
     await window.waitForTimeout(1500)
     await pressCtrl(app, 'N', 'ui')

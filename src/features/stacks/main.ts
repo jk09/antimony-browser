@@ -607,7 +607,7 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
     changed()
   })
 
-  // Ctrl/Cmd+R, +N, +W and +E go to the UI, which runs them like its buttons (and knows whether the
+  // Ctrl/Cmd+R, +N, +T, +W and +E go to the UI, which runs them like its buttons (and knows whether the
   // assistant runs). They're caught before the page or the menu sees them, like Ctrl/Cmd+B:
   // a page view doesn't always pass them on to the menu, and Chromium's own Ctrl+R mustn't run.
   const command = (name: StackCommand) => {
@@ -626,6 +626,12 @@ export function register({ window, browsingSession, ipc, fileMenu }: MainContext
       label: 'New Stack',
       accelerator: 'CmdOrCtrl+N',
       click: () => command('new'),
+    },
+    {
+      id: 'stacks-new-page',
+      label: 'New Page',
+      accelerator: 'CmdOrCtrl+T',
+      click: () => command('new-page'),
     },
     {
       id: 'stacks-close-page',

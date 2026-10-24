@@ -680,11 +680,12 @@ describe('stacks main', () => {
     expect(tabs.calls).toEqual(['create 1 active', 'close 1'])
   })
 
-  it('sends Ctrl/Cmd+R, +N and +W to the UI and lists them in the File menu', () => {
+  it('sends Ctrl/Cmd+R, +N, +T and +W to the UI and lists them in the File menu', () => {
     const { press, send, fileMenu } = setup()
     expect(fileMenu.map((item) => [item.label, item.accelerator])).toEqual([
       ['Reload Page', 'CmdOrCtrl+R'],
       ['New Stack', 'CmdOrCtrl+N'],
+      ['New Page', 'CmdOrCtrl+T'],
       ['Close Page', 'CmdOrCtrl+W'],
       ['Focus Stack', 'CmdOrCtrl+E'],
       ['Next Stack', 'Ctrl+Tab'],
@@ -692,12 +693,14 @@ describe('stacks main', () => {
     ])
     expect(press('r')).toBe(true)
     expect(press('n')).toBe(true)
+    expect(press('t')).toBe(true)
     expect(press('w')).toBe(true)
     expect(press('e')).toBe(true)
     expect(press('b')).toBe(false)
     expect(send.mock.calls.filter(([channel]) => channel === channels.command)).toEqual([
       [channels.command, 'reload'],
       [channels.command, 'new'],
+      [channels.command, 'new-page'],
       [channels.command, 'close-page'],
       [channels.command, 'focus-tree'],
     ])
