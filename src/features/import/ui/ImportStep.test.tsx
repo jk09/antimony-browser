@@ -71,6 +71,7 @@ describe('ImportStep', () => {
     await waitFor(() =>
       expect(screen.getByRole('status').textContent).toContain('Importing /e.csv'),
     )
+    expect(screen.getByRole('status').querySelector('.import-spinner')).not.toBeNull()
     expect((screen.getByRole('button') as HTMLButtonElement).disabled).toBe(true)
     finish(result)
     await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Imported 12'))

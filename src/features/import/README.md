@@ -3,7 +3,7 @@
 Brings your Edge browsing data into Antimony: it reads the CSV file Edge's "Export browsing data" creates, adds its pages to history (searchable, in Recall and the map) and groups its pages into at most 30 stacks by how related their addresses are (site, then path) and, when the Claude CLI works, by topic. Start it from the Import step of the welcome page or by typing `/import-edge [path to the file]`; without a path a file dialog opens.
 
 ## Entry points
-- UI: `ui/ImportStep.tsx` – the welcome page's Import step (`importStep` slot filled in `App.tsx`): *Choose file…* opens the native dialog, then the result or the error is shown
+- UI: `ui/ImportStep.tsx` – the welcome page's Import step (`importStep` slot filled in `App.tsx`): *Choose file…* opens the native dialog, then a spinner with the path while it runs, and the result or the error
 - IPC: `import:choose|run` (UI → main) – `ipc.ts`; `run` takes only a path
 - Skill: the built-in `/import-edge [file]` (skills' `builtins.ts`, `file` optional) replays the agent's `import_browsing_data` tool (`path` optional: none opens the dialog; cancelling ends quietly); the assistant may call the same tool when asked, with the user's approval each time
 - Main: `register` in `main.ts` – the dialog, one import at a time, `provideImporter` for the agent; `main/run.ts` checks the path, reads the file, groups, calls history's `importVisits` and stacks' `importStacks`; `main/topics.ts` the model request, its answer's validation and merge
