@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, Menu, session, type MenuItemConstructorOptions } from 'electron'
 import { windowTitle } from '../../shared/build-info'
+import { applyAppIcon } from './app-icon'
 import { features } from './features'
 import { createChromeUiIpc } from './ipc'
 import { appMenuTemplate } from './menu'
@@ -37,6 +38,7 @@ async function createWindow(): Promise<void> {
       backgroundThrottling: false,
     },
   })
+  applyAppIcon(window)
   window.once('ready-to-show', () => window.show())
 
   const url = chromeUiUrl()
