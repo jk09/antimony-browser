@@ -398,6 +398,16 @@ describe('Prompt', () => {
       expect(api.history.updateSettings).toHaveBeenCalledWith({ summaries: true }),
     )
 
+    type(box, '/link-summaries on')
+    press(box, 'Enter')
+    await waitFor(() =>
+      expect(api.linkSummaries.updateSettings).toHaveBeenCalledWith({ enabled: true }),
+    )
+    expect(await screen.findByText(/fetched without your cookies/)).toBeTruthy()
+    type(box, '/link-summaries')
+    press(box, 'Enter')
+    expect(await screen.findByText(/Link summaries are off/)).toBeTruthy()
+
     type(box, '/history-clear everything')
     press(box, 'Enter')
     expect(await screen.findByRole('alert')).toBeTruthy()

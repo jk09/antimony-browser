@@ -205,6 +205,20 @@ export async function runCommand(
           : 'Page summaries off.',
       )
     }
+    case 'link-summaries': {
+      if (args !== 'on' && args !== 'off') {
+        const current = await api.linkSummaries.settings()
+        return info(
+          `Link summaries are ${current.enabled ? 'on' : 'off'}. Use /link-summaries on or off.`,
+        )
+      }
+      await api.linkSummaries.updateSettings({ enabled: args === 'on' })
+      return info(
+        args === 'on'
+          ? 'Links in the text of article-like pages get a summary tooltip (marked ⓘ). The linked pages are fetched without your cookies and their text is sent to the selected model.'
+          : 'Link summaries off.',
+      )
+    }
   }
 
   const skill = skills.find((candidate) => candidate.name === name)

@@ -4,6 +4,7 @@ import { appearanceBridge } from '../../features/appearance/preload'
 import { feedbackBridge } from '../../features/feedback/preload'
 import { historyBridge } from '../../features/history/preload'
 import { importBridge } from '../../features/import/preload'
+import { linkSummariesBridge } from '../../features/link-summaries/preload'
 import { menuBridge } from '../../features/menu/preload'
 import { navigationBridge } from '../../features/navigation/preload'
 import { promptBridge } from '../../features/prompt/preload'
@@ -20,6 +21,7 @@ const api: AntimonyApi = {
   feedback: feedbackBridge,
   history: historyBridge,
   import: importBridge,
+  linkSummaries: linkSummariesBridge,
   menu: menuBridge,
   navigation: navigationBridge,
   prompt: promptBridge,
