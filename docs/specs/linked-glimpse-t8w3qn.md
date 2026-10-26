@@ -6,15 +6,15 @@
 | --- | --- |
 | **Feature name** | Link summaries – a mode that prefetches the pages a simple, article-like page links to, has the selected model summarise them and shows each summary as a tooltip on its link, marking the links that have one |
 | **Spec ID** | linked-glimpse-t8w3qn |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-26 10:00 +00:00 |
-| **Last updated** | 2026-10-26 17:30 +00:00 |
+| **Last updated** | 2026-10-26 18:00 +00:00 |
 | **Affected features** | link-summaries (new), prompt |
 | **Target release** | 0.1.0 |
-| **Related links** | ADR 0004 (assistant reads pages), ADR 0006 (history summaries with the selected model), ADR 0015 (CLI only); new ADR 0021 |
+| **Related links** | PR #98; ADR 0004 (assistant reads pages), ADR 0006 (history summaries with the selected model), ADR 0015 (CLI only); new ADR 0021 |
 
 **Status definitions:**
 - **Draft:** The spec is being written or reviewed. The scope may still change.
