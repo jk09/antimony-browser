@@ -1,6 +1,6 @@
 # 0022. Summarise linked pages on demand, into the conversation
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-27
 - Features: link-summaries, agent, skills
 - Spec: linked-digest-r5m2kw
