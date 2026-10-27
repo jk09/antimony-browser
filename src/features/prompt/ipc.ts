@@ -116,12 +116,6 @@ export const promptCommands: CommandInfo[] = [
     description: 'Summarise pages you spend time on with the selected model',
     options: ['on', 'off'],
   },
-  {
-    name: 'link-summaries',
-    usage: 'on|off',
-    description: 'Summary tooltips on the links of article-like pages (asks the selected model)',
-    options: ['on', 'off'],
-  },
 ]
 
 export interface PromptApi {

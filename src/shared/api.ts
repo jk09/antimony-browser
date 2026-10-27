@@ -3,7 +3,6 @@ import type { AppearanceApi } from '../features/appearance/ipc'
 import type { FeedbackApi } from '../features/feedback/ipc'
 import type { HistoryApi } from '../features/history/ipc'
 import type { ImportApi } from '../features/import/ipc'
-import type { LinkSummariesApi } from '../features/link-summaries/ipc'
 import type { MenuApi } from '../features/menu/ipc'
 import type { NavigationApi } from '../features/navigation/ipc'
 import type { PromptApi } from '../features/prompt/ipc'
@@ -23,7 +22,6 @@ export interface AntimonyApi {
   feedback: FeedbackApi
   history: HistoryApi
   import: ImportApi
-  linkSummaries: LinkSummariesApi
   menu: MenuApi
   navigation: NavigationApi
   prompt: PromptApi
