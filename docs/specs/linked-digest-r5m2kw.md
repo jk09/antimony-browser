@@ -6,15 +6,15 @@
 | --- | --- |
 | **Feature name** | `/link-summaries` – a built-in skill that fetches the pages the current page's main text links to and shows a short summary of each, as a list of clickable links, in the conversation |
 | **Spec ID** | linked-digest-r5m2kw |
-| **Status** | Active <!-- one of: Draft, Active, Done --> |
+| **Status** | Done <!-- one of: Draft, Active, Done --> |
 | **Author** | Claude Code |
 | **Owner** | jk09 |
 | **Reviewers** | jk09 |
 | **Created on** | 2026-10-27 09:00 +00:00 |
-| **Last updated** | 2026-10-27 10:30 +00:00 |
+| **Last updated** | 2026-10-27 11:00 +00:00 |
 | **Affected features** | link-summaries (new), agent, skills |
 | **Target release** | 0.1.0 |
-| **Related links** | PR #98 (link tooltips, reverted), ADR 0004 (assistant reads pages), ADR 0013 (macros as tool-call scripts), ADR 0015 (CLI only); ADR 0021 (superseded), new ADR 0022 |
+| **Related links** | PR #100; PR #98 (link tooltips, reverted), ADR 0004 (assistant reads pages), ADR 0013 (macros as tool-call scripts), ADR 0015 (CLI only); ADR 0021 (superseded), new ADR 0022 |
 
 **Status definitions:**
 - **Draft:** The spec is being written or reviewed. The scope may still change.
