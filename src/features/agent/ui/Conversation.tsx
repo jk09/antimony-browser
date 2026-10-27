@@ -49,6 +49,33 @@ function Item({ item }: { item: ConversationItem }) {
       return <li className="turn error">{item.message}</li>
     case 'notice':
       return <li className="turn notice">{item.text}</li>
+    case 'links':
+      return (
+        <li className="turn links">
+          <h3 className="links-title">Linked pages</h3>
+          <ul>
+            {item.links.map((link) => (
+              <li key={link.url}>
+                <a
+                  href={link.url}
+                  title={link.url}
+                  // The chrome UI never navigates itself: the page view loads the link.
+                  onClick={(event) => {
+                    event.preventDefault()
+                    void window.antimony.navigation.go(link.url)
+                  }}
+                >
+                  {link.label}
+                </a>
+                <span className="links-host"> · {link.host}</span>
+                <p className={link.summary === null ? 'links-summary none' : 'links-summary'}>
+                  {link.summary ?? 'No summary (the page couldn’t be read).'}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </li>
+      )
   }
 }
 

@@ -27,6 +27,7 @@ import {
   type HistoryPort,
   type MacroPort,
   type ImportPort,
+  type LinkSummaryPort,
   describeClosePage,
   formatStackCount,
   type StackPort,
@@ -80,6 +81,8 @@ export interface AgentDeps {
   stacks(): StackPort | null
   /** Imports browsing-data exports, once the import feature provided it. */
   importer(): ImportPort | null
+  /** Summarises linked pages, once the link-summaries feature provided it. */
+  links(): LinkSummaryPort | null
   settings(): { model: ModelId; pageAccess: boolean; historyAccess: boolean }
   onState(state: AgentState): void
   onDebug(event: DebugEvent, label: string): void
@@ -361,7 +364,8 @@ export class Agent {
           status: 'running',
         })
         try {
-          await this.execute(run, browser, step.tool, input, signal, item)
+          const output = await this.execute(run, browser, step.tool, input, signal, item)
+          if (output.links) this.addItem({ kind: 'links', links: output.links })
         } catch (error) {
           if (error instanceof Stopped) throw error
           throw new ToolError(
@@ -452,7 +456,8 @@ export class Agent {
     const tool = toolNamed(call.name)
     let item: ConversationItem | null = null
     try {
-      if (!tool) throw new ToolError(`Unknown tool ${call.name}`)
+      // Skill-only tools aren't offered to the model; one it names anyway doesn't exist for it.
+      if (!tool || tool.skillOnly) throw new ToolError(`Unknown tool ${call.name}`)
       const input = validateInput(call.name, call.input)
       if (needsPageAccess(tool) && !this.deps.settings().pageAccess) {
         throw new ToolError('Page access is off; the user has to turn it on (/page-access on).')
@@ -570,6 +575,7 @@ export class Agent {
           macros: this.deps.macros(),
           stacks: this.deps.stacks(),
           importer: this.deps.importer(),
+          links: this.deps.links(),
           images: this.requestImages,
           signal,
         }),

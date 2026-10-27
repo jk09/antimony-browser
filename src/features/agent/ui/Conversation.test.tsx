@@ -22,6 +22,41 @@ describe('Conversation', () => {
     expect(container.textContent).toBe('')
   })
 
+  it('lists linked pages with their summaries; a click loads the page in the page view', async () => {
+    const { api, emit } = fakeApi()
+    render(<Conversation />)
+    act(() =>
+      emit.state({
+        ...idleState,
+        items: [
+          {
+            kind: 'links',
+            links: [
+              {
+                url: 'https://a.example/x',
+                label: 'Page A',
+                host: 'a.example',
+                summary: 'About A.',
+              },
+              { url: 'https://b.example/', label: 'Page B', host: 'b.example', summary: null },
+            ],
+          },
+        ],
+      }),
+    )
+    const link = screen.getByRole('link', { name: 'Page A' })
+    expect(link.getAttribute('href')).toBe('https://a.example/x')
+    const text = screen.getByRole('region', { name: 'Conversation' }).textContent
+    expect(text).toContain('Linked pages')
+    expect(text).toContain('a.example')
+    expect(text).toContain('About A.')
+    expect(text).toContain('No summary')
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true })
+    fireEvent(link, click)
+    expect(click.defaultPrevented).toBe(true)
+    expect(api.navigation.go).toHaveBeenCalledWith('https://a.example/x')
+  })
+
   it('shows turns and tool steps, and no way to save a run by hand', async () => {
     const { emit } = fakeApi()
     render(<Conversation />)

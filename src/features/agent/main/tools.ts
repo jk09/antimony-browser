@@ -1,4 +1,5 @@
 import type { NavigationState } from '../../navigation/ipc'
+import type { LinkSummary } from '../ipc'
 import {
   findInPage,
   inspectElement,
@@ -186,6 +187,12 @@ export interface ImportPort {
   run(path: string, signal?: AbortSignal): Promise<string>
 }
 
+/** Summarises the pages the current page links to, provided by link-summaries (provideLinkSummaries). */
+export interface LinkSummaryPort {
+  /** Resolves with the linked pages in page order (empty: no links); rejects with a readable error. */
+  summarize(signal?: AbortSignal): Promise<LinkSummary[]>
+}
+
 /**
  * navigation: like the address bar, never needs approval.
  * history: reads the browsing history or the open stacks; no page access or approval, but like reading a page it
@@ -210,6 +217,8 @@ export interface ToolDefinition {
   kind: ToolKind
   /** Replayed by skills (read tools only inform the model). */
   replayable: boolean
+  /** Run only by built-in skills: never offered to the model, refused if it calls one. */
+  skillOnly?: boolean
   description: string
   input_schema: {
     type: 'object'
@@ -447,6 +456,15 @@ export const toolDefinitions: ToolDefinition[] = [
     }),
   },
   {
+    name: 'summarize_links',
+    kind: 'read',
+    replayable: false,
+    skillOnly: true,
+    description:
+      "Fetch the pages the current page's main text links to (without cookies) and summarise each with the selected model; for /link-summaries only.",
+    input_schema: schema(),
+  },
+  {
     name: 'read_page',
     kind: 'read',
     replayable: false,
@@ -521,6 +539,7 @@ export function toolsFor(access: {
 }): ToolDefinition[] {
   return toolDefinitions.filter(
     (tool) =>
+      !tool.skillOnly &&
       (access.pageAccess || !needsPageAccess(tool)) &&
       (access.historyAccess || tool.kind !== 'history'),
   )
@@ -619,6 +638,8 @@ export function describeCall(name: string, input: Input, element?: ElementInfo):
       return typeof input['path'] === 'string' && input['path'].trim()
         ? `Import browsing data from ${input['path']}`
         : 'Import browsing data (you choose the file)'
+    case 'summarize_links':
+      return 'Summarise the linked pages'
     case 'read_page':
       return 'Read the page'
     case 'find_in_page':
@@ -645,6 +666,8 @@ export interface ToolOutput {
   image?: string
   /** data: URL thumbnail for the debug panel. */
   thumbnail?: string
+  /** Linked pages to show in the conversation (summarize_links). */
+  links?: LinkSummary[]
 }
 
 export const MAX_PAGE_TEXT = 20_000
@@ -873,6 +896,21 @@ async function importBrowsingData(
   }
 }
 
+async function summarizeLinks(
+  port: LinkSummaryPort | null,
+  signal?: AbortSignal,
+): Promise<ToolOutput> {
+  if (!port) throw new ToolError('Link summaries are not available.')
+  let links: LinkSummary[]
+  try {
+    links = await port.summarize(signal)
+  } catch (error) {
+    throw new ToolError(error instanceof Error ? error.message : String(error))
+  }
+  const summarized = links.filter((link) => link.summary !== null).length
+  return { text: `Summarised ${summarized} of ${links.length} linked pages.`, links }
+}
+
 export const MAX_LISTED_PAGES = 200
 
 const stackLabel = (stack: Pick<StackInfo, 'name'>) => (stack.name ? `@${stack.name}` : 'New tab')
@@ -1026,6 +1064,7 @@ export interface ToolPorts {
   macros?: MacroPort | null
   stacks?: StackPort | null
   importer?: ImportPort | null
+  links?: LinkSummaryPort | null
   /** Images attached to the current request (recall_history). */
   images?: AttachedImage[]
   /** Aborted when the run stops (tools that wait on a model request). */
@@ -1053,6 +1092,7 @@ export async function executeTool(
   }
   if (name === 'import_browsing_data')
     return importBrowsingData(ports.importer ?? null, input, ports.signal)
+  if (name === 'summarize_links') return summarizeLinks(ports.links ?? null, ports.signal)
   if (toolNamed(name)?.kind === 'macro') return runMacroTool(ports.macros ?? null, name, input)
   if (!browser) throw new ToolError('The browser page is not available.')
   if (name === 'new_stack') {

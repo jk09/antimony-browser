@@ -20,6 +20,7 @@ import {
   validateInput,
   type HistoryPort,
   type ImportPort,
+  type LinkSummaryPort,
   type MacroPort,
   type StackPort,
 } from './main/tools'
@@ -35,6 +36,7 @@ export type {
   HistoryRecallRequest,
   HistorySearchMode,
   ImportPort,
+  LinkSummaryPort,
   MacroInfo,
   MacroPort,
   StackInfo,
@@ -47,6 +49,7 @@ let historySearch: HistoryPort | null = null
 let macroStore: MacroPort | null = null
 let stackPort: StackPort | null = null
 let importer: ImportPort | null = null
+let linkSummaries: LinkSummaryPort | null = null
 let completer: ((request: CompletionRequest) => Promise<Completion>) | null = null
 
 /** A single model request without tools or conversation (history summaries and search). */
@@ -99,6 +102,11 @@ export function provideStacks(port: StackPort): void {
 /** Lets the assistant and skills import a browsing-data export (import_browsing_data); called by the import feature. */
 export function provideImporter(port: ImportPort): void {
   importer = port
+}
+
+/** Lets the /link-summaries skill summarise linked pages (summarize_links); called by link-summaries. */
+export function provideLinkSummaries(port: LinkSummaryPort): void {
+  linkSummaries = port
 }
 
 /** True for tools a skill may replay (navigation and page actions, not read-only tools). */
@@ -159,6 +167,7 @@ export function register({ ipc, fileMenu }: MainContext): void {
     macros: () => macroStore,
     stacks: () => stackPort,
     importer: () => importer,
+    links: () => linkSummaries,
     settings: () => store.get(),
     onState: (state) => ipc.send(channels.stateChanged, state),
     onDebug: (event, label) => ipc.send(channels.debugLogChanged, { event, label }),

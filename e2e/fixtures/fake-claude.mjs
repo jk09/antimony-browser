@@ -7,6 +7,7 @@
 // MCP and sends their results back, until a step calls no tools.
 // Asked for colour themes (appearance), it answers with two fixed candidates. Asked to organise
 // imported browsing history into stacks (import), it puts every group and page in one stack, "bread".
+// Asked to summarise linked pages (/link-summaries), it answers "<n>: Fake summary of <title>.".
 // FAKE_CLAUDE_LOGGED_IN=0 plays a logged-out CLI; FAKE_CLAUDE_LOG appends each run's arguments.
 import { appendFileSync, readFileSync } from 'node:fs'
 
@@ -156,6 +157,11 @@ if (modelUrl && configPath) {
   const ids = (letter) =>
     [...text.matchAll(new RegExp(`^(${letter}\\d+) \\|`, 'gm'))].map((m) => m[1])
   const answer = JSON.stringify({ stacks: [{ name: 'bread', groups: ids('g'), pages: ids('p') }] })
+  assistant([{ type: 'text', text: answer }])
+  result({ result: answer })
+} else if ((flag('--system-prompt') ?? '').startsWith('You summarise linked web pages')) {
+  const titles = [...text.matchAll(/^\[(\d+)\] URL: .*\nTitle: (.*)$/gm)]
+  const answer = titles.map(([, n, title]) => `${n}: Fake summary of ${title}.`).join('\n')
   assistant([{ type: 'text', text: answer }])
   result({ result: answer })
 } else if (url) {

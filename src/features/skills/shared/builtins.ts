@@ -24,6 +24,11 @@ export const builtinSkills: Skill[] = [
     steps: [{ tool: 'import_browsing_data', input: { path: '{{file}}' } }],
     builtin: true,
   },
+  builtin(
+    'link-summaries',
+    'summarize_links',
+    "Summarise the pages the links in this page's text lead to, in the conversation (fetched without cookies, asks the selected model)",
+  ),
   builtin('reload', 'reload', 'Reload the page'),
   builtin('stop', 'stop', 'Stop loading the page'),
 ]
