@@ -94,6 +94,16 @@ export interface RunInput {
 
 export type Decision = 'allow' | 'allow-run' | 'deny'
 
+/** A page the current page links to, with what the selected model said it is about. */
+export interface LinkSummary {
+  url: string
+  /** The link's text, or the linked page's title when the link has none. */
+  label: string
+  host: string
+  /** null when the page couldn't be read or the model had nothing to say. */
+  summary: string | null
+}
+
 /** One line of the conversation shown above the prompt. */
 export type ConversationItem =
   | { kind: 'user'; text: string; attachments: { kind: Attachment['kind']; name: string }[] }
@@ -108,6 +118,8 @@ export type ConversationItem =
   | { kind: 'approval'; description: string; decision: Decision | 'stopped' | null }
   | { kind: 'error'; message: string }
   | { kind: 'notice'; text: string }
+  /** The linked pages /link-summaries summarised, in page order. */
+  | { kind: 'links'; links: LinkSummary[] }
 
 export type RunStatus = 'idle' | 'running' | 'awaiting-approval'
 

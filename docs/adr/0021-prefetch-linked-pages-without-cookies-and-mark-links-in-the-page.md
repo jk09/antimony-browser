@@ -1,6 +1,6 @@
 # 0021. Prefetch linked pages without cookies and show their summaries in the page
 
-- Status: Proposed
+- Status: Superseded by 0022 (the in-page link tooltips were reverted)
 - Date: 2026-10-26
 - Features: link-summaries
 - Spec: linked-glimpse-t8w3qn

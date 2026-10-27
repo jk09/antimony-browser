@@ -1,6 +1,6 @@
 # skills
 
-Runs `/name` commands that replay browser tool calls without the model: macros the assistant stores when asked in the prompt ("open a new stack and store it as /ns", with `{{parameters}}` and a hint for each) and the built-in `/reload`, `/stop` and `/import-edge [file]` (imports an Edge export through the agent's `import_browsing_data`; without a path a file dialog opens); `/skills` opens a page listing every system command, built-in skill and macro with the steps it replays. Arguments are typed after the command, constants or `@stack` / `@stack/page` references (resolved to the page's URL by the prompt).
+Runs `/name` commands that replay browser tool calls without the model: macros the assistant stores when asked in the prompt ("open a new stack and store it as /ns", with `{{parameters}}` and a hint for each) and the built-in `/reload`, `/stop`, `/link-summaries` (replays the skill-only `summarize_links`: summaries of the pages the current page's text links to, listed in the conversation) and `/import-edge [file]` (imports an Edge export through the agent's `import_browsing_data`; without a path a file dialog opens); `/skills` opens a page listing every system command, built-in skill and macro with the steps it replays. Arguments are typed after the command, constants or `@stack` / `@stack/page` references (resolved to the page's URL by the prompt).
 
 ## Entry points
 - IPC: `skills:list|delete|run|request-open` (UI → main), `skills:list-changed|open` (main → UI) – `ipc.ts`; there is no channel to create or change a macro
@@ -15,7 +15,8 @@ Runs `/name` commands that replay browser tool calls without the model: macros t
 - Macros stored without `params` load with parameters from their steps and no hints – `main.test.ts › loads macros stored without params…`
 - The last parameter takes the rest of the line; missing arguments run nothing – `shared/params.test.ts`, `main.test.ts › runs a macro…`
 - `/import-edge` takes the rest of the line as the path (spaces kept), or none (the import then opens a file dialog), and runs the one-step `import_browsing_data` replay with no approval, as it is the user's own command; `file` is an optional parameter (`[file]`, built-in skills only – a macro can't declare one) – `main.test.ts › runs /import-edge…`, `shared/params.test.ts › lets an optional parameter…`
-- Replays make no model request, need page access for page steps, ask one approval for any page actions, and stop at the first failing step – `../agent/main/agent.test.ts › Agent.replay`, `e2e/prompt.spec.ts`
+- `/link-summaries` is the one `summarize_links` step – `main.test.ts › runs /link-summaries…`
+- Replays make no model request (apart from `/link-summaries`' one summary request), need page access for page steps, ask one approval for any page actions, and stop at the first failing step – `../agent/main/agent.test.ts › Agent.replay`, `e2e/prompt.spec.ts`
 
 ## Dependencies
 - Features: agent (`replay`, `checkStep`, `provideMacros` from `main.ts`), prompt (`promptCommands` from `ipc.ts`: reserved names, the skills page's System list)

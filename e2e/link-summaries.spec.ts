@@ -7,14 +7,12 @@ import { newProfile } from './profile'
 // Chromium refuses to run as root with its sandbox on (e.g. in containers); CI runs as a normal user.
 const args = ['.', ...(process.getuid?.() === 0 ? ['--no-sandbox'] : [])]
 
-const text = 'Readers do not block writers and writers do not block readers. '.repeat(30)
 const pages: Record<string, string> = {
   '/article': `<!doctype html><title>Notes</title><nav><a href="/nav">Nav</a></nav>
-    <article><h1>WAL</h1><p>${text}</p>
+    <article><h1>WAL</h1><p>Readers do not block writers.</p>
     <p>See <a href="/a">the first page</a>, <a href="/b#part">the second</a> and <a href="/missing">a gone one</a>.</p></article>`,
   '/a': '<!doctype html><title>Checkpoints</title><p>How checkpoints move pages back.</p>',
   '/b': '<!doctype html><title>Recovery</title><p>How a crash is recovered.</p>',
-  '/short': '<!doctype html><title>Short</title><p>Tiny.</p><a href="/a">A</a>',
 }
 
 let server: Server
@@ -47,71 +45,45 @@ const launch = () =>
     },
   })
 
-async function open(app: ElectronApplication, url: string) {
+async function prompt(app: ElectronApplication) {
   const window = await app.firstWindow()
   const location = window.getByRole('textbox', { name: 'Prompt' })
   await expect(async () => {
     await app.evaluate(({ Menu }) => Menu.getApplicationMenu()!.getMenuItemById('prompt')!.click())
     await expect(location).toBeFocused({ timeout: 1000 })
   }).toPass()
-  await location.fill(url)
-  await location.press('Enter')
-  await expect.poll(() => app.windows().find((page) => page.url() === url)).toBeTruthy()
-  return app.windows().find((page) => page.url() === url)!
+  return { window, location }
 }
 
-/** Clicks File → Link Summaries once the menu is built; returns whether it is now checked. */
-const toggle = async (app: ElectronApplication) => {
-  await app.firstWindow()
-  await expect
-    .poll(() =>
-      app.evaluate(({ Menu }) => !!Menu.getApplicationMenu()?.getMenuItemById('link-summaries')),
-    )
-    .toBe(true)
-  return app.evaluate(({ Menu }) => {
-    const item = Menu.getApplicationMenu()!.getMenuItemById('link-summaries')!
-    item.click()
-    return item.checked
-  })
-}
-
-/** The tooltip's text, read in the feature's isolated world (the page itself can't see it). */
-const tooltipText = (app: ElectronApplication, url: string) =>
-  app.evaluate(async ({ webContents }, url) => {
-    const page = webContents.getAllWebContents().find((contents) => contents.getURL() === url)!
-    return page.executeJavaScriptInIsolatedWorld(1003, [
-      {
-        code: `(() => { const t = window.__antimonyLinkSummaries?.tooltip; return t && !t.hidden ? t.textContent : null })()`,
-      },
-    ])
-  }, url)
-
-test('marks the links of a simple page and shows their summaries as tooltips', async () => {
+test('/link-summaries lists the linked pages with summaries in the conversation', async () => {
   const app = await launch()
   try {
-    expect(await toggle(app)).toBe(true)
-    // The browsing session has a cookie for the site; prefetching must not send it.
-    const short = await open(app, `${origin}/short`)
-    await short.waitForLoadState('load')
+    const { window, location } = await prompt(app)
     const url = `${origin}/article`
-    const page = await open(app, url)
-    const marked = page.locator('a[data-antimony-summary]')
-    await expect(marked).toHaveCount(2, { timeout: 20_000 })
-    await expect(page.locator('a[href="/missing"]')).not.toHaveAttribute('data-antimony-summary')
-    await expect(page.locator('nav a')).not.toHaveAttribute('data-antimony-summary')
-    // The page can't read the summaries.
-    expect(await page.evaluate(() => document.documentElement.textContent)).not.toContain(
-      'Fake summary',
-    )
+    await location.fill(url)
+    await location.press('Enter')
+    await expect.poll(() => app.windows().find((page) => page.url() === url)).toBeTruthy()
+    const page = app.windows().find((candidate) => candidate.url() === url)!
+    await page.waitForLoadState('load')
+    const before = await page.evaluate(() => document.documentElement.outerHTML)
+
+    await location.fill('/page-access on')
+    await location.press('Enter')
+    await location.fill('/link-summaries')
+    await location.press('Enter')
+
+    const conversation = window.getByRole('region', { name: 'Conversation' })
+    await expect(conversation).toContainText('Linked pages', { timeout: 20_000 })
+    await expect(conversation).toContainText('Fake summary of Checkpoints.')
+    await expect(conversation).toContainText('Fake summary of Recovery.')
+    await expect(conversation).toContainText('No summary')
+    await expect(conversation).not.toContainText('Nav')
+    // The page itself is never changed, and prefetching sends none of the site's cookies.
+    expect(await page.evaluate(() => document.documentElement.outerHTML)).toBe(before)
     expect(cookies.filter(Boolean)).toEqual([])
 
-    await page.locator('a[href="/a"]').hover()
-    await expect.poll(() => tooltipText(app, url)).toContain('Fake summary of Checkpoints.')
-    await page.locator('a[href="/b#part"]').focus()
-    await expect.poll(() => tooltipText(app, url)).toContain('Fake summary of Recovery.')
-
-    expect(await toggle(app)).toBe(false)
-    await expect(marked).toHaveCount(0)
+    await conversation.getByRole('link', { name: 'the first page' }).click()
+    await expect.poll(() => app.windows().some((p) => p.url() === `${origin}/a`)).toBe(true)
   } finally {
     await app.close()
   }

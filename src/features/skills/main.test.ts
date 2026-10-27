@@ -67,7 +67,9 @@ describe('skills main', () => {
   it('lists the built-in skills and offers no way to save from the UI', () => {
     const { call } = setup()
     const names = (call(channels.list) as { name: string }[]).map((skill) => skill.name)
-    expect(names).toEqual(expect.arrayContaining(['reload', 'stop', 'import-edge']))
+    expect(names).toEqual(
+      expect.arrayContaining(['reload', 'stop', 'import-edge', 'link-summaries']),
+    )
     expect(Object.values(channels)).toEqual([
       'skills:list',
       'skills:delete',
@@ -143,6 +145,12 @@ describe('skills main', () => {
     ])
     expect(await call(channels.run, 'dash', '')).toEqual({ ok: false, error: 'Missing <team>' })
     await expect(async () => call(channels.run, 'nope', '')).rejects.toThrow('Unknown skill')
+  })
+
+  it('runs /link-summaries as the one summarize_links step', async () => {
+    const { call } = setup()
+    await call(channels.run, 'link-summaries', '')
+    expect(replay).toHaveBeenCalledWith('/link-summaries', [{ tool: 'summarize_links', input: {} }])
   })
 
   it('runs /import-edge with the typed path, spaces included', async () => {

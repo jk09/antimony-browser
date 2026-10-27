@@ -1,34 +1,32 @@
 # link-summaries
 
-Lets you study a web text without leaving it: with `/link-summaries on` (or File → Link Summaries), the links in the main text of article-like pages are marked with a dotted underline and ⓘ once the selected model has summarised the page they lead to, and hovering or focusing one shows that summary in a tooltip. The linked pages are prefetched in the background without your cookies.
+Lets you learn what a page's links are about without opening them: `/link-summaries` fetches the pages the current page's main text links to (up to 20, without your cookies), has the selected model summarise each in a sentence or two, and lists them in the conversation, where a click opens one. The page itself is only read, never changed.
 
 ## Entry points
-- UI: – (the prompt's `/link-summaries on|off` calls `window.antimony.linkSummaries`; no component of its own)
-- IPC: `link-summaries:settings|update-settings` (UI → main), `link-summaries:settings-changed` (main → UI) – `ipc.ts`
-- Main: `register` in `main.ts` – listens to navigation's `onPageEvent` (active tab's `loaded`, `navigated`, `activated`), runs `scanLinks` in isolated world 1003, prefetches the targets not in the cache (`main/prefetch.ts`, ≤ 4 at once, 10 s, 1 MB, HTML only) on the in-memory session `link-summaries`, extracts their gist (`shared/extract.ts`, 1,500 chars), asks agent's `complete` once per page (`main/summarize.ts`), keeps results in an in-memory LRU of 500 (`main/cache.ts`, misses included) and runs `markLinks`; File → Link Summaries checkbox, kept in sync with the setting
-- Shared: `shared/page-scripts.ts` – `scanLinks` (simple page: ≥ 1,500 chars of paragraph text in `article`/`main`/`[role=main]`/body, no password or card field, ≤ 300 links; ≤ 20 distinct http(s) targets outside nav/header/footer/aside, no fragment, not the page itself, no downloads or file extensions), `markLinks` (marker stylesheet, tooltip in a closed shadow root: 300 ms hover delay, on focus, hidden on leave, blur, Escape, scroll), `unmarkLinks`
+- UI: – (the list is agent's `links` conversation item; the skill is the built-in `/link-summaries` in skills)
+- IPC: – (runs through `skills:run`; the list arrives in `agent:state-changed`)
+- Main: `register` in `main.ts` – `provideLinkSummaries` with agent; `summarize` reads the active page (`getPage`), runs `collectLinks` in isolated world 1003, prefetches the targets (`main/prefetch.ts`: GET, `credentials: 'omit'`, ≤ 4 at once, 10 s, 1 MB, HTML only) on the in-memory session `link-summaries`, extracts their gist (`shared/extract.ts`, 1,500 characters), asks agent's `complete` once (`main/summarize.ts`) and returns the links in page order with their summary or null
+- Shared: `shared/page-scripts.ts` – `collectLinks` (main content: `article`/`main`/`[role=main]`/body without nav, header, footer and asides; distinct http(s) targets without fragment, not the page itself, no downloads or file extensions, ≤ 20, with link text)
 
 ## Invariants
-- Off by default; nothing runs while off; switching from IPC or the menu keeps both in sync and persists – `main.test.ts › is off by default…`, `› switches from IPC and the File menu…`
-- Only article-like pages and links in their main text get summaries – `shared/page-scripts.test.ts › scanLinks`
-- Prefetching uses a non-`persist:` session of its own, `GET` without credentials, and skips non-HTML – `main.test.ts › prefetches cookieless…`, `main/prefetch.test.ts`, `e2e/link-summaries.spec.ts`
-- One model request per page, content marked untrusted; known targets aren't fetched or asked again; a failed request caches nothing – `main.test.ts`, `main/summarize.test.ts`
-- Results for a page that navigated away are dropped; the page's scan answer is validated – `main.test.ts › drops the results…`, `› ignores a malformed scan answer…`
-- The summary text is only in a closed shadow root, never in the page's DOM – `shared/page-scripts.test.ts › marks every link…`, `e2e/link-summaries.spec.ts`
-- Turning off removes the marks, stylesheet and tooltip and clears the cache – `main.test.ts › turning off…`, `shared/page-scripts.test.ts › unmarkLinks…`
+- Only main-text links, deduplicated, ≤ 20; the script doesn't change the page – `shared/page-scripts.test.ts`, `e2e/link-summaries.spec.ts`
+- The page script's answer is validated – `main.test.ts › keeps only valid, distinct web links…`
+- Prefetching uses a non-`persist:` session of its own, GET without credentials, HTML only, ≤ 1 MB, and sends none of the browsing session's cookies – `main.test.ts › fetches the linked pages cookieless…`, `main/prefetch.test.ts`, `e2e/link-summaries.spec.ts`
+- One model request, content marked untrusted; answer lines map to links by number, `-` and missing lines give no summary – `main.test.ts`, `main/summarize.test.ts`
+- No page, no links, nothing readable or a failed model request end the run with the reason; Stop aborts the fetches before any model request – `main.test.ts › says why…`, `› stops with the run…`
 
 ## Dependencies
-- Features: navigation (`getPage`, `getTabs`, `onPageEvent` from `main.ts`), agent (`complete` from `main.ts`); prompt runs `/link-summaries`
-- Electron: `session.fromPartition('link-summaries', { cache: false })`, `Session.fetch`, `executeJavaScriptInIsolatedWorld` (world 1003), `Menu.getApplicationMenu` (checkbox state)
-- Stored data: `userData/link-summaries.json` (`enabled`); summaries only in memory
+- Features: navigation (`getPage` from `main.ts`), agent (`complete`, `provideLinkSummaries` from `main.ts`, `LinkSummary` from `ipc.ts`); skills ships the `/link-summaries` built-in
+- Electron: `session.fromPartition('link-summaries', { cache: false })`, `Session.fetch`, `executeJavaScriptInIsolatedWorld` (world 1003)
+- Stored data: – (summaries only in the conversation)
 
 ## Security surface
-- IPC: the chrome UI reads and switches the mode (validated boolean).
-- Web content: fixed isolated-world scripts read links and text length and add a `data-antimony-summary` attribute, one `<style>` and one shadow host; the page's own world gets no API and can't read the summaries. Prefetch fetches up to 20 addresses per simple page from their sites, without cookies or credentials; their extracted text (not the page's own) goes to the selected model (ADR 0021).
+- IPC: –
+- Web content: a fixed read-only isolated-world script reads the page's links. On `/link-summaries` only (page access on), up to 20 linked addresses are fetched from their sites without cookies or credentials, and their extracted text (not the current page's) goes to the selected model (ADR 0022). The model can't start this: `summarize_links` is skill-only.
 
 ## Feature flags
 | Flag | Default | Owner | Remove by |
 |---|---|---|---|
 | – | | | |
 
-Spec: linked-glimpse-t8w3qn · ADRs: 0004, 0015, 0021
+Spec: linked-digest-r5m2kw · ADRs: 0004, 0015, 0021 (superseded), 0022

@@ -17,7 +17,6 @@ import type {
   RecallResult,
   RecallShown,
 } from '../../features/history/ipc'
-import type { LinkSummariesSettings } from '../../features/link-summaries/ipc'
 import type { SendResult } from '../../features/feedback/ipc'
 import type { MenuEntry, RunResult } from '../../features/menu/ipc'
 import type { NavigationState } from '../../features/navigation/ipc'
@@ -102,7 +101,6 @@ export function fakeApi(
   let home: string | null = null
   const currentSettings = { ...defaultSettings, ...options.settings }
 
-  const linkSummariesChanged = channel<LinkSummariesSettings>()
   const api = {
     versions: { chrome: '140.0.0.0', electron: '44.0.0' },
     agent: {
@@ -248,11 +246,6 @@ export function fakeApi(
         stacksSkipped: 0,
         grouping: 'addresses',
       })),
-    },
-    linkSummaries: {
-      settings: vi.fn(async () => ({ enabled: false })),
-      updateSettings: vi.fn(async (update) => ({ enabled: false, ...update })),
-      onSettingsChanged: linkSummariesChanged.subscribe,
     },
     welcome: {
       state: vi.fn(async () => ({ done: options.welcomeDone ?? true })),

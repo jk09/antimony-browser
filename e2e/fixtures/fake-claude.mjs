@@ -7,7 +7,7 @@
 // MCP and sends their results back, until a step calls no tools.
 // Asked for colour themes (appearance), it answers with two fixed candidates. Asked to organise
 // imported browsing history into stacks (import), it puts every group and page in one stack, "bread".
-// Asked to summarise linked pages (link-summaries), it answers "<n>: Fake summary of <title>.".
+// Asked to summarise linked pages (/link-summaries), it answers "<n>: Fake summary of <title>.".
 // FAKE_CLAUDE_LOGGED_IN=0 plays a logged-out CLI; FAKE_CLAUDE_LOG appends each run's arguments.
 import { appendFileSync, readFileSync } from 'node:fs'
 

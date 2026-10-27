@@ -1117,6 +1117,44 @@ textarea {
   font-size: 12px;
 }
 
+.turn.links {
+  white-space: normal;
+}
+
+.turn.links h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.turn.links ul {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.turn.links a {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.turn.links a:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.links-host,
+.links-summary.none {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.links-summary {
+  margin: 2px 0 0;
+}
+
 .turn.tool.ok span:first-child {
   color: var(--ok);
 }

@@ -102,6 +102,18 @@ describe('toolsFor', () => {
     )
   })
 
+  it('never offers skill-only tools, which macros cannot replay either', () => {
+    for (const pageAccess of [false, true]) {
+      const names = toolsFor({ pageAccess, historyAccess: true }).map((tool) => tool.name)
+      expect(names).not.toContain('summarize_links')
+    }
+    expect(toolNamed('summarize_links')).toMatchObject({
+      kind: 'read',
+      skillOnly: true,
+      replayable: false,
+    })
+  })
+
   it('leaves out history search and recall without history access', () => {
     const names = toolsFor({ pageAccess: true, historyAccess: false }).map((tool) => tool.name)
     expect(names).not.toContain('search_history')

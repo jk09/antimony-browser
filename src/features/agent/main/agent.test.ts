@@ -10,7 +10,15 @@ import {
 } from './claude-cli'
 import type { ApiTool, ContentBlock } from './content'
 import { fakeBrowser } from './fake-browser'
-import type { HistoryPort, ImportPort, MacroInfo, MacroPort, StackInfo, StackPort } from './tools'
+import type {
+  HistoryPort,
+  ImportPort,
+  LinkSummaryPort,
+  MacroInfo,
+  MacroPort,
+  StackInfo,
+  StackPort,
+} from './tools'
 
 /** What the scripted CLI's model saw at one step of a turn. */
 interface ModelRequest {
@@ -84,6 +92,7 @@ function setup(
     macros?: MacroPort | null
     stacks?: StackPort | null
     importer?: ImportPort | null
+    links?: LinkSummaryPort | null
   } = {},
 ) {
   const { browser, state } = fakeBrowser(options.elements)
@@ -107,6 +116,7 @@ function setup(
     macros: () => options.macros ?? null,
     stacks: () => options.stacks ?? null,
     importer: () => options.importer ?? null,
+    links: () => options.links ?? null,
     settings: () => settings,
     onState: (value) => states.push(structuredClone(value)),
     onDebug: (event) => events.push(event),
@@ -995,6 +1005,70 @@ describe('Agent.replay', () => {
     expect(result.ok).toBe(false)
     expect(result.error).toContain('Step 2')
     expect(browser.reload).not.toHaveBeenCalled()
+  })
+})
+
+describe('summarize_links', () => {
+  const links = [
+    { url: 'https://a.example/', label: 'A', host: 'a.example', summary: 'About A.' },
+    { url: 'https://b.example/', label: 'B', host: 'b.example', summary: null },
+  ]
+
+  it('replays from the skill with page access, without approval, and lists the pages', async () => {
+    const port = { summarize: vi.fn(async () => links) }
+    const off = setup([], { links: port })
+    expect(
+      await off.agent.replay('/link-summaries', [{ tool: 'summarize_links', input: {} }]),
+    ).toMatchObject({ ok: false, error: expect.stringContaining('page access') })
+    expect(port.summarize).not.toHaveBeenCalled()
+
+    const { agent, deps, states } = setup([], { links: port, pageAccess: true })
+    expect(await agent.replay('/link-summaries', [{ tool: 'summarize_links', input: {} }])).toEqual(
+      { ok: true },
+    )
+    expect(port.summarize).toHaveBeenCalledWith(expect.any(AbortSignal))
+    expect(deps.runCli).not.toHaveBeenCalled()
+    expect(states.some((state) => state.status === 'awaiting-approval')).toBe(false)
+    expect(agent.state().items).toEqual([
+      { kind: 'user', text: '/link-summaries', attachments: [] },
+      {
+        kind: 'tool',
+        tool: 'summarize_links',
+        summary: 'Summarise the linked pages',
+        status: 'ok',
+      },
+      { kind: 'links', links },
+    ])
+  })
+
+  it('shows the reason when summarising fails', async () => {
+    const port = {
+      summarize: vi.fn(async () => {
+        throw new Error('No links to summarise in this page’s text.')
+      }),
+    }
+    const { agent } = setup([], { links: port, pageAccess: true })
+    const result = await agent.replay('/link-summaries', [{ tool: 'summarize_links', input: {} }])
+    expect(result.error).toContain('No links to summarise')
+    expect(agent.state().items.some((item) => item.kind === 'links')).toBe(false)
+  })
+
+  it('is never offered to the model and refused when the model calls it', async () => {
+    const port = { summarize: vi.fn(async () => links) }
+    const { agent, requests } = setup(
+      [
+        async () => response([toolUse('t1', 'summarize_links', {})], 'tool_use'),
+        async () => response([{ type: 'text', text: 'Done.' }]),
+      ],
+      { links: port, pageAccess: true },
+    )
+    await agent.run(input('what are the links about?'))
+    expect(requests[0]!.tools.map((tool) => tool.name)).not.toContain('summarize_links')
+    expect(requests[1]!.messages.at(-1)!.content[0]).toMatchObject({
+      is_error: true,
+      content: expect.stringContaining('Unknown tool summarize_links'),
+    })
+    expect(port.summarize).not.toHaveBeenCalled()
   })
 })
 
